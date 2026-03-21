@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+packages/server/data/projects/
+packages/server/data/builds/
+packages/server/data/*.db
+*.tgz

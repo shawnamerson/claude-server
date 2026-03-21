@@ -1,0 +1,264 @@
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { api, Project, Deployment } from "../api/client";
+import StatusBadge from "../components/StatusBadge";
+import LogViewer from "../components/LogViewer";
+import ChatPanel from "../components/ChatPanel";
+import FileViewer from "../components/FileViewer";
+import EnvVarsPanel from "../components/EnvVarsPanel";
+import GitHubPanel from "../components/GitHubPanel";
+
+type Tab = "logs" | "files" | "env" | "github";
+
+const styles = {
+  page: {
+    display: "flex",
+    flexDirection: "column" as const,
+    height: "calc(100vh - 60px)",
+    overflow: "hidden",
+  },
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "0.5rem 0",
+    flexShrink: 0,
+  },
+  titleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+  },
+  name: { fontSize: "1.25rem", fontWeight: 600 },
+  actions: { display: "flex", gap: "0.5rem", alignItems: "center" },
+  dangerBtn: {
+    padding: "0.4rem 0.8rem",
+    background: "#450a0a",
+    color: "#f87171",
+    border: "1px solid #7f1d1d",
+    borderRadius: "0.5rem",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+  },
+  stopBtn: {
+    padding: "0.15rem 0.5rem",
+    background: "#1a1a2e",
+    color: "#f59e0b",
+    border: "1px solid #92400e",
+    borderRadius: "0.35rem",
+    cursor: "pointer",
+    fontSize: "0.75rem",
+  },
+  deploymentBar: {
+    display: "flex",
+    gap: "0.5rem",
+    paddingBottom: "0.5rem",
+    flexShrink: 0,
+    flexWrap: "wrap" as const,
+    overflow: "hidden",
+    maxHeight: "2.5rem",
+  },
+  deployItem: {
+    padding: "0.3rem 0.6rem",
+    background: "#12121a",
+    border: "1px solid #1e1e30",
+    borderRadius: "0.5rem",
+    fontSize: "0.75rem",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+  },
+  deployItemActive: {
+    borderColor: "#7c3aed",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "1rem",
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+  },
+  leftPanel: {
+    display: "flex",
+    flexDirection: "column" as const,
+    minHeight: 0,
+    overflow: "hidden",
+  },
+  rightPanel: {
+    display: "flex",
+    flexDirection: "column" as const,
+    minHeight: 0,
+    overflow: "hidden",
+  },
+  tabs: {
+    display: "flex",
+    gap: "0",
+    flexShrink: 0,
+    marginBottom: "0.4rem",
+  },
+  tab: {
+    padding: "0.35rem 0.75rem",
+    background: "transparent",
+    color: "#666",
+    border: "1px solid #1e1e30",
+    borderBottom: "none",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    borderRadius: "0.35rem 0.35rem 0 0",
+  },
+  tabActive: {
+    background: "#0a0a0f",
+    color: "#a78bfa",
+    borderColor: "#7c3aed",
+  },
+  sectionTitle: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "#aaa",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.05em",
+    flexShrink: 0,
+    marginBottom: "0.4rem",
+  },
+};
+
+export default function ProjectDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [project, setProject] = useState<Project | null>(null);
+  const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [selectedDeployment, setSelectedDeployment] = useState<string | null>(null);
+  const [leftTab, setLeftTab] = useState<Tab>("logs");
+
+  const refresh = useCallback(() => {
+    if (!id) return;
+    api.getProject(id).then(setProject);
+    api.listDeployments(id).then((deps) => {
+      setDeployments(deps);
+      if (deps.length > 0) {
+        setSelectedDeployment((prev) => prev || deps[0].id);
+      }
+    });
+  }, [id]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!id) return;
+    const interval = setInterval(() => {
+      api.listDeployments(id).then((deps) => {
+        setDeployments(deps);
+        if (deps.length > 0) {
+          setSelectedDeployment((prev) => prev || deps[0].id);
+        }
+      });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [id]);
+
+  const handleStop = async (depId: string) => {
+    await api.stopDeployment(depId);
+    refresh();
+  };
+
+  const handleDelete = async () => {
+    if (!id || !confirm("Delete this project and all deployments?")) return;
+    await api.deleteProject(id);
+    navigate("/");
+  };
+
+  if (!project) return <div>Loading...</div>;
+
+  const runningDep = deployments.find((d) => d.status === "running");
+
+  return (
+    <div style={styles.page}>
+      {/* Top bar */}
+      <div style={styles.topBar}>
+        <div style={styles.titleRow}>
+          <div style={styles.name}>{project.name}</div>
+          {runningDep && <StatusBadge status="running" />}
+          {runningDep?.port && (
+            <a
+              href={`http://localhost:${runningDep.port}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#60a5fa", fontSize: "0.8rem" }}
+            >
+              localhost:{runningDep.port}
+            </a>
+          )}
+        </div>
+        <div style={styles.actions}>
+          <button style={styles.dangerBtn} onClick={handleDelete}>Delete</button>
+        </div>
+      </div>
+
+      {/* Deployment pills */}
+      {deployments.length > 0 && (
+        <div style={styles.deploymentBar}>
+          {deployments.map((dep) => (
+            <div
+              key={dep.id}
+              style={{
+                ...styles.deployItem,
+                ...(dep.id === selectedDeployment ? styles.deployItemActive : {}),
+              }}
+              onClick={() => setSelectedDeployment(dep.id)}
+            >
+              <StatusBadge status={dep.status} />
+              <span style={{ color: "#666" }}>
+                {new Date(dep.created_at).toLocaleTimeString()}
+              </span>
+              {dep.status === "running" && (
+                <button
+                  style={styles.stopBtn}
+                  onClick={(e) => { e.stopPropagation(); handleStop(dep.id); }}
+                >
+                  Stop
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Main content */}
+      <div style={styles.grid}>
+        {/* Left panel: Tabs for Logs / Files / Env / GitHub */}
+        <div style={styles.leftPanel}>
+          <div style={styles.tabs}>
+            {(["logs", "files", "env", "github"] as Tab[]).map((tab) => (
+              <button
+                key={tab}
+                style={{ ...styles.tab, ...(leftTab === tab ? styles.tabActive : {}) }}
+                onClick={() => setLeftTab(tab)}
+              >
+                {tab === "logs" ? "Logs" : tab === "files" ? "Files" : tab === "env" ? "Env Vars" : "GitHub"}
+              </button>
+            ))}
+          </div>
+          {leftTab === "logs" && <LogViewer deploymentId={selectedDeployment} />}
+          {leftTab === "files" && <FileViewer projectId={project.id} />}
+          {leftTab === "env" && <EnvVarsPanel projectId={project.id} />}
+          {leftTab === "github" && <GitHubPanel projectId={project.id} />}
+        </div>
+
+        {/* Right panel: Chat */}
+        <div style={styles.rightPanel}>
+          <div style={styles.sectionTitle}>Chat with Claude</div>
+          <ChatPanel projectId={project.id} onDeploy={(prompt) => {
+            if (!id) return;
+            api.deploy(id, prompt).then((dep) => {
+              setSelectedDeployment(dep.id);
+              setLeftTab("logs");
+              refresh();
+            }).catch(() => {});
+          }} />
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,14 @@
+{
+  "name": "claude-server",
+  "private": true,
+  "workspaces": [
+    "packages/server",
+    "packages/dashboard"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/server",
+    "dev:dashboard": "npm run dev --workspace=packages/dashboard",
+    "dev:all": "npm run dev --workspace=packages/server & npm run dev --workspace=packages/dashboard",
+    "build": "npm run build --workspaces"
+  }
+}
