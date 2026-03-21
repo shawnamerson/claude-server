@@ -1,49 +1,9 @@
 services:
-  traefik:
-    image: traefik:v3.2
-    restart: always
-    command:
-      - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=claude-server-network"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      # HTTP -> HTTPS redirect
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      # Let's Encrypt
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      # Wildcard cert via DNS challenge (needed for *.yourdomain.com)
-      - "--certificatesresolvers.letsencrypt-dns.acme.dnschallenge=true"
-      - "--certificatesresolvers.letsencrypt-dns.acme.dnschallenge.provider=${DNS_PROVIDER:-cloudflare}"
-      - "--certificatesresolvers.letsencrypt-dns.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt-dns.acme.storage=/letsencrypt/acme-dns.json"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - letsencrypt:/letsencrypt
-    environment:
-      # For Cloudflare DNS challenge (change if using another provider)
-      - CF_API_EMAIL=${CF_API_EMAIL:-}
-      - CF_API_KEY=${CF_API_KEY:-}
-    networks:
-      - claude-server-network
-    labels:
-      # Traefik dashboard at traefik.yourdomain.com
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.traefik.service=api@internal"
-
   claude-server:
     build: .
     restart: always
+    ports:
+      - "80:3000"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PORT=3000
@@ -54,17 +14,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - claude-server-network
-    labels:
-      - "traefik.enable=true"
-      # Main dashboard at yourdomain.com
-      - "traefik.http.routers.claude-server.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.claude-server.entrypoints=websecure"
-      - "traefik.http.routers.claude-server.tls.certresolver=letsencrypt"
-      - "traefik.http.services.claude-server.loadbalancer.server.port=3000"
 
 volumes:
   app-data:
-  letsencrypt:
 
 networks:
   claude-server-network:
