@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useSSE } from "../hooks/useSSE";
 
 interface LogLine {
@@ -15,13 +15,6 @@ const streamColors: Record<string, string> = {
 };
 
 const styles = {
-  wrapper: {
-    display: "flex",
-    flexDirection: "column" as const,
-    flex: 1,
-    minHeight: 0,
-    overflow: "hidden",
-  },
   container: {
     flex: 1,
     minHeight: 0,
@@ -44,79 +37,39 @@ const styles = {
     textAlign: "center" as const,
     fontFamily: "inherit",
   },
-  followBtn: {
-    alignSelf: "flex-end" as const,
-    padding: "0.25rem 0.6rem",
-    marginTop: "0.4rem",
-    background: "#1a1a2e",
-    color: "#a78bfa",
-    border: "1px solid #2e2e4a",
-    borderRadius: "0.35rem",
-    cursor: "pointer",
-    fontSize: "0.75rem",
-  },
 };
 
 export default function LogViewer({ deploymentId }: { deploymentId: string | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [autoFollow, setAutoFollow] = useState(true);
   const { events: rawLogs } = useSSE<LogLine>({
     url: `/api/deployments/${deploymentId}/logs/stream`,
     enabled: !!deploymentId,
   });
 
-  // Deduplicate logs by id + timestamp + message
+  // Deduplicate logs
   const logs = rawLogs.filter((log, index) => {
     if (log.id) {
       return rawLogs.findIndex((l) => l.id === log.id) === index;
     }
-    // For logs without id, dedupe by timestamp + message
     return rawLogs.findIndex((l) => l.timestamp === log.timestamp && l.message === log.message) === index;
   });
 
-  // Auto-scroll to bottom when following
-  useEffect(() => {
-    if (autoFollow && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [logs, autoFollow]);
-
-  // Detect if user scrolled up — disable auto-follow
-  const handleScroll = () => {
-    if (!containerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    const atBottom = scrollHeight - scrollTop - clientHeight < 30;
-    setAutoFollow(atBottom);
-  };
+  // Reverse so newest is on top
+  const reversed = [...logs].reverse();
 
   return (
-    <div style={styles.wrapper}>
-      <div ref={containerRef} style={styles.container} onScroll={handleScroll}>
-        {!deploymentId ? (
-          <div style={styles.empty}>No deployment selected</div>
-        ) : logs.length === 0 ? (
-          <div style={styles.empty}>Waiting for logs...</div>
-        ) : (
-          logs.map((log, i) => (
-            <div key={i} style={{ ...styles.line, color: streamColors[log.stream] || "#e0e0e0" }}>
-              <span style={{ color: "#555" }}>[{log.stream}] </span>
-              {log.message}
-            </div>
-          ))
-        )}
-      </div>
-      {!autoFollow && logs.length > 0 && (
-        <button
-          style={styles.followBtn}
-          onClick={() => {
-            setAutoFollow(true);
-            if (containerRef.current) {
-              containerRef.current.scrollTop = containerRef.current.scrollHeight;
-            }
-          }}
-        >
-          Follow logs
-        </button>
+    <div ref={containerRef} style={styles.container}>
+      {!deploymentId ? (
+        <div style={styles.empty}>No deployment selected</div>
+      ) : reversed.length === 0 ? (
+        <div style={styles.empty}>Waiting for logs...</div>
+      ) : (
+        reversed.map((log, i) => (
+          <div key={i} style={{ ...styles.line, color: streamColors[log.stream] || "#e0e0e0" }}>
+            <span style={{ color: "#555" }}>[{log.stream}] </span>
+            {log.message}
+          </div>
+        ))
       )}
     </div>
   );
