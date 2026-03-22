@@ -3,8 +3,7 @@ import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
 import { Project, Deployment } from "../types.js";
 import { generateProject, modifyProject, readProjectFiles } from "../services/generator.js";
-import { buildWithRetry } from "../services/builder.js";
-import { deployContainer, stopContainer, releasePort, logEmitter } from "../services/deployer.js";
+import { deployContainer, deployFromVolume, stopContainer, releasePort, logEmitter } from "../services/deployer.js";
 import { getEnvVarsForDeploy } from "./envvars.js";
 import { config } from "../config.js";
 import { reloadCaddyConfig } from "../services/caddy.js";
@@ -125,7 +124,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       "INSERT INTO chat_messages (project_id, deployment_id, role, content) VALUES (?, ?, 'assistant', ?)"
     ).run(project.id, deploymentId, result.notes || "Project generated successfully.");
 
-    // Save dockerfile
+    // Save dockerfile for reference
     db.prepare("UPDATE deployments SET dockerfile = ? WHERE id = ?").run(result.dockerfile, deploymentId);
 
     // Auto-create database if the project uses pg/DATABASE_URL
@@ -142,22 +141,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       }
     }
 
-    // Step 3: Build Docker image
-    updateStatus(deploymentId, "building");
-    addLog(deploymentId, "system", "--- Starting Docker build ---");
-    addLog(deploymentId, "system", "Pulling base image and installing dependencies...");
-    addLog(deploymentId, "system", "This may take a minute on first build...");
-
-    const imageTag = await buildWithRetry(
-      project.slug,
-      deploymentId,
-      project.source_path,
-      { dockerfile: result.dockerfile, dockerignore: result.dockerignore } as any
-    );
-
-    db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run(imageTag, deploymentId);
-
-    // Step 4: Stop previous deployment if running
+    // Stop previous deployment if running
     const prevDeployment = db
       .prepare(
         "SELECT * FROM deployments WHERE project_id = ? AND status = 'running' AND id != ? ORDER BY created_at DESC LIMIT 1"
@@ -171,16 +155,31 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       db.prepare("UPDATE deployments SET status = 'stopped', stopped_at = datetime('now') WHERE id = ?").run(prevDeployment.id);
     }
 
-    // Step 5: Deploy container
+    // Deploy directly from volume — no Docker build needed
     updateStatus(deploymentId, "deploying");
-    addLog(deploymentId, "system", "Starting container...");
+    addLog(deploymentId, "system", "Starting app...");
 
-    // Detect port from Dockerfile EXPOSE
-    const portMatch = result.dockerfile.match(/EXPOSE\s+(\d+)/);
-    const appPort = portMatch ? parseInt(portMatch[1]) : 3000;
+    const appPort = 3000;
+
+    // Determine start command from package.json
+    let startCommand = "node server.js";
+    try {
+      const fs = await import("fs");
+      const pkgPath = `${project.source_path}/package.json`;
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        if (pkg.scripts?.start) {
+          startCommand = `npm start`;
+        }
+      }
+    } catch {}
 
     const envVars = getEnvVarsForDeploy(project.id);
-    const { containerId, hostPort } = await deployContainer(imageTag, deploymentId, appPort, envVars, project.slug);
+    const { containerId, hostPort } = await deployFromVolume(
+      project.source_path, deploymentId, appPort, startCommand, envVars, project.slug
+    );
+
+    db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run("claude-server/base:latest", deploymentId);
 
     updateStatus(deploymentId, "running", {
       container_id: containerId,
@@ -264,26 +263,26 @@ async function autoFixAndRedeploy(
       if (oldDep.port) releasePort(oldDep.port);
     }
 
-    // Rebuild
-    addLog(deploymentId, "system", "Rebuilding with fix...");
-    updateStatus(deploymentId, "building");
+    // Redeploy from volume — no build needed
+    updateStatus(deploymentId, "deploying");
+    addLog(deploymentId, "system", "Starting fixed app...");
 
-    const imageTag = await buildWithRetry(
-      project.slug,
-      deploymentId,
-      project.source_path,
-      { dockerfile: fixResult.dockerfile, dockerignore: fixResult.dockerignore }
+    let startCommand = "node server.js";
+    try {
+      const fs = await import("fs");
+      const pkgPath = `${project.source_path}/package.json`;
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        if (pkg.scripts?.start) startCommand = "npm start";
+      }
+    } catch {}
+
+    const envVars = getEnvVarsForDeploy(project.id);
+    const { containerId: newId, hostPort } = await deployFromVolume(
+      project.source_path, deploymentId, 3000, startCommand, envVars, project.slug
     );
 
-    // Redeploy
-    updateStatus(deploymentId, "deploying");
-    addLog(deploymentId, "system", "Starting fixed container...");
-    const portMatch = fixResult.dockerfile.match(/EXPOSE\s+(\d+)/);
-    const appPort = portMatch ? parseInt(portMatch[1]) : 3000;
-    const envVars = getEnvVarsForDeploy(project.id);
-    const { containerId: newId, hostPort } = await deployContainer(imageTag, deploymentId, appPort, envVars, project.slug);
-
-    updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: imageTag });
+    updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: "claude-server/base:latest" });
     addLog(deploymentId, "system", `Auto-fixed and redeployed on port ${hostPort}`);
     addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
 
@@ -441,10 +440,20 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
   }
 
   try {
-    const portMatch = deployment.dockerfile?.match(/EXPOSE\s+(\d+)/);
-    const appPort = portMatch ? parseInt(portMatch[1]) : 3000;
+    let startCommand = "node server.js";
+    try {
+      const fs = await import("fs");
+      const pkgPath = `${project.source_path}/package.json`;
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        if (pkg.scripts?.start) startCommand = "npm start";
+      }
+    } catch {}
+
     const envVars = getEnvVarsForDeploy(project.id);
-    const { containerId, hostPort } = await deployContainer(deployment.docker_image_id, deployment.id, appPort, envVars, project.slug);
+    const { containerId, hostPort } = await deployFromVolume(
+      project.source_path, deployment.id, 3000, startCommand, envVars, project.slug
+    );
 
     db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")
       .run(containerId, hostPort, deployment.id);

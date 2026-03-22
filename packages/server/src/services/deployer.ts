@@ -42,6 +42,46 @@ export async function deployContainer(
   extraEnv: string[] = [],
   projectSlug?: string
 ): Promise<{ containerId: string; hostPort: number }> {
+  return _createAndStartContainer(deploymentId, appPort, extraEnv, projectSlug, {
+    Image: imageTag,
+  });
+}
+
+/**
+ * Deploy using the base image with project files mounted from the app-data volume.
+ * Skips the Docker build step entirely — files are already on disk and tested.
+ */
+export async function deployFromVolume(
+  sourcePath: string,
+  deploymentId: string,
+  appPort: number,
+  startCommand: string,
+  extraEnv: string[] = [],
+  projectSlug?: string
+): Promise<{ containerId: string; hostPort: number }> {
+  const relativeToData = sourcePath.replace(/^\/app\/data\//, "");
+  const workDir = `/data/${relativeToData}`;
+
+  return _createAndStartContainer(deploymentId, appPort, extraEnv, projectSlug, {
+    Image: "claude-server/base:latest",
+    WorkingDir: workDir,
+    Cmd: ["sh", "-c", startCommand],
+    extraBinds: [`claude-server_app-data:/data:rw`],
+  });
+}
+
+async function _createAndStartContainer(
+  deploymentId: string,
+  appPort: number,
+  extraEnv: string[],
+  projectSlug: string | undefined,
+  opts: {
+    Image: string;
+    WorkingDir?: string;
+    Cmd?: string[];
+    extraBinds?: string[];
+  }
+): Promise<{ containerId: string; hostPort: number }> {
   const hostPort = await findAvailablePort();
   const domain = process.env.DOMAIN || "localhost";
 
@@ -58,35 +98,37 @@ export async function deployContainer(
     await docker.createNetwork({
       Name: networkName,
       Driver: "bridge",
-      Internal: false, // needs outbound for npm, APIs, etc.
+      Internal: false,
     });
   }
 
   const container = await docker.createContainer({
-    Image: imageTag,
+    Image: opts.Image,
     name: `claude-server-${deploymentId}`,
+    ...(opts.WorkingDir ? { WorkingDir: opts.WorkingDir } : {}),
+    ...(opts.Cmd ? { Cmd: opts.Cmd } : {}),
     ExposedPorts: { [`${appPort}/tcp`]: {} },
     HostConfig: {
       PortBindings: {
         [`${appPort}/tcp`]: [{ HostPort: String(hostPort) }],
       },
+      Binds: opts.extraBinds || [],
       RestartPolicy: { Name: "no" },
-      Memory: 512 * 1024 * 1024, // 512MB limit
-      MemorySwap: 512 * 1024 * 1024, // No swap
+      Memory: 512 * 1024 * 1024,
+      MemorySwap: 512 * 1024 * 1024,
       CpuPeriod: 100000,
-      CpuQuota: 50000, // 50% CPU limit
-      PidsLimit: 256, // Prevent fork bombs
-      CapDrop: ["ALL"], // Drop all capabilities
-      CapAdd: ["NET_BIND_SERVICE"], // Only allow binding to ports
+      CpuQuota: 50000,
+      PidsLimit: 256,
+      CapDrop: ["ALL"],
+      CapAdd: ["NET_BIND_SERVICE"],
       SecurityOpt: ["no-new-privileges:true"],
-      ReadonlyRootfs: false, // Apps may need to write temp files
+      ReadonlyRootfs: false,
     },
     Env: [`PORT=${appPort}`, ...extraEnv],
     Labels: {
       "claude-server": "true",
       "claude-server.deployment": deploymentId,
       "claude-server.project": projectSlug || deploymentId,
-      // Traefik labels for custom domain routing
       "traefik.enable": "true",
       [`traefik.http.routers.${deploymentId}.rule`]: `Host(\`${projectSlug || deploymentId}.${domain}\`)`,
       [`traefik.http.routers.${deploymentId}.entrypoints`]: domain === "localhost" ? "web" : "websecure",
@@ -97,7 +139,7 @@ export async function deployContainer(
     },
     NetworkingConfig: {
       EndpointsConfig: {
-        [networkName]: {}, // Isolated project network (for its database)
+        [networkName]: {},
       },
     },
   });
