@@ -67,9 +67,10 @@ router.post("/", (req: Request, res: Response) => {
   const sourcePath = `${config.projectsDir}/${id}`;
   fs.mkdirSync(sourcePath, { recursive: true });
 
+  const userId = (req as any).user?.id || null;
   db.prepare(
-    "INSERT INTO projects (id, name, slug, source_path, description) VALUES (?, ?, ?, ?, ?)"
-  ).run(id, name, slug, sourcePath, description || "");
+    "INSERT INTO projects (id, user_id, name, slug, source_path, description) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(id, userId, name, slug, sourcePath, description || "");
 
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
   res.status(201).json(project);

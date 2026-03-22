@@ -5,8 +5,35 @@ export function initializeDatabase(db: Database.Database): void {
   db.pragma("foreign_keys = ON");
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id          TEXT PRIMARY KEY,
+      email       TEXT NOT NULL UNIQUE,
+      password    TEXT NOT NULL,
+      name        TEXT NOT NULL DEFAULT '',
+      credits     INTEGER NOT NULL DEFAULT 3,
+      stripe_customer_id TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id          TEXT PRIMARY KEY,
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at  TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS credit_transactions (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount      INTEGER NOT NULL,
+      type        TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS projects (
       id          TEXT PRIMARY KEY,
+      user_id     TEXT REFERENCES users(id) ON DELETE CASCADE,
       name        TEXT NOT NULL,
       slug        TEXT NOT NULL UNIQUE,
       source_path TEXT NOT NULL,

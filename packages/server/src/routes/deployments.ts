@@ -8,6 +8,7 @@ import { deployContainer, stopContainer, releasePort } from "../services/deploye
 import { getEnvVarsForDeploy } from "./envvars.js";
 import { config } from "../config.js";
 import { reloadCaddyConfig } from "../services/caddy.js";
+import { deductCredit } from "./auth.js";
 
 const router = Router();
 
@@ -53,6 +54,16 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
   }
 
   const { prompt } = req.body;
+
+  // Check credits if user is authenticated
+  const user = (req as any).user;
+  if (user) {
+    if (!deductCredit(user.id, `Deploy: ${project.name}`)) {
+      res.status(402).json({ error: "No credits remaining. Purchase more to continue deploying." });
+      return;
+    }
+  }
+
   const deploymentId = nanoid(12);
 
   db.prepare(

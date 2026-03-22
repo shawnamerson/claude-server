@@ -207,7 +207,7 @@ export default function Landing() {
         <p style={styles.subtitle}>
           Tell Claude what you want to build and it generates, deploys, and maintains your app automatically. No coding required.
         </p>
-        <Link to="/projects" style={styles.cta}>Start Building</Link>
+        <Link to="/signup" style={styles.cta}>Start Building Free</Link>
         <a href="#how" style={styles.secondaryCta}>How it works</a>
       </div>
 
@@ -237,7 +237,7 @@ export default function Landing() {
       </div>
 
       <div style={{ textAlign: "center", padding: "2rem" }}>
-        <Link to="/projects" style={styles.cta}>Start Building</Link>
+        <Link to="/signup" style={styles.cta}>Start Building Free</Link>
       </div>
 
       <div style={styles.footer}>

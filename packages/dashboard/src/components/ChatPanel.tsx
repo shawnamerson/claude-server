@@ -126,9 +126,13 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     setMessages((prev) => [...prev, userMsg]);
 
     try {
+      const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      const authToken = (window as any).__authToken;
+      if (authToken) authHeaders["Authorization"] = `Bearer ${authToken}`;
+
       const res = await fetch(`/api/projects/${projectId}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ message: text }),
       });
 

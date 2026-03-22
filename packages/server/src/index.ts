@@ -14,6 +14,8 @@ import githubRoutes from "./routes/github.js";
 import databaseRoutes from "./routes/database.js";
 import domainRoutes from "./routes/domains.js";
 import proxyRoutes from "./routes/proxy.js";
+import authRoutes, { authMiddleware } from "./routes/auth.js";
+import billingRoutes from "./routes/billing.js";
 import { initializeDbPortTracking } from "./services/database.js";
 import { reloadCaddyConfig } from "./services/caddy.js";
 import fs from "fs";
@@ -23,7 +25,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Auth middleware — attaches user to request if token present
+app.use(authMiddleware);
+
 // API routes
+app.use("/api", authRoutes);
+app.use("/api", billingRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api", deploymentRoutes);
 app.use("/api", logRoutes);
