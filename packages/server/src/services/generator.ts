@@ -93,7 +93,7 @@ CRITICAL RULES:
 - For web apps: use a SINGLE Node.js server that serves both the API and frontend HTML.
 - The app MUST listen on a port (use the PORT env var, default to 3000).
 - Include a proper package.json with all dependencies listed.
-- If the user mentions a database and DATABASE_URL is available, use PostgreSQL. Otherwise use SQLite or in-memory storage.
+- If the app needs any data persistence (users, listings, posts, products, bookings, etc.), ALWAYS use PostgreSQL via the DATABASE_URL environment variable. The platform provides a built-in PostgreSQL database automatically. Use the "pg" npm package to connect: new Pool({ connectionString: process.env.DATABASE_URL }). Create tables on startup with CREATE TABLE IF NOT EXISTS. NEVER use SQLite, JSON files, or in-memory storage for persistent data.
 
 JAVASCRIPT/HTML RULES — VERY IMPORTANT:
 - NEVER put HTML directly inside JavaScript template literals (backticks). This causes syntax errors.
@@ -132,7 +132,9 @@ const MODIFY_SYSTEM_PROMPT = `You are an expert full-stack developer. The user h
 
 Generate the COMPLETE updated project — include ALL files, even ones that haven't changed. This ensures the project stays complete and buildable.
 
-IMPORTANT: NEVER put HTML inside JavaScript template literals (backticks) — this causes syntax errors. Keep HTML in separate .html files in the public folder, CSS in .css files, and client-side JS in .js files. The server.js should only contain Express API routes and serve static files with express.static('public').
+IMPORTANT RULES:
+- NEVER put HTML inside JavaScript template literals (backticks) — this causes syntax errors. Keep HTML in separate .html files in the public folder, CSS in .css files, and client-side JS in .js files. The server.js should only contain Express API routes and serve static files with express.static('public').
+- For any data persistence, ALWAYS use PostgreSQL via process.env.DATABASE_URL with the "pg" npm package. The platform provides a built-in database. NEVER use SQLite, JSON files, or in-memory storage.
 
 You MUST call the submit_project tool with the complete set of files, the updated Dockerfile, and .dockerignore.`;
 

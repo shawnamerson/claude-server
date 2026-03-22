@@ -10,6 +10,7 @@ import { config } from "../config.js";
 import { reloadCaddyConfig } from "../services/caddy.js";
 import { deductCredit } from "./auth.js";
 import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
+import { createDatabase, getDatabaseInfo } from "../services/database.js";
 
 const router = Router();
 
@@ -161,6 +162,20 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
 
     // Save dockerfile
     db.prepare("UPDATE deployments SET dockerfile = ? WHERE id = ?").run(result.dockerfile, deploymentId);
+
+    // Auto-create database if the project uses pg/DATABASE_URL
+    const needsDb = result.files.some(f =>
+      f.content.includes("DATABASE_URL") || f.content.includes("pg") || f.content.includes("Pool")
+    );
+    if (needsDb && !getDatabaseInfo(project.id)) {
+      try {
+        addLog(deploymentId, "system", "Project uses a database — creating PostgreSQL...");
+        const dbInfo = await createDatabase(project.id, project.slug);
+        addLog(deploymentId, "system", `Database created: ${dbInfo.dbName} (DATABASE_URL auto-set)`);
+      } catch (err) {
+        addLog(deploymentId, "system", `Database creation failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
 
     // Step 3: Build Docker image
     updateStatus(deploymentId, "building");
