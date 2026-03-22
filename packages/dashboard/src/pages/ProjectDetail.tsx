@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { api, Project, Deployment } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
 import LogViewer from "../components/LogViewer";
@@ -173,9 +173,10 @@ const styles = {
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [project, setProject] = useState<Project | null>(null);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [selectedDeployment, setSelectedDeployment] = useState<string | null>(null);
+  const [selectedDeployment, setSelectedDeployment] = useState<string | null>(searchParams.get("dep"));
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);

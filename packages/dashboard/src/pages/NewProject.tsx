@@ -57,9 +57,11 @@ export default function NewProject() {
     try {
       const project = await api.createProject(name, description);
       if (description.trim()) {
-        api.deploy(project.id, description).catch(() => {});
+        const dep = await api.deploy(project.id, description);
+        navigate(`/project/${project.id}?dep=${dep.id}`);
+      } else {
+        navigate(`/project/${project.id}`);
       }
-      navigate(`/project/${project.id}`);
       return;
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to create project");
