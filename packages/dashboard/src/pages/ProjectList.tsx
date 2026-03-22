@@ -83,7 +83,9 @@ export default function ProjectList() {
               </div>
               <div style={styles.cardFooter}>
                 <StatusBadge status={p.latest_status || "none"} />
-                {p.latest_port && <span>:{p.latest_port}</span>}
+                {(p as any).total_cost_cents > 0 && (
+                  <span>${((p as any).total_cost_cents / 100).toFixed(2)}</span>
+                )}
               </div>
             </Link>
           ))}
