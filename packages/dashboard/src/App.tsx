@@ -1,7 +1,8 @@
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, useLocation } from "react-router-dom";
 import ProjectList from "./pages/ProjectList";
 import ProjectDetail from "./pages/ProjectDetail";
 import NewProject from "./pages/NewProject";
+import Landing from "./pages/Landing";
 
 const styles = {
   app: {
@@ -43,21 +44,36 @@ const styles = {
   },
 };
 
-export default function App() {
+function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div style={styles.app}>
       <nav style={styles.nav}>
         <Link to="/" style={styles.logo}>Claude Server</Link>
-        <Link to="/" style={styles.navLink}>Projects</Link>
+        <Link to="/projects" style={styles.navLink}>Projects</Link>
         <Link to="/new" style={styles.navLink}>New Project</Link>
       </nav>
       <main style={styles.main}>
-        <Routes>
-          <Route path="/" element={<ProjectList />} />
-          <Route path="/new" element={<NewProject />} />
-          <Route path="/project/:id" element={<ProjectDetail />} />
-        </Routes>
+        {children}
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  const location = useLocation();
+  const isLanding = location.pathname === "/";
+
+  if (isLanding) {
+    return <Landing />;
+  }
+
+  return (
+    <AppShell>
+      <Routes>
+        <Route path="/projects" element={<ProjectList />} />
+        <Route path="/new" element={<NewProject />} />
+        <Route path="/project/:id" element={<ProjectDetail />} />
+      </Routes>
+    </AppShell>
   );
 }
