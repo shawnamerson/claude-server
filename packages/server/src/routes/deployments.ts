@@ -345,17 +345,34 @@ async function monitorContainer(project: Project, deploymentId: string, containe
       if (dep.port) {
         const healthy = await checkHealth(dep.port);
         if (healthy) {
-          autoFixCount = 0; // Reset on healthy
-          continue;
+          // HTTP is responding — but check stderr for repeated errors
+          if (checkCount > 3) {
+            const recentErrors = db.prepare(
+              "SELECT COUNT(*) as cnt FROM logs WHERE deployment_id = ? AND stream = 'stderr' AND id > (SELECT COALESCE(MAX(id), 0) - 100 FROM logs WHERE deployment_id = ?)"
+            ).get(deploymentId, deploymentId) as { cnt: number };
+
+            if (recentErrors.cnt >= 10) {
+              // Lots of stderr errors even though health check passes — trigger fix
+              addLog(deploymentId, "system", `Detected ${recentErrors.cnt} errors in stderr while app appears healthy`);
+              // Fall through to auto-fix below
+            } else {
+              autoFixCount = 0; // Reset on healthy
+              continue;
+            }
+          } else {
+            autoFixCount = 0;
+            continue;
+          }
+        } else {
+          // Recheck several times before declaring unresponsive
+          let fails = 0;
+          for (let i = 0; i < 4; i++) {
+            await new Promise((r) => setTimeout(r, 8000));
+            if (await checkHealth(dep.port)) break;
+            fails++;
+          }
+          if (fails < 4) continue;
         }
-        // Recheck several times before declaring unresponsive
-        let fails = 0;
-        for (let i = 0; i < 4; i++) {
-          await new Promise((r) => setTimeout(r, 8000));
-          if (await checkHealth(dep.port)) break;
-          fails++;
-        }
-        if (fails < 4) continue;
       } else {
         continue;
       }
