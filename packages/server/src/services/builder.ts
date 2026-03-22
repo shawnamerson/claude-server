@@ -137,27 +137,39 @@ export async function buildWithRetry(
       addLog(deploymentId, "system", `Build attempt ${attempt} failed: ${lastError}`);
 
       if (attempt < config.maxBuildRetries) {
-        // Ask Claude to fix the Dockerfile
-        addLog(deploymentId, "system", "Asking Claude to fix the Dockerfile...");
+        // Detect if it's a package/dependency issue vs Dockerfile issue
+        const isDepError = lastError.includes("npm error") || lastError.includes("ETARGET") || lastError.includes("notarget") || lastError.includes("ERESOLVE");
 
-        const fileTree = fs.readdirSync(sourcePath, { recursive: true }) as string[];
+        if (isDepError) {
+          // Fix package.json — re-run preBuildFix with wildcard versions
+          addLog(deploymentId, "system", "Fixing dependency versions...");
+          await preBuildFix(sourcePath, deploymentId);
+          // Also ensure npm install in Dockerfile
+          dockerfile = dockerfile.replace(/npm ci\b[^\n]*/g, "npm install --production");
+          dockerfile = dockerfile.replace(/npm install\s+--only=production/g, "npm install --production");
+        } else {
+          addLog(deploymentId, "system", "Asking Claude to fix the build error...");
 
-        const response = await claudeChat(
-          "You are a Docker expert. Fix the Dockerfile based on the build error. IMPORTANT: Always use 'npm install' NOT 'npm ci' (there is no lockfile). Return ONLY the corrected Dockerfile content, nothing else.",
-          [
-            {
-              role: "user",
-              content: `The Docker build failed with this error:\n\`\`\`\n${lastError}\n\`\`\`\n\nThe Dockerfile was:\n\`\`\`dockerfile\n${dockerfile}\n\`\`\`\n\nThe project file tree is:\n\`\`\`\n${fileTree.slice(0, 100).join("\n")}\n\`\`\`\n\nPlease provide a fixed Dockerfile.`,
-            },
-          ]
-        );
+          const fileTree = fs.readdirSync(sourcePath, { recursive: true }) as string[];
 
-        const textBlock = response.content.find((b) => b.type === "text");
-        if (textBlock && textBlock.type === "text") {
-          // Extract Dockerfile from potential markdown code blocks
-          const match = textBlock.text.match(/```(?:dockerfile)?\n([\s\S]*?)```/);
-          dockerfile = match ? match[1].trim() : textBlock.text.trim();
-          addLog(deploymentId, "system", "Claude generated a fixed Dockerfile");
+          const response = await claudeChat(
+            "You are a Docker expert. Fix the Dockerfile based on the build error. IMPORTANT: Always use 'npm install' NOT 'npm ci' (there is no lockfile). Return ONLY the corrected Dockerfile content, nothing else.",
+            [
+              {
+                role: "user",
+                content: `The Docker build failed with this error:\n\`\`\`\n${lastError}\n\`\`\`\n\nThe Dockerfile was:\n\`\`\`dockerfile\n${dockerfile}\n\`\`\`\n\nThe project file tree is:\n\`\`\`\n${fileTree.slice(0, 100).join("\n")}\n\`\`\`\n\nPlease provide a fixed Dockerfile.`,
+              },
+            ]
+          );
+
+          const textBlock = response.content.find((b) => b.type === "text");
+          if (textBlock && textBlock.type === "text") {
+            const match = textBlock.text.match(/```(?:dockerfile)?\n([\s\S]*?)```/);
+            dockerfile = match ? match[1].trim() : textBlock.text.trim();
+            // Always enforce npm install
+            dockerfile = dockerfile.replace(/npm ci\b[^\n]*/g, "npm install --production");
+            addLog(deploymentId, "system", "Claude generated a fixed Dockerfile");
+          }
         }
       }
     }
