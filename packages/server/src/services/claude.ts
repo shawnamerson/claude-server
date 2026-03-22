@@ -16,16 +16,27 @@ export async function claudeChat(
   tools?: Anthropic.Tool[]
 ): Promise<Anthropic.Message> {
   const client = getClient();
-  // Use streaming to avoid 10-minute timeout on large generations
-  const stream = client.messages.stream({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 32000,
-    system: systemPrompt,
-    messages,
-    tools,
-    ...(tools ? { tool_choice: { type: "tool" as const, name: tools[0].name } } : {}),
-  });
-  return stream.finalMessage();
+
+  // Use streaming to avoid timeout, with a 5 minute abort
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+
+  try {
+    const stream = client.messages.stream(
+      {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 16000,
+        system: systemPrompt,
+        messages,
+        tools,
+        ...(tools ? { tool_choice: { type: "tool" as const, name: tools[0].name } } : {}),
+      },
+      { signal: controller.signal }
+    );
+    return await stream.finalMessage();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function claudeStream(
