@@ -16,98 +16,163 @@ const styles = {
     flex: 1,
     minHeight: 0,
     overflow: "auto",
-    padding: "1rem",
+    padding: "0.75rem",
     display: "flex",
     flexDirection: "column" as const,
-    gap: "0.75rem",
+    gap: "0.5rem",
   },
   userMsg: {
     alignSelf: "flex-end" as const,
     background: "#7c3aed",
     color: "#fff",
-    padding: "0.6rem 1rem",
-    borderRadius: "1rem 1rem 0.25rem 1rem",
-    maxWidth: "80%",
-    fontSize: "0.9rem",
+    padding: "0.5rem 0.75rem",
+    borderRadius: "0.75rem 0.75rem 0.25rem 0.75rem",
+    maxWidth: "85%",
+    fontSize: "0.85rem",
     whiteSpace: "pre-wrap" as const,
   },
   assistantMsg: {
     alignSelf: "flex-start" as const,
     background: "#1a1a2e",
     color: "#e0e0e0",
-    padding: "0.6rem 1rem",
-    borderRadius: "1rem 1rem 1rem 0.25rem",
-    maxWidth: "80%",
-    fontSize: "0.9rem",
+    padding: "0.5rem 0.75rem",
+    borderRadius: "0.75rem 0.75rem 0.75rem 0.25rem",
+    maxWidth: "85%",
+    fontSize: "0.85rem",
     whiteSpace: "pre-wrap" as const,
+  },
+  activityBlock: {
+    alignSelf: "flex-start" as const,
+    background: "#0a0a12",
+    border: "1px solid #1e1e30",
+    borderRadius: "0.5rem",
+    padding: "0.5rem 0.75rem",
+    maxWidth: "90%",
+    width: "100%",
+    fontSize: "0.78rem",
+    fontFamily: "'JetBrains Mono', monospace",
+    color: "#888",
+    maxHeight: "200px",
+    overflow: "auto",
+  },
+  activityLine: {
+    padding: "1px 0",
+    whiteSpace: "pre-wrap" as const,
+    wordBreak: "break-all" as const,
+  },
+  activityClaude: {
+    color: "#a78bfa",
+  },
+  activityFile: {
+    color: "#34d399",
+  },
+  activityCmd: {
+    color: "#f59e0b",
+  },
+  activityError: {
+    color: "#f87171",
   },
   inputArea: {
     display: "flex",
     gap: "0.5rem",
-    padding: "0.75rem",
+    padding: "0.5rem 0.75rem",
     borderTop: "1px solid #1e1e30",
   },
   input: {
     flex: 1,
-    padding: "0.6rem 0.75rem",
+    padding: "0.5rem 0.6rem",
     background: "#12121a",
     border: "1px solid #1e1e30",
     borderRadius: "0.5rem",
     color: "#e0e0e0",
-    fontSize: "0.9rem",
+    fontSize: "0.85rem",
     outline: "none",
     fontFamily: "inherit",
   },
-  askBtn: {
-    padding: "0.6rem 0.75rem",
-    background: "#1a1a2e",
-    color: "#a78bfa",
-    border: "1px solid #2e2e4a",
-    borderRadius: "0.5rem",
-    cursor: "pointer",
-    fontSize: "0.85rem",
-  },
   deployBtn: {
-    padding: "0.6rem 0.75rem",
+    padding: "0.5rem 0.75rem",
     background: "#7c3aed",
     color: "#fff",
     border: "none",
     borderRadius: "0.5rem",
     cursor: "pointer",
-    fontSize: "0.85rem",
+    fontSize: "0.8rem",
     whiteSpace: "nowrap" as const,
   },
   empty: {
     color: "#555",
     textAlign: "center" as const,
-    padding: "2rem",
-    fontSize: "0.9rem",
+    padding: "2rem 1rem",
+    fontSize: "0.85rem",
   },
 };
+
+interface LogLine {
+  stream: string;
+  message: string;
+  timestamp: string;
+}
+
+function getActivityStyle(msg: string): React.CSSProperties {
+  if (msg.startsWith("Claude:")) return styles.activityClaude;
+  if (msg.startsWith("  +") || msg.startsWith("Writing")) return styles.activityFile;
+  if (msg.startsWith("Running:") || msg.startsWith("$")) return styles.activityCmd;
+  if (msg.includes("error") || msg.includes("Error") || msg.includes("failed")) return styles.activityError;
+  return {};
+}
 
 interface Props {
   projectId: string;
   deploying?: boolean;
   deployStatus?: string;
   onDeploy: (prompt: string) => void;
+  deploymentId?: string | null;
 }
 
-export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy }: Props) {
+export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy, deploymentId }: Props) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
+  const [activityLogs, setActivityLogs] = useState<LogLine[]>([]);
   const messagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.getChatHistory(projectId).then(setMessages);
   }, [projectId]);
 
+  // Subscribe to deployment logs for live activity in chat
+  useEffect(() => {
+    if (!deploying || !deploymentId) {
+      setActivityLogs([]);
+      return;
+    }
+
+    setActivityLogs([]);
+    const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream`);
+
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as LogLine;
+        // Only show interesting lines — skip Docker build noise and timestamps
+        if (data.stream === "system" && data.message.trim()) {
+          setActivityLogs(prev => {
+            const next = [...prev, data];
+            // Keep last 50 lines
+            return next.length > 50 ? next.slice(-50) : next;
+          });
+        }
+      } catch {}
+    };
+
+    return () => source.close();
+  }, [deploying, deploymentId]);
+
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
-  }, [messages, streamText]);
+  }, [messages, streamText, activityLogs]);
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -154,9 +219,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
                   fullText += data.content;
                   setStreamText(fullText);
                 }
-              } catch {
-                // Skip
-              }
+              } catch {}
             }
           }
         }
@@ -178,12 +241,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     }
   };
 
-  const handleApplyDeploy = () => {
+  const handleDeploy = () => {
     const text = input.trim();
     if (!text) return;
     setInput("");
 
-    // Show confirmation in chat
     const userMsg: ChatMsg = {
       id: Date.now(),
       project_id: projectId,
@@ -191,62 +253,38 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       content: text,
       created_at: new Date().toISOString(),
     };
-    const systemMsg: ChatMsg = {
-      id: Date.now() + 1,
-      project_id: projectId,
-      role: "assistant",
-      content: "Deploying your changes now... Check the Logs tab for progress.",
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg, systemMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     onDeploy(text);
   };
+
+  const statusText = deployStatus === "generating" ? "Generating..."
+    : deployStatus === "deploying" ? "Deploying..."
+    : "Working...";
 
   return (
     <div style={styles.container}>
       <div ref={messagesRef} style={styles.messages}>
-        {messages.length === 0 && !streaming && (
+        {messages.length === 0 && !streaming && !deploying && (
           <div style={styles.empty}>
-            Ask Claude questions, or describe changes and click "Apply & Deploy".
+            Describe what you want to build and hit Deploy.
           </div>
         )}
-        {messages.map((msg, idx) => (
-          <div key={msg.id}>
-            <div style={msg.role === "user" ? styles.userMsg : styles.assistantMsg}>
-              {msg.content}
-            </div>
-            {msg.role === "assistant" && idx === messages.length - 1 && !streaming && !deploying && (
-              <button
-                style={{
-                  ...styles.deployBtn,
-                  marginTop: "0.4rem",
-                  fontSize: "0.8rem",
-                  padding: "0.4rem 0.7rem",
-                  alignSelf: "flex-start",
-                }}
-                onClick={() => {
-                  const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
-                  const applyPrompt = lastUserMsg
-                    ? `Apply the fix you suggested for: ${lastUserMsg.content}`
-                    : "Apply the changes you just suggested";
-                  const systemMsg: ChatMsg = {
-                    id: Date.now(),
-                    project_id: projectId,
-                    role: "assistant",
-                    content: "Applying suggestion and deploying... Check the Logs tab for progress.",
-                    created_at: new Date().toISOString(),
-                  };
-                  setMessages((prev) => [...prev, systemMsg]);
-                  onDeploy(applyPrompt);
-                }}
-              >
-                Apply Suggestion & Deploy
-              </button>
-            )}
+        {messages.map((msg) => (
+          <div key={msg.id} style={msg.role === "user" ? styles.userMsg : styles.assistantMsg}>
+            {msg.content}
           </div>
         ))}
         {streamText && (
           <div style={styles.assistantMsg}>{streamText}</div>
+        )}
+        {deploying && activityLogs.length > 0 && (
+          <div style={styles.activityBlock}>
+            {activityLogs.map((log, i) => (
+              <div key={i} style={{ ...styles.activityLine, ...getActivityStyle(log.message) }}>
+                {log.message}
+              </div>
+            ))}
+          </div>
         )}
       </div>
       <div style={styles.inputArea}>
@@ -254,20 +292,24 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
           style={styles.input}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-          placeholder="Ask a question or describe changes..."
-          disabled={streaming}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleDeploy();
+            }
+          }}
+          placeholder={deploying ? statusText : "Describe what to build..."}
+          disabled={streaming || deploying}
         />
-        <button style={styles.askBtn} onClick={sendMessage} disabled={streaming || !input.trim()}>
-          {streaming ? "..." : "Ask"}
-        </button>
-        <button style={styles.deployBtn} onClick={handleApplyDeploy} disabled={streaming || deploying || !input.trim()}>
-          {deploying
-            ? deployStatus === "generating" ? "Generating..."
-              : deployStatus === "building" ? "Building..."
-              : deployStatus === "deploying" ? "Deploying..."
-              : "Working..."
-            : "Apply & Deploy"}
+        <button
+          style={{
+            ...styles.deployBtn,
+            opacity: (streaming || deploying || !input.trim()) ? 0.5 : 1,
+          }}
+          onClick={handleDeploy}
+          disabled={streaming || deploying || !input.trim()}
+        >
+          {deploying ? statusText : "Deploy"}
         </button>
       </div>
     </div>

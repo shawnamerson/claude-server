@@ -306,7 +306,7 @@ export default function ProjectDetail() {
         {/* Tab content */}
         <div style={styles.sidebarContent}>
           {sideTab === "chat" && (
-            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} onDeploy={(prompt) => {
+            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} deploymentId={selectedDeployment} onDeploy={(prompt) => {
               if (!id) return;
               api.deploy(id, prompt).then((dep) => {
                 setSelectedDeployment(dep.id);
