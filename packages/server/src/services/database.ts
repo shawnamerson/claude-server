@@ -76,7 +76,15 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
     });
   }
 
-  // Create and start the Postgres container
+  // Create project-specific network if it doesn't exist
+  const networkName = `claude-project-${projectSlug}`;
+  try {
+    await docker.getNetwork(networkName).inspect();
+  } catch {
+    await docker.createNetwork({ Name: networkName, Driver: "bridge" });
+  }
+
+  // Create and start the Postgres container on the project's isolated network
   const container = await docker.createContainer({
     Image: "postgres:16-alpine",
     name: containerName,
@@ -98,7 +106,10 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
       "claude-server.database": projectId,
     },
     NetworkingConfig: {
-      EndpointsConfig: { "claude-server-network": {} },
+      EndpointsConfig: {
+        [networkName]: {}, // Only accessible from this project's containers
+        "claude-server-network": {}, // Also on main network for schema viewer/query runner
+      },
     },
   });
 

@@ -14,7 +14,7 @@ import githubRoutes from "./routes/github.js";
 import databaseRoutes from "./routes/database.js";
 import domainRoutes from "./routes/domains.js";
 import proxyRoutes from "./routes/proxy.js";
-import authRoutes, { authMiddleware } from "./routes/auth.js";
+import authRoutes, { authMiddleware, requireProjectOwner, requireDeploymentOwner } from "./routes/auth.js";
 import billingRoutes from "./routes/billing.js";
 import { initializeDbPortTracking } from "./services/database.js";
 import { reloadCaddyConfig } from "./services/caddy.js";
@@ -28,10 +28,15 @@ app.use(express.json());
 // Auth middleware — attaches user to request if token present
 app.use(authMiddleware);
 
-// API routes
+// API routes — public
 app.use("/api", authRoutes);
 app.use("/api", billingRoutes);
-app.use("/api/projects", projectRoutes);
+
+// API routes — project-scoped (require auth + ownership)
+app.use("/api/projects", projectRoutes); // list/create don't need ownership; individual routes do
+app.use("/api/projects/:id", requireProjectOwner); // All sub-routes of /projects/:id
+app.use("/api/projects/:projectId", requireProjectOwner); // All sub-routes of /projects/:projectId
+app.use("/api/deployments/:id", requireDeploymentOwner); // Deployment-specific routes
 app.use("/api", deploymentRoutes);
 app.use("/api", logRoutes);
 app.use("/api", chatRoutes);

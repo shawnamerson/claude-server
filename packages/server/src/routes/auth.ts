@@ -131,6 +131,69 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Middleware: require auth + verify user owns the project referenced by :id or :projectId
+export function requireProjectOwner(req: Request, res: Response, next: NextFunction) {
+  const user = (req as any).user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const projectId = req.params.id || req.params.projectId;
+  if (!projectId) {
+    next();
+    return;
+  }
+
+  const db = getDb();
+  const project = db.prepare("SELECT user_id FROM projects WHERE id = ?").get(projectId) as { user_id: string | null } | undefined;
+
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  // Allow access if project has no owner (legacy) or user is the owner
+  if (project.user_id && project.user_id !== user.id) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  next();
+}
+
+// Middleware: require auth + verify user owns the deployment referenced by :id (via its project)
+export function requireDeploymentOwner(req: Request, res: Response, next: NextFunction) {
+  const user = (req as any).user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const deploymentId = req.params.id;
+  if (!deploymentId) {
+    next();
+    return;
+  }
+
+  const db = getDb();
+  const dep = db.prepare(
+    "SELECT d.project_id, p.user_id FROM deployments d JOIN projects p ON p.id = d.project_id WHERE d.id = ?"
+  ).get(deploymentId) as { project_id: string; user_id: string | null } | undefined;
+
+  if (!dep) {
+    res.status(404).json({ error: "Deployment not found" });
+    return;
+  }
+
+  if (dep.user_id && dep.user_id !== user.id) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  next();
+}
+
 // Deduct credits for a deploy
 export function deductCredit(userId: string, description: string): boolean {
   const db = getDb();

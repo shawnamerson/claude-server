@@ -17,9 +17,15 @@ function slugify(name: string): string {
     .slice(0, 50);
 }
 
-// List all projects
-router.get("/", (_req: Request, res: Response) => {
+// List projects for the current user
+router.get("/", (req: Request, res: Response) => {
   const db = getDb();
+  const user = (req as any).user;
+
+  // If authenticated, show only user's projects. Otherwise show unowned projects.
+  const whereClause = user ? "WHERE p.user_id = ?" : "WHERE p.user_id IS NULL";
+  const params = user ? [user.id] : [];
+
   const projects = db
     .prepare(
       `SELECT p.*,
@@ -27,9 +33,9 @@ router.get("/", (_req: Request, res: Response) => {
         (SELECT d.port FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1) as latest_port,
         (SELECT COUNT(*) FROM deployments d WHERE d.project_id = p.id) as deploy_count,
         (SELECT COALESCE(SUM(d.cost_cents), 0) FROM deployments d WHERE d.project_id = p.id) as total_cost_cents
-       FROM projects p ORDER BY p.updated_at DESC`
+       FROM projects p ${whereClause} ORDER BY p.updated_at DESC`
     )
-    .all();
+    .all(...params);
   res.json(projects);
 });
 
