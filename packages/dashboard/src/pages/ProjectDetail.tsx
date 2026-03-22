@@ -166,6 +166,11 @@ export default function ProjectDetail() {
     refresh();
   };
 
+  const handleStart = async (depId: string) => {
+    await api.startDeployment(depId);
+    refresh();
+  };
+
   const handleDelete = async () => {
     if (!id) return;
     await api.deleteProject(id);
@@ -262,6 +267,14 @@ export default function ProjectDetail() {
                   onClick={(e) => { e.stopPropagation(); handleStop(dep.id); }}
                 >
                   Stop
+                </button>
+              )}
+              {(dep.status === "stopped" || dep.status === "failed") && dep.dockerfile && (
+                <button
+                  style={{ ...styles.stopBtn, color: "#34d399", borderColor: "#064e3b" }}
+                  onClick={(e) => { e.stopPropagation(); handleStart(dep.id); }}
+                >
+                  Start
                 </button>
               )}
             </div>

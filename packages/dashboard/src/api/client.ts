@@ -114,6 +114,8 @@ export const api = {
     }),
   stopDeployment: (id: string) =>
     request<{ ok: boolean }>(`/deployments/${id}/stop`, { method: "POST" }),
+  startDeployment: (id: string) =>
+    request<{ ok: boolean }>(`/deployments/${id}/start`, { method: "POST" }),
 
   // Chat
   getChatHistory: (projectId: string) => request<ChatMsg[]>(`/projects/${projectId}/chat`),

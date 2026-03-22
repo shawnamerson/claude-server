@@ -223,4 +223,41 @@ router.post("/deployments/:id/stop", async (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// Restart a stopped deployment
+router.post("/deployments/:id/start", async (req: Request, res: Response) => {
+  const db = getDb();
+  const deployment = db.prepare("SELECT * FROM deployments WHERE id = ?").get(req.params.id) as Deployment | undefined;
+  if (!deployment) {
+    res.status(404).json({ error: "Deployment not found" });
+    return;
+  }
+
+  if (!deployment.docker_image_id) {
+    res.status(400).json({ error: "No image to start — redeploy instead" });
+    return;
+  }
+
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(deployment.project_id) as Project | undefined;
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  try {
+    const portMatch = deployment.dockerfile?.match(/EXPOSE\s+(\d+)/);
+    const appPort = portMatch ? parseInt(portMatch[1]) : 3000;
+    const envVars = getEnvVarsForDeploy(project.id);
+    const { containerId, hostPort } = await deployContainer(deployment.docker_image_id, deployment.id, appPort, envVars, project.slug);
+
+    db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")
+      .run(containerId, hostPort, deployment.id);
+
+    addLog(deployment.id, "system", `Restarted on port ${hostPort}`);
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
 export default router;
