@@ -65,6 +65,22 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
     dbContext = "(No database)";
   }
 
+  // Get env vars
+  const envVars = db
+    .prepare("SELECT key, value FROM env_vars WHERE project_id = ?")
+    .all(project.id) as Array<{ key: string; value: string }>;
+  const envContext = envVars.length > 0
+    ? envVars.map((v) => `${v.key}=${v.value}`).join("\n")
+    : "(No environment variables set)";
+
+  // Get GitHub connection
+  const githubRepo = db
+    .prepare("SELECT repo_url, branch FROM github_repos WHERE project_id = ?")
+    .get(project.id) as { repo_url: string; branch: string } | undefined;
+  const githubContext = githubRepo
+    ? `Connected to ${githubRepo.repo_url} (branch: ${githubRepo.branch})`
+    : "(No GitHub repo connected)";
+
   const systemPrompt = `You are a helpful AI assistant integrated into a cloud deployment platform. You have full context about the user's project, including their database schema and data.
 
 Project: ${project.name}
@@ -82,10 +98,18 @@ ${latestDeployment?.error ? `Error: ${latestDeployment.error}` : ""}
 ${logsContext || "(No logs)"}
 \`\`\`
 
+## Environment Variables
+\`\`\`
+${envContext}
+\`\`\`
+
 ## Database
 ${dbContext}
 
-Help the user understand their project, debug issues, suggest improvements, and answer questions. You can see the database tables, schema, and row counts above. If they want to make changes, explain what you'd change. For actual code changes, suggest they click "Apply & Deploy" with their modification request.`;
+## GitHub
+${githubContext}
+
+Help the user understand their project, debug issues, suggest improvements, and answer questions. You can see the database tables, schema, and row counts above. You can see all environment variables and the GitHub connection. If they want to make changes, explain what you'd change. For actual code changes, suggest they click "Apply & Deploy" with their modification request.`;
 
   // Get chat history
   const history = db
