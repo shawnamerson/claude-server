@@ -254,10 +254,12 @@ async function monitorAndAutoFix(
     }
   }
 
-  // Monitor container continuously every 10 seconds
+  // First check quickly (3 seconds) to catch instant crashes, then every 10 seconds
   let currentContainerId = containerId;
+  let firstCheck = true;
   while (true) {
-    await new Promise((r) => setTimeout(r, 10000));
+    await new Promise((r) => setTimeout(r, firstCheck ? 3000 : 10000));
+    firstCheck = false;
 
     // Check if deployment is still supposed to be running
     const dep = db.prepare("SELECT status, container_id FROM deployments WHERE id = ?").get(deploymentId) as { status: string; container_id: string } | undefined;
