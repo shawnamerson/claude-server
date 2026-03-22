@@ -58,7 +58,7 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
     return;
   }
 
-  const { prompt, template } = req.body;
+  const { prompt } = req.body;
 
   // Check credits if user is authenticated
   const user = (req as any).user;
@@ -79,13 +79,13 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
   res.status(202).json({ id: deploymentId, status: "pending" });
 
   // Run the pipeline asynchronously
-  runPipeline(project, deploymentId, prompt, template).catch((err) => {
+  runPipeline(project, deploymentId, prompt).catch((err) => {
     console.error("Pipeline error:", err);
     updateStatus(deploymentId, "failed", { error: err.message });
   });
 });
 
-async function runPipeline(project: Project, deploymentId: string, prompt?: string, template?: string) {
+async function runPipeline(project: Project, deploymentId: string, prompt?: string) {
   const db = getDb();
   setCurrentDeployment(deploymentId);
 
@@ -110,7 +110,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
         throw new Error("No description provided. Tell Claude what to build.");
       }
       addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
-      result = await generateProject(project.source_path, description, log, template);
+      result = await generateProject(project.source_path, description, log);
     }
 
     addLog(deploymentId, "system", `Project ready — ${result.files.length} files`);

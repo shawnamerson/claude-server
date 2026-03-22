@@ -90,35 +90,7 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-const TEMPLATE_PROMPTS: Record<string, string> = {
-  "web-app": `ARCHITECTURE: Express server with vanilla HTML/CSS/JS frontend.
-- Structure: server.js (Express API + static serving), public/index.html, public/style.css, public/app.js
-- Use express.static('public') to serve frontend files.
-- NEVER put HTML inside JavaScript template literals — use separate .html files.
-- Include a GET /health endpoint.`,
-
-  "static-site": `ARCHITECTURE: Static website with no backend server.
-- Structure: index.html, style.css, app.js (all in root directory)
-- Use a minimal Express server (server.js) just to serve static files.
-- No database needed. Use localStorage for any client-side state.
-- Focus on beautiful, responsive design with modern CSS.
-- Include a GET /health endpoint in server.js.`,
-
-  "react-app": `ARCHITECTURE: Express API backend + React frontend built with Vite.
-- Structure:
-  - server.js (Express API on process.env.PORT, serves built React app from dist/)
-  - src/App.jsx, src/main.jsx, src/index.css (React app)
-  - index.html (Vite entry point)
-  - vite.config.js (with proxy to API in dev)
-- The Dockerfile should: install deps, run "npx vite build", then start server.js which serves dist/.
-- Use fetch('/api/...') in React components to call the API.
-- Include a GET /health endpoint in server.js.`,
-};
-
-function getSystemPrompt(template: string): string {
-  const archSection = TEMPLATE_PROMPTS[template] || TEMPLATE_PROMPTS["web-app"];
-
-  return `You are an expert full-stack developer. Build projects using the provided tools.
+const SYSTEM_PROMPT = `You are an expert full-stack developer. Build projects using the provided tools.
 
 IMPORTANT: Write multiple files per turn using write_files to minimize round-trips. Batch related files together. Use run_command to test your code before finishing.
 
@@ -131,10 +103,16 @@ WORKFLOW:
 
 If any command reveals an error, fix the file and re-test before moving on.
 
-${archSection}
+CHOOSE THE RIGHT ARCHITECTURE based on what the user describes:
+- For simple sites (landing pages, portfolios, blogs): Express serving static HTML/CSS/JS from public/ folder
+- For web apps with a backend (CRUD apps, marketplaces, dashboards): Express API + vanilla HTML/CSS/JS in public/
+- For complex interactive UIs (real-time apps, rich SPAs): Express API + React with Vite (src/App.jsx, build to dist/)
+Use your judgment — pick the simplest architecture that fits the requirements.
 
 RULES:
+- NEVER put HTML inside JavaScript template literals — use separate .html files in public/ or React components.
 - The app MUST listen on process.env.PORT (default 3000).
+- Include a GET /health endpoint.
 - If the app needs data persistence, ALWAYS use PostgreSQL via process.env.DATABASE_URL with the "pg" npm package. Create tables on startup with CREATE TABLE IF NOT EXISTS. NEVER use SQLite, JSON files, or in-memory storage.
 - Make the app functional with real features, not a skeleton. Include sample data if appropriate.
 
@@ -152,7 +130,6 @@ DOCKERFILE:
 - Exclude: node_modules, .git, *.md
 
 Call "done" with a brief note about what the app does when finished.`;
-}
 
 const MODIFY_SYSTEM_PROMPT = `You are an expert full-stack developer. Modify an existing project using the provided tools.
 
@@ -392,7 +369,6 @@ export async function generateProject(
   sourcePath: string,
   description: string,
   onLog: (message: string) => void,
-  template: string = "web-app",
 ): Promise<GenerationResult> {
   // Clean directory for fresh generation
   if (fs.existsSync(sourcePath)) {
@@ -410,7 +386,7 @@ export async function generateProject(
 
   try {
     const notes = await claudeAgentLoop(
-      getSystemPrompt(template),
+      SYSTEM_PROMPT,
       `Build me this application:\n\n${description}`,
       AGENT_TOOLS,
       handlers,

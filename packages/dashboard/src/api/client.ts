@@ -139,10 +139,10 @@ export const api = {
   listDeployments: (projectId: string) =>
     request<Deployment[]>(`/projects/${projectId}/deployments`),
   getDeployment: (id: string) => request<Deployment>(`/deployments/${id}`),
-  deploy: (projectId: string, prompt?: string, template?: string) =>
+  deploy: (projectId: string, prompt?: string) =>
     request<Deployment>(`/projects/${projectId}/deploy`, {
       method: "POST",
-      body: JSON.stringify({ prompt, template }),
+      body: JSON.stringify({ prompt }),
     }),
   stopDeployment: (id: string) =>
     request<{ ok: boolean }>(`/deployments/${id}/stop`, { method: "POST" }),
