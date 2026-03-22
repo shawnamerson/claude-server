@@ -110,10 +110,11 @@ JAVASCRIPT/HTML RULES — VERY IMPORTANT:
 - In server.js: app.use(express.static('public')) and app.get('/', (req, res) => res.sendFile('index.html', { root: 'public' }))
 
 Dockerfile rules:
-- Use node:20-alpine as the base image
-- Use "npm install" NOT "npm ci" (there is no lockfile)
+- Use claude-server/base:latest as the base image (it's node:20-alpine with common packages pre-installed: express, cors, pg, bcryptjs, jsonwebtoken, uuid, dotenv, multer, cookie-parser, compression, morgan, helmet, express-rate-limit, ws, socket.io, axios, node-fetch, dayjs, marked, sanitize-html, sharp)
+- WORKDIR is already /app and node_modules are at /app/node_modules
+- Only run "npm install" if you need packages NOT in the base image. If all your dependencies are in the base image, skip npm install entirely.
 - COPY the public folder: COPY public/ public/
-- Set WORKDIR, EXPOSE, and CMD properly
+- Set EXPOSE and CMD properly
 - Keep it simple — no multi-stage builds unless truly needed
 
 Other rules:

@@ -15,8 +15,9 @@ const FAST_MODEL = "claude-sonnet-4-20250514";
 const CHAT_MODEL = "claude-sonnet-4-20250514";
 
 // Sonnet pricing per million tokens
-const INPUT_COST_PER_M = 3.0;  // $3 per 1M input tokens
-const OUTPUT_COST_PER_M = 15.0; // $15 per 1M output tokens
+const INPUT_COST_PER_M = 3.0;      // $3 per 1M input tokens
+const CACHE_READ_COST_PER_M = 0.3; // $0.30 per 1M cached input tokens
+const OUTPUT_COST_PER_M = 15.0;    // $15 per 1M output tokens
 
 export interface TokenUsage {
   inputTokens: number;
@@ -30,11 +31,14 @@ const deployUsage = new Map<string, TokenUsage>();
 function trackUsage(deploymentId: string | null, message: Anthropic.Message) {
   const input = message.usage?.input_tokens || 0;
   const output = message.usage?.output_tokens || 0;
+  const cacheRead = (message.usage as any)?.cache_read_input_tokens || 0;
+  const uncachedInput = input - cacheRead;
   const costCents = Math.round(
-    (input / 1_000_000 * INPUT_COST_PER_M + output / 1_000_000 * OUTPUT_COST_PER_M) * 100
+    (uncachedInput / 1_000_000 * INPUT_COST_PER_M + cacheRead / 1_000_000 * CACHE_READ_COST_PER_M + output / 1_000_000 * OUTPUT_COST_PER_M) * 100
   );
 
-  console.log(`API usage: ${input} in / ${output} out / $${(costCents / 100).toFixed(3)}`);
+  const cacheInfo = cacheRead > 0 ? ` (${cacheRead.toLocaleString()} cached)` : "";
+  console.log(`API usage: ${input} in${cacheInfo} / ${output} out / $${(costCents / 100).toFixed(3)}`);
 
   if (deploymentId) {
     const existing = deployUsage.get(deploymentId) || { inputTokens: 0, outputTokens: 0, costCents: 0 };
@@ -81,7 +85,7 @@ export async function claudeChat(
       {
         model: FAST_MODEL,
         max_tokens: 64000,
-        system: systemPrompt,
+        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
         messages,
         tools,
         ...(tools ? { tool_choice: { type: "tool" as const, name: tools[0].name } } : {}),
