@@ -118,8 +118,15 @@ export function initializeDatabase(db: Database.Database): void {
   `);
 
   // Migrations for existing databases
-  const columns = db.prepare("PRAGMA table_info(projects)").all() as Array<{ name: string }>;
-  if (!columns.find(c => c.name === "user_id")) {
+  const projCols = db.prepare("PRAGMA table_info(projects)").all() as Array<{ name: string }>;
+  if (!projCols.find(c => c.name === "user_id")) {
     db.exec("ALTER TABLE projects ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE");
+  }
+
+  const depCols = db.prepare("PRAGMA table_info(deployments)").all() as Array<{ name: string }>;
+  if (!depCols.find(c => c.name === "input_tokens")) {
+    db.exec("ALTER TABLE deployments ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0");
+    db.exec("ALTER TABLE deployments ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0");
+    db.exec("ALTER TABLE deployments ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0");
   }
 }

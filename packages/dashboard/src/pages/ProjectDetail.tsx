@@ -229,7 +229,17 @@ export default function ProjectDetail() {
       <div style={styles.topBar}>
         <div style={styles.titleRow}>
           <div style={styles.name}>{project.name}</div>
-
+          {(project as any).usage?.total_cost_cents > 0 && (
+            <span style={{
+              fontSize: "0.75rem",
+              color: "#888",
+              background: "#1a1a2e",
+              padding: "0.15rem 0.5rem",
+              borderRadius: "9999px",
+            }}>
+              {(project as any).usage.deploys} deploys &middot; ${((project as any).usage.total_cost_cents / 100).toFixed(2)} API cost
+            </span>
+          )}
           {runningDep?.port && (
             <a
               href={`${window.location.protocol}//${project.slug}.${window.location.hostname}`}

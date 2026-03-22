@@ -225,9 +225,11 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     addLog(deploymentId, "system", `Deployed successfully! Running on port ${hostPort}`);
     addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
 
-    // Log total API usage for this deploy
+    // Save and log total API usage for this deploy
     const usage = getDeployUsage(deploymentId);
     if (usage.inputTokens > 0) {
+      db.prepare("UPDATE deployments SET input_tokens = ?, output_tokens = ?, cost_cents = ? WHERE id = ?")
+        .run(usage.inputTokens, usage.outputTokens, usage.costCents, deploymentId);
       addLog(deploymentId, "system", `Total API usage: ${usage.inputTokens.toLocaleString()} input + ${usage.outputTokens.toLocaleString()} output tokens ($${(usage.costCents / 100).toFixed(3)})`);
     }
 

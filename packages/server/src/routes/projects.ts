@@ -24,7 +24,8 @@ router.get("/", (_req: Request, res: Response) => {
     .prepare(
       `SELECT p.*,
         (SELECT d.status FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1) as latest_status,
-        (SELECT d.port FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1) as latest_port
+        (SELECT d.port FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1) as latest_port,
+        (SELECT COUNT(*) FROM deployments d WHERE d.project_id = p.id) as deploy_count
        FROM projects p ORDER BY p.updated_at DESC`
     )
     .all();
@@ -43,7 +44,12 @@ router.get("/:id", (req: Request, res: Response) => {
   // Get files
   const files = readProjectFiles((project as Project).source_path);
 
-  res.json({ ...project, files });
+  // Get total cost
+  const costData = db.prepare(
+    "SELECT COUNT(*) as deploys, COALESCE(SUM(input_tokens), 0) as total_input, COALESCE(SUM(output_tokens), 0) as total_output, COALESCE(SUM(cost_cents), 0) as total_cost_cents FROM deployments WHERE project_id = ?"
+  ).get(req.params.id) as { deploys: number; total_input: number; total_output: number; total_cost_cents: number };
+
+  res.json({ ...project, files, usage: costData });
 });
 
 // Create a new project (just name + description, no upload needed)
