@@ -9,6 +9,7 @@ import { getEnvVarsForDeploy } from "./envvars.js";
 import { config } from "../config.js";
 import { reloadCaddyConfig } from "../services/caddy.js";
 import { deductCredit } from "./auth.js";
+import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
 
 const router = Router();
 
@@ -82,6 +83,7 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
 
 async function runPipeline(project: Project, deploymentId: string, prompt?: string) {
   const db = getDb();
+  setCurrentDeployment(deploymentId);
 
   try {
     // Step 1: Generate or modify code with Claude
@@ -208,6 +210,14 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     addLog(deploymentId, "system", `Deployed successfully! Running on port ${hostPort}`);
     addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
 
+    // Log total API usage for this deploy
+    const usage = getDeployUsage(deploymentId);
+    if (usage.inputTokens > 0) {
+      addLog(deploymentId, "system", `Total API usage: ${usage.inputTokens.toLocaleString()} input + ${usage.outputTokens.toLocaleString()} output tokens ($${(usage.costCents / 100).toFixed(3)})`);
+    }
+
+    setCurrentDeployment(null);
+
     // Update Caddy routing
     reloadCaddyConfig().catch((err) => console.error("Caddy reload failed:", err));
 
@@ -220,6 +230,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       addLog(deploymentId, "system", `Monitor error: ${err instanceof Error ? err.message : String(err)}`);
     });
   } catch (err) {
+    setCurrentDeployment(null);
     const message = err instanceof Error ? err.message : String(err);
     addLog(deploymentId, "system", `Deployment failed: ${message}`);
     updateStatus(deploymentId, "failed", { error: message });
