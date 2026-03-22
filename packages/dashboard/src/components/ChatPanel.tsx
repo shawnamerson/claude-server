@@ -205,12 +205,39 @@ export default function ChatPanel({ projectId, deploying, onDeploy }: Props) {
             Ask Claude questions, or describe changes and click "Apply & Deploy".
           </div>
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            style={msg.role === "user" ? styles.userMsg : styles.assistantMsg}
-          >
-            {msg.content}
+        {messages.map((msg, idx) => (
+          <div key={msg.id}>
+            <div style={msg.role === "user" ? styles.userMsg : styles.assistantMsg}>
+              {msg.content}
+            </div>
+            {msg.role === "assistant" && idx === messages.length - 1 && !streaming && !deploying && (
+              <button
+                style={{
+                  ...styles.deployBtn,
+                  marginTop: "0.4rem",
+                  fontSize: "0.8rem",
+                  padding: "0.4rem 0.7rem",
+                  alignSelf: "flex-start",
+                }}
+                onClick={() => {
+                  const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
+                  const applyPrompt = lastUserMsg
+                    ? `Apply the fix you suggested for: ${lastUserMsg.content}`
+                    : "Apply the changes you just suggested";
+                  const systemMsg: ChatMsg = {
+                    id: Date.now(),
+                    project_id: projectId,
+                    role: "assistant",
+                    content: "Applying suggestion and deploying... Check the Logs tab for progress.",
+                    created_at: new Date().toISOString(),
+                  };
+                  setMessages((prev) => [...prev, systemMsg]);
+                  onDeploy(applyPrompt);
+                }}
+              >
+                Apply Suggestion & Deploy
+              </button>
+            )}
           </div>
         ))}
         {streamText && (
