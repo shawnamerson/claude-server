@@ -72,6 +72,13 @@ export interface GitHubConnection {
   webhookUrl: string;
 }
 
+export interface CustomDomain {
+  id: number;
+  project_id: string;
+  domain: string;
+  verified: number;
+}
+
 export interface DatabaseInfo {
   status: string;
   dbName: string;
@@ -156,4 +163,14 @@ export const api = {
     request<DatabaseCreateResult>(`/projects/${projectId}/database`, { method: "POST" }),
   deleteDatabase: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/database`, { method: "DELETE" }),
+
+  // Domains
+  getDomains: (projectId: string) => request<CustomDomain[]>(`/projects/${projectId}/domains`),
+  addDomain: (projectId: string, domain: string) =>
+    request<{ ok: boolean; domain: string; instructions: string }>(`/projects/${projectId}/domains`, {
+      method: "POST",
+      body: JSON.stringify({ domain }),
+    }),
+  removeDomain: (projectId: string, domainId: number) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/domains/${domainId}`, { method: "DELETE" }),
 };

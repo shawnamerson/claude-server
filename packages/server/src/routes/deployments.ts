@@ -7,6 +7,7 @@ import { buildWithRetry } from "../services/builder.js";
 import { deployContainer, stopContainer, releasePort } from "../services/deployer.js";
 import { getEnvVarsForDeploy } from "./envvars.js";
 import { config } from "../config.js";
+import { reloadCaddyConfig } from "../services/caddy.js";
 
 const router = Router();
 
@@ -194,7 +195,10 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     });
 
     addLog(deploymentId, "system", `Deployed successfully! Running on port ${hostPort}`);
-    addLog(deploymentId, "system", `Access your app via the "Open Preview" link above`);
+    addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
+
+    // Update Caddy routing
+    reloadCaddyConfig().catch((err) => console.error("Caddy reload failed:", err));
 
     // Update project timestamp
     db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
@@ -220,6 +224,7 @@ router.post("/deployments/:id/stop", async (req: Request, res: Response) => {
   }
 
   db.prepare("UPDATE deployments SET status = 'stopped', stopped_at = datetime('now') WHERE id = ?").run(deployment.id);
+  reloadCaddyConfig().catch(() => {});
   res.json({ ok: true });
 });
 
@@ -253,6 +258,7 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
       .run(containerId, hostPort, deployment.id);
 
     addLog(deployment.id, "system", `Restarted on port ${hostPort}`);
+    reloadCaddyConfig().catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

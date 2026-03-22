@@ -12,8 +12,10 @@ import fileRoutes from "./routes/files.js";
 import envRoutes from "./routes/envvars.js";
 import githubRoutes from "./routes/github.js";
 import databaseRoutes from "./routes/database.js";
+import domainRoutes from "./routes/domains.js";
 import proxyRoutes from "./routes/proxy.js";
 import { initializeDbPortTracking } from "./services/database.js";
+import { reloadCaddyConfig } from "./services/caddy.js";
 import fs from "fs";
 
 const app = express();
@@ -30,6 +32,7 @@ app.use("/api", fileRoutes);
 app.use("/api", envRoutes);
 app.use("/api", githubRoutes);
 app.use("/api", databaseRoutes);
+app.use("/api", domainRoutes);
 
 // Proxy to deployed containers (must be before static files)
 app.use(proxyRoutes);
@@ -68,6 +71,9 @@ async function start() {
   // Track existing container ports
   await initializePortTracking();
   await initializeDbPortTracking();
+
+  // Generate initial Caddy config
+  reloadCaddyConfig().catch(() => console.log("Caddy not available yet — config will update on first deploy"));
 
   app.listen(config.port, () => {
     console.log(`Claude Server running on http://localhost:${config.port}`);

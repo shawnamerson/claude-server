@@ -8,8 +8,9 @@ import FileViewer from "../components/FileViewer";
 import EnvVarsPanel from "../components/EnvVarsPanel";
 import GitHubPanel from "../components/GitHubPanel";
 import DatabasePanel from "../components/DatabasePanel";
+import DomainsPanel from "../components/DomainsPanel";
 
-type Tab = "logs" | "files" | "env" | "database" | "github";
+type Tab = "logs" | "files" | "env" | "database" | "domains" | "github";
 
 const styles = {
   page: {
@@ -231,12 +232,12 @@ export default function ProjectDetail() {
           {runningDep && <StatusBadge status="running" />}
           {runningDep?.port && (
             <a
-              href={`/preview/${runningDep.port}`}
+              href={`${window.location.protocol}//${project.slug}.${window.location.hostname}`}
               target="_blank"
               rel="noreferrer"
               style={{ color: "#60a5fa", fontSize: "0.8rem" }}
             >
-              Open Preview
+              {project.slug}.{window.location.hostname}
             </a>
           )}
         </div>
@@ -287,13 +288,13 @@ export default function ProjectDetail() {
         {/* Left panel: Tabs for Logs / Files / Env / GitHub */}
         <div style={styles.leftPanel}>
           <div style={styles.tabs}>
-            {(["logs", "files", "env", "database", "github"] as Tab[]).map((tab) => (
+            {(["logs", "files", "env", "database", "domains", "github"] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 style={{ ...styles.tab, ...(leftTab === tab ? styles.tabActive : {}) }}
                 onClick={() => setLeftTab(tab)}
               >
-                {{ logs: "Logs", files: "Files", env: "Env Vars", database: "Database", github: "GitHub" }[tab]}
+                {{ logs: "Logs", files: "Files", env: "Env", database: "DB", domains: "Domains", github: "Git" }[tab]}
               </button>
             ))}
           </div>
@@ -303,6 +304,7 @@ export default function ProjectDetail() {
           {leftTab === "files" && <FileViewer projectId={project.id} />}
           {leftTab === "env" && <EnvVarsPanel projectId={project.id} />}
           {leftTab === "database" && <DatabasePanel projectId={project.id} />}
+          {leftTab === "domains" && <DomainsPanel projectId={project.id} projectSlug={project.slug} />}
           {leftTab === "github" && <GitHubPanel projectId={project.id} />}
         </div>
 

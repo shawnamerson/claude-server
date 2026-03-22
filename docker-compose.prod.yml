@@ -6,13 +6,15 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddyfile:/etc/caddy
       - caddy-data:/data
       - caddy-config:/config
     environment:
       - DOMAIN=${DOMAIN}
     networks:
       - claude-server-network
+    # Enable admin API for dynamic config reloads
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 
   claude-server:
     build: .
@@ -22,8 +24,10 @@ services:
       - PORT=3000
       - DATA_DIR=/app/data
       - DOMAIN=${DOMAIN}
+      - CADDYFILE_PATH=/caddyfile/Caddyfile
     volumes:
       - app-data:/app/data
+      - caddyfile:/caddyfile
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - claude-server-network
@@ -32,6 +36,7 @@ volumes:
   app-data:
   caddy-data:
   caddy-config:
+  caddyfile:
 
 networks:
   claude-server-network:
