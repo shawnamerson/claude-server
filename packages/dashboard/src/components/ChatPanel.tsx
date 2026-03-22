@@ -149,9 +149,8 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     }
   }, [deploying]);
 
-  // Subscribe to deployment logs — use activeDepId (set immediately on deploy)
-  // or fall back to deploymentId from parent (set via polling)
-  const watchId = activeDepId || (deploying ? deploymentId : null);
+  // Subscribe to deployment logs — use whichever ID we have first
+  const watchId = activeDepId || deploymentId;
 
   useEffect(() => {
     if (!watchId) return;
@@ -214,7 +213,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     setTimeout(() => clearInterval(poll), 10000);
   };
 
-  const isActive = building || deploying;
+  const isActive = building || deploying || (watchId !== null && activity.length > 0);
   const statusLabel = deployStatus === "generating" ? "Claude is working..."
     : deployStatus === "deploying" ? "Starting your app..."
     : isActive ? "Working..." : "";
