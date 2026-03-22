@@ -5,20 +5,22 @@ import NewProject from "./pages/NewProject";
 
 const styles = {
   app: {
-    minHeight: "100vh",
+    height: "100vh",
     display: "flex",
     flexDirection: "column" as const,
+    overflow: "hidden",
   },
   nav: {
     display: "flex",
     alignItems: "center",
     gap: "1.5rem",
-    padding: "1rem 2rem",
+    padding: "0.6rem 1.5rem",
     borderBottom: "1px solid #1a1a2e",
     background: "#0d0d14",
+    flexShrink: 0,
   },
   logo: {
-    fontSize: "1.25rem",
+    fontSize: "1.1rem",
     fontWeight: 700,
     color: "#a78bfa",
     textDecoration: "none",
@@ -26,15 +28,18 @@ const styles = {
   navLink: {
     color: "#888",
     textDecoration: "none",
-    fontSize: "0.9rem",
+    fontSize: "0.85rem",
   },
   main: {
     flex: 1,
-    padding: "0.75rem 1.5rem",
-    maxWidth: "1400px",
+    padding: "0.5rem 1rem",
     overflow: "hidden",
     width: "100%",
+    maxWidth: "1400px",
     margin: "0 auto",
+    display: "flex",
+    flexDirection: "column" as const,
+    minHeight: 0,
   },
 };
 

@@ -15,22 +15,23 @@ const styles = {
   page: {
     display: "flex",
     flexDirection: "column" as const,
-    height: "calc(100vh - 60px)",
+    flex: 1,
+    minHeight: 0,
     overflow: "hidden",
   },
   topBar: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "0.5rem 0",
+    padding: "0.25rem 0",
     flexShrink: 0,
   },
   titleRow: {
     display: "flex",
     alignItems: "center",
-    gap: "1rem",
+    gap: "0.75rem",
   },
-  name: { fontSize: "1.25rem", fontWeight: 600 },
+  name: { fontSize: "1.1rem", fontWeight: 600 },
   actions: { display: "flex", gap: "0.5rem", alignItems: "center" },
   dangerBtn: {
     padding: "0.4rem 0.8rem",
@@ -52,12 +53,12 @@ const styles = {
   },
   deploymentBar: {
     display: "flex",
-    gap: "0.5rem",
-    paddingBottom: "0.5rem",
+    gap: "0.4rem",
+    paddingBottom: "0.25rem",
     flexShrink: 0,
     flexWrap: "wrap" as const,
     overflow: "hidden",
-    maxHeight: "2.5rem",
+    maxHeight: "2rem",
   },
   deployItem: {
     padding: "0.3rem 0.6rem",
@@ -76,7 +77,7 @@ const styles = {
   grid: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: "1rem",
+    gap: "0.5rem",
     flex: 1,
     minHeight: 0,
     overflow: "hidden",
@@ -97,16 +98,16 @@ const styles = {
     display: "flex",
     gap: "0",
     flexShrink: 0,
-    marginBottom: "0.4rem",
+    marginBottom: "0.25rem",
   },
   tab: {
-    padding: "0.35rem 0.75rem",
+    padding: "0.25rem 0.6rem",
     background: "transparent",
     color: "#666",
     border: "1px solid #1e1e30",
     borderBottom: "none",
     cursor: "pointer",
-    fontSize: "0.8rem",
+    fontSize: "0.75rem",
     borderRadius: "0.35rem 0.35rem 0 0",
   },
   tabActive: {
@@ -115,13 +116,13 @@ const styles = {
     borderColor: "#7c3aed",
   },
   sectionTitle: {
-    fontSize: "0.8rem",
+    fontSize: "0.75rem",
     fontWeight: 600,
     color: "#aaa",
     textTransform: "uppercase" as const,
     letterSpacing: "0.05em",
     flexShrink: 0,
-    marginBottom: "0.4rem",
+    marginBottom: "0.25rem",
   },
 };
 
