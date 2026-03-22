@@ -1,16 +1,16 @@
-const statusColors: Record<string, { bg: string; text: string }> = {
-  running: { bg: "#064e3b", text: "#34d399" },
-  building: { bg: "#1e3a5f", text: "#60a5fa" },
-  generating: { bg: "#3b0764", text: "#c084fc" },
-  deploying: { bg: "#1e3a5f", text: "#60a5fa" },
-  pending: { bg: "#1a1a2e", text: "#888" },
-  failed: { bg: "#450a0a", text: "#f87171" },
-  stopped: { bg: "#1a1a2e", text: "#666" },
-  none: { bg: "#1a1a2e", text: "#555" },
+const statusConfig: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+  running:    { bg: "#064e3b", text: "#34d399", dot: "#34d399", label: "Live" },
+  building:   { bg: "#1e3a5f", text: "#60a5fa", dot: "#60a5fa", label: "Building" },
+  generating: { bg: "#3b0764", text: "#c084fc", dot: "#c084fc", label: "Generating" },
+  deploying:  { bg: "#1e3a5f", text: "#60a5fa", dot: "#60a5fa", label: "Deploying" },
+  pending:    { bg: "#1a1a2e", text: "#888",    dot: "#888",    label: "Pending" },
+  failed:     { bg: "#450a0a", text: "#f87171", dot: "#f87171", label: "Error" },
+  stopped:    { bg: "#1a1a2e", text: "#666",    dot: "#666",    label: "Stopped" },
+  none:       { bg: "#1a1a2e", text: "#555",    dot: "#555",    label: "None" },
 };
 
 export default function StatusBadge({ status }: { status: string }) {
-  const colors = statusColors[status] || statusColors.none;
+  const config = statusConfig[status] || statusConfig.none;
   return (
     <span
       style={{
@@ -18,12 +18,21 @@ export default function StatusBadge({ status }: { status: string }) {
         borderRadius: "9999px",
         fontSize: "0.75rem",
         fontWeight: 500,
-        background: colors.bg,
-        color: colors.text,
-        textTransform: "capitalize",
+        background: config.bg,
+        color: config.text,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35rem",
       }}
     >
-      {status}
+      <span style={{
+        width: "6px",
+        height: "6px",
+        borderRadius: "50%",
+        background: config.dot,
+        display: "inline-block",
+      }} />
+      {config.label}
     </span>
   );
 }
