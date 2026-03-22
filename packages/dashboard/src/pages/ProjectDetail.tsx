@@ -155,7 +155,14 @@ export default function ProjectDetail() {
       api.listDeployments(id).then((deps) => {
         setDeployments(deps);
         if (deps.length > 0) {
-          setSelectedDeployment((prev) => prev || deps[0].id);
+          // Auto-switch to the latest deployment if it's actively running/building
+          const latest = deps[0];
+          const isActive = ["pending", "generating", "building", "deploying"].includes(latest.status);
+          setSelectedDeployment((prev) => {
+            if (!prev) return latest.id;
+            if (isActive && prev !== latest.id) return latest.id;
+            return prev;
+          });
         }
       });
     }, 2000);
