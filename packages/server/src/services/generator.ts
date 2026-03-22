@@ -90,15 +90,29 @@ const SYSTEM_PROMPT = `You are an expert full-stack developer and DevOps enginee
 
 CRITICAL RULES:
 - Build a focused MVP — the core features that make the app work. Keep it simple and functional.
-- For web apps: use a SINGLE Node.js server that serves both the API and frontend HTML. Use inline HTML/CSS/JS served from Express — do NOT use React, Next.js, or any frontend build step. This keeps the project small and deployable.
-- Use vanilla HTML, CSS, and JavaScript for the frontend. Serve it as static files or inline from Express.
+- For web apps: use a SINGLE Node.js server that serves both the API and frontend HTML.
 - The app MUST listen on a port (use the PORT env var, default to 3000).
 - Include a proper package.json with all dependencies listed.
 - If the user mentions a database and DATABASE_URL is available, use PostgreSQL. Otherwise use SQLite or in-memory storage.
 
+JAVASCRIPT/HTML RULES — VERY IMPORTANT:
+- NEVER put HTML directly inside JavaScript template literals (backticks). This causes syntax errors.
+- Instead, serve HTML from SEPARATE .html files in a "public" folder using express.static.
+- Put CSS in separate .css files in the public folder.
+- Put client-side JavaScript in separate .js files in the public folder.
+- The server.js should ONLY contain the Express server, API routes, and data logic.
+- Use res.sendFile() to serve the main HTML page, NOT res.send() with template literals containing HTML.
+- Example structure:
+  - server.js (Express API only)
+  - public/index.html (HTML)
+  - public/style.css (CSS)
+  - public/app.js (client-side JS)
+- In server.js: app.use(express.static('public')) and app.get('/', (req, res) => res.sendFile('index.html', { root: 'public' }))
+
 Dockerfile rules:
 - Use node:20-alpine as the base image
 - Use "npm install" NOT "npm ci" (there is no lockfile)
+- COPY the public folder: COPY public/ public/
 - Set WORKDIR, EXPOSE, and CMD properly
 - Keep it simple — no multi-stage builds unless truly needed
 
@@ -117,6 +131,8 @@ You MUST call the submit_project tool with all generated files.`;
 const MODIFY_SYSTEM_PROMPT = `You are an expert full-stack developer. The user has an existing project and wants to modify it. You will receive the current project files and the user's requested changes.
 
 Generate the COMPLETE updated project — include ALL files, even ones that haven't changed. This ensures the project stays complete and buildable.
+
+IMPORTANT: NEVER put HTML inside JavaScript template literals (backticks) — this causes syntax errors. Keep HTML in separate .html files in the public folder, CSS in .css files, and client-side JS in .js files. The server.js should only contain Express API routes and serve static files with express.static('public').
 
 You MUST call the submit_project tool with the complete set of files, the updated Dockerfile, and .dockerignore.`;
 
