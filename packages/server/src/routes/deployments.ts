@@ -221,6 +221,19 @@ async function monitorAndAutoFix(
   const db = getDb();
 
   const { getContainerStatus } = await import("../services/deployer.js");
+  const DOCKER_HOST = "172.17.0.1";
+
+  async function checkHealth(port: number): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch(`http://${DOCKER_HOST}:${port}/health`, { signal: controller.signal });
+      clearTimeout(timeout);
+      return resp.ok;
+    } catch {
+      return false;
+    }
+  }
 
   // Monitor container continuously every 10 seconds
   let currentContainerId = containerId;
@@ -233,9 +246,30 @@ async function monitorAndAutoFix(
 
     currentContainerId = dep.container_id || currentContainerId;
     const status = await getContainerStatus(currentContainerId);
-    if (status === "running") continue; // All good, keep watching
 
-  addLog(deploymentId, "system", "Container crashed! Auto-diagnosing...");
+    if (status === "running") {
+      // Container is running — but is the app actually responding?
+      const port = (db.prepare("SELECT port FROM deployments WHERE id = ?").get(deploymentId) as { port: number } | undefined)?.port;
+      if (port) {
+        const healthy = await checkHealth(port);
+        if (healthy) continue; // All good
+
+        // App is stuck — count consecutive failures
+        let failCount = 0;
+        for (let i = 0; i < 3; i++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          if (await checkHealth(port)) { failCount = 0; break; }
+          failCount++;
+        }
+        if (failCount < 3) continue; // Recovered
+
+        addLog(deploymentId, "system", "App is unresponsive! Auto-diagnosing...");
+      } else {
+        continue;
+      }
+    } else {
+      addLog(deploymentId, "system", "Container crashed! Auto-diagnosing...");
+    }
 
   // Get error logs
   const errorLogs = db
