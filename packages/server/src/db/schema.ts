@@ -116,4 +116,10 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_messages(project_id);
     CREATE INDEX IF NOT EXISTS idx_env_vars_project ON env_vars(project_id);
   `);
+
+  // Migrations for existing databases
+  const columns = db.prepare("PRAGMA table_info(projects)").all() as Array<{ name: string }>;
+  if (!columns.find(c => c.name === "user_id")) {
+    db.exec("ALTER TABLE projects ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE");
+  }
 }
