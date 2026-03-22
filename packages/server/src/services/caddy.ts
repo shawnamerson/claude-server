@@ -49,9 +49,13 @@ export function generateCaddyfile(): string {
   caddyfile += `}\n\n`;
 
   // Subdomain routing: slug.domain -> container port via host
+  // Strip framing restrictions so apps render in the dashboard preview iframe
   for (const [_projectId, { port, slug }] of projectPorts) {
     caddyfile += `${slug}.${domain} {\n`;
     caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${port}\n`;
+    caddyfile += `    header -X-Frame-Options\n`;
+    caddyfile += `    header -Content-Security-Policy\n`;
+    caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
     caddyfile += `}\n\n`;
   }
 
@@ -61,6 +65,9 @@ export function generateCaddyfile(): string {
     if (mapping) {
       caddyfile += `${cd.domain} {\n`;
       caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${mapping.port}\n`;
+      caddyfile += `    header -X-Frame-Options\n`;
+      caddyfile += `    header -Content-Security-Policy\n`;
+      caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
       caddyfile += `}\n\n`;
     }
   }
