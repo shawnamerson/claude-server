@@ -223,7 +223,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 
     // Monitor container health — auto-fix if it crashes
-    monitorAndAutoFix(project, deploymentId, containerId, result).catch((err) => {
+    monitorContainer(project, deploymentId, containerId).catch((err) => {
       console.error("Monitor error:", err);
       addLog(deploymentId, "system", `Monitor error: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -234,105 +234,49 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
   }
 }
 
-async function monitorAndAutoFix(
+// Auto-fix: read error logs, ask Claude to fix, rebuild, redeploy
+async function autoFixAndRedeploy(
   project: Project,
   deploymentId: string,
-  containerId: string,
-  lastResult: { dockerfile: string; dockerignore: string; files: Array<{ path: string; content: string }>; notes: string }
-) {
+  reason: string
+): Promise<string | null> {
   const db = getDb();
 
-  const { getContainerStatus } = await import("../services/deployer.js");
-  const DOCKER_HOST = "172.17.0.1";
-
-  async function checkHealth(port: number): Promise<boolean> {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const resp = await fetch(`http://${DOCKER_HOST}:${port}/health`, { signal: controller.signal });
-      clearTimeout(timeout);
-      return resp.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  // First check quickly (3 seconds) to catch instant crashes, then every 10 seconds
-  let currentContainerId = containerId;
-  let firstCheck = true;
-  while (true) {
-    await new Promise((r) => setTimeout(r, firstCheck ? 3000 : 10000));
-    firstCheck = false;
-
-    // Check if deployment is still supposed to be running
-    const dep = db.prepare("SELECT status, container_id FROM deployments WHERE id = ?").get(deploymentId) as { status: string; container_id: string } | undefined;
-    if (!dep || dep.status === "stopped" || dep.status === "failed") return;
-
-    currentContainerId = dep.container_id || currentContainerId;
-    const status = await getContainerStatus(currentContainerId);
-
-    if (status === "running") {
-      // Container is running — but is the app actually responding?
-      const port = (db.prepare("SELECT port FROM deployments WHERE id = ?").get(deploymentId) as { port: number } | undefined)?.port;
-      if (port) {
-        const healthy = await checkHealth(port);
-        if (healthy) continue; // All good
-
-        // App is stuck — count consecutive failures
-        let failCount = 0;
-        for (let i = 0; i < 3; i++) {
-          await new Promise((r) => setTimeout(r, 5000));
-          if (await checkHealth(port)) { failCount = 0; break; }
-          failCount++;
-        }
-        if (failCount < 3) continue; // Recovered
-
-        addLog(deploymentId, "system", "App is unresponsive! Auto-diagnosing...");
-      } else {
-        continue;
-      }
-    } else {
-      addLog(deploymentId, "system", "Container crashed! Auto-diagnosing...");
-    }
+  addLog(deploymentId, "system", `${reason} — Auto-fixing...`);
 
   // Get error logs
   const errorLogs = db
-    .prepare("SELECT message FROM logs WHERE deployment_id = ? AND stream IN ('stderr', 'stdout') ORDER BY id DESC LIMIT 50")
-    .all(deploymentId) as Array<{ message: string }>;
+    .prepare("SELECT stream, message FROM logs WHERE deployment_id = ? AND stream IN ('stderr', 'stdout', 'system') ORDER BY id DESC LIMIT 50")
+    .all(deploymentId) as Array<{ stream: string; message: string }>;
 
-  const errorText = errorLogs.map((l) => l.message).reverse().join("\n");
+  const errorText = errorLogs.map((l) => `[${l.stream}] ${l.message}`).reverse().join("\n");
 
   if (!errorText.trim()) {
-    addLog(deploymentId, "system", "No error logs found — container exited silently");
-    updateStatus(deploymentId, "failed", { error: "Container crashed with no error output" });
-    return;
+    addLog(deploymentId, "system", "No error logs found");
+    updateStatus(deploymentId, "failed", { error: `${reason}, no error logs` });
+    return null;
   }
 
-  addLog(deploymentId, "system", "Asking Claude to fix the error...");
+  addLog(deploymentId, "system", "Claude is analyzing the error and generating a fix...");
+  updateStatus(deploymentId, "generating");
 
-  // Get current files
-  const { readProjectFiles } = await import("../services/generator.js");
   const currentFiles = readProjectFiles(project.source_path);
-  const filesContext = Object.entries(currentFiles)
-    .map(([p, c]) => `### ${p}\n\`\`\`\n${c}\n\`\`\``)
-    .join("\n\n");
-
-  const { modifyProject, writeProjectFiles } = await import("../services/generator.js");
 
   try {
     const fixResult = await modifyProject(
       currentFiles,
       [],
-      `The application crashed with this error:\n\`\`\`\n${errorText}\n\`\`\`\n\nFix the code to resolve this error. Make sure the app starts without crashing.`
+      `The application failed with this error. Fix ALL issues so it runs without crashing.\n\nError logs:\n\`\`\`\n${errorText}\n\`\`\`\n\nIMPORTANT:\n- Use require() not import for CommonJS modules\n- Use uuid v4 alternative if uuid causes ESM errors (use crypto.randomUUID() instead)\n- Fix any syntax errors in template literals\n- Make sure all dependencies in package.json actually exist`
     );
 
     addLog(deploymentId, "system", `Claude generated fix — ${fixResult.files.length} files`);
 
-    // Stop the crashed container
-    const { stopContainer, releasePort, deployContainer: deploy } = await import("../services/deployer.js");
-    try { await stopContainer(containerId); } catch {}
-    const oldPort = (db.prepare("SELECT port FROM deployments WHERE id = ?").get(deploymentId) as any)?.port;
-    if (oldPort) releasePort(oldPort);
+    // Stop old container if running
+    const oldDep = db.prepare("SELECT container_id, port FROM deployments WHERE id = ?").get(deploymentId) as { container_id: string | null; port: number | null } | undefined;
+    if (oldDep?.container_id) {
+      try { await stopContainer(oldDep.container_id); } catch {}
+      if (oldDep.port) releasePort(oldDep.port);
+    }
 
     // Write fixed files
     writeProjectFiles(project.source_path, fixResult);
@@ -350,27 +294,101 @@ async function monitorAndAutoFix(
 
     // Redeploy
     updateStatus(deploymentId, "deploying");
+    addLog(deploymentId, "system", "Starting fixed container...");
     const portMatch = fixResult.dockerfile.match(/EXPOSE\s+(\d+)/);
     const appPort = portMatch ? parseInt(portMatch[1]) : 3000;
-    const { getEnvVarsForDeploy } = await import("./envvars.js");
     const envVars = getEnvVarsForDeploy(project.id);
-    const { containerId: newId, hostPort } = await deploy(imageTag, deploymentId, appPort, envVars, project.slug);
+    const { containerId: newId, hostPort } = await deployContainer(imageTag, deploymentId, appPort, envVars, project.slug);
 
     updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: imageTag });
     addLog(deploymentId, "system", `Auto-fixed and redeployed on port ${hostPort}`);
     addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
 
     reloadCaddyConfig().catch(() => {});
-
-    // Update containerId so the loop monitors the new container
-    currentContainerId = newId;
+    return newId;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     addLog(deploymentId, "system", `Auto-fix failed: ${msg}`);
-    updateStatus(deploymentId, "failed", { error: `Container crashed, auto-fix failed: ${msg}` });
-    return; // Stop monitoring
+    updateStatus(deploymentId, "failed", { error: `${reason}, auto-fix failed: ${msg}` });
+    return null;
   }
-  } // end while
+}
+
+// Monitor container health continuously
+async function monitorContainer(project: Project, deploymentId: string, containerId: string) {
+  const db = getDb();
+  const { getContainerStatus } = await import("../services/deployer.js");
+  const DOCKER_HOST = "172.17.0.1";
+  const MAX_AUTO_FIXES = 3;
+  let autoFixCount = 0;
+
+  async function checkHealth(port: number): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch(`http://${DOCKER_HOST}:${port}/health`, { signal: controller.signal });
+      clearTimeout(timeout);
+      return resp.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  let currentContainerId = containerId;
+  let firstCheck = true;
+
+  while (autoFixCount < MAX_AUTO_FIXES) {
+    await new Promise((r) => setTimeout(r, firstCheck ? 3000 : 10000));
+    firstCheck = false;
+
+    // Check if deployment is still supposed to be running
+    const dep = db.prepare("SELECT status, container_id, port FROM deployments WHERE id = ?").get(deploymentId) as { status: string; container_id: string; port: number | null } | undefined;
+    if (!dep) return;
+    if (dep.status === "stopped" || dep.status === "failed") return;
+    if (dep.status !== "running") continue; // Still building/deploying
+
+    currentContainerId = dep.container_id || currentContainerId;
+    const status = await getContainerStatus(currentContainerId);
+
+    if (status === "running") {
+      if (dep.port) {
+        const healthy = await checkHealth(dep.port);
+        if (healthy) {
+          autoFixCount = 0; // Reset on healthy
+          continue;
+        }
+        // Check 3 more times
+        let fails = 0;
+        for (let i = 0; i < 3; i++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          if (await checkHealth(dep.port)) break;
+          fails++;
+        }
+        if (fails < 3) continue;
+      } else {
+        continue;
+      }
+    }
+
+    // Container crashed or app is unresponsive
+    autoFixCount++;
+    addLog(deploymentId, "system", `Auto-fix attempt ${autoFixCount}/${MAX_AUTO_FIXES}`);
+
+    const newId = await autoFixAndRedeploy(
+      project,
+      deploymentId,
+      status === "running" ? "App unresponsive" : "Container crashed"
+    );
+
+    if (!newId) return; // Fix failed, stop monitoring
+    currentContainerId = newId;
+    firstCheck = true; // Quick check after fix
+  }
+
+  if (autoFixCount >= MAX_AUTO_FIXES) {
+    addLog(deploymentId, "system", `Reached max auto-fix attempts (${MAX_AUTO_FIXES}). Manual intervention needed.`);
+    updateStatus(deploymentId, "failed", { error: "Crashed repeatedly, auto-fix exhausted" });
+  }
 }
 
 // Stop a deployment
