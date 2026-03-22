@@ -131,10 +131,8 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
           throw new Error("No description provided. Tell Claude what to build.");
         }
         addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
-        addLog(deploymentId, "system", "Claude is planning and generating your app...");
-        result = await generateProject(description, (phase, index, total) => {
-          addLog(deploymentId, "system", `Phase ${index + 1}/${total}: ${phase}`);
-        });
+        addLog(deploymentId, "system", "Claude is generating your app...");
+        result = await generateProject(description);
       }
     } finally {
       clearInterval(heartbeat);

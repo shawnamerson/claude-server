@@ -170,70 +170,14 @@ IMPORTANT RULES:
 
 You MUST call the submit_changes tool with your changes.`;
 
-export async function generateProject(
-  description: string,
-  onPhaseStart?: (phase: string, index: number, total: number) => void,
-): Promise<GenerationResult> {
-  // Plan phases for the project
-  const phases = await planProject(description);
-
-  if (phases.length <= 1) {
-    // Simple project — single-shot generation
-    onPhaseStart?.("Full Build", 0, 1);
-    const response = await claudeChat(
-      SYSTEM_PROMPT,
-      [{ role: "user", content: `Build me this application:\n\n${description}` }],
-      [GENERATE_TOOL]
-    );
-    return extractResult(response);
-  }
-
-  // Multi-phase: build incrementally
-  let currentFiles: Record<string, string> = {};
-  let result: GenerationResult | null = null;
-
-  for (let i = 0; i < phases.length; i++) {
-    const phase = phases[i];
-    onPhaseStart?.(phase.name, i, phases.length);
-
-    const hasFiles = Object.keys(currentFiles).length > 0;
-
-    if (!hasFiles) {
-      // Phase 1: generate from scratch
-      const response = await claudeChat(
-        SYSTEM_PROMPT,
-        [{
-          role: "user",
-          content: `Build me this application:\n\n${description}\n\nThis is phase ${i + 1} of ${phases.length}. For this phase, focus on: ${phase.name} — ${phase.description}\n\nBuild a solid foundation that the next phases will extend.`,
-        }],
-        [GENERATE_TOOL]
-      );
-      result = extractResult(response);
-    } else {
-      // Subsequent phases: build on existing files
-      const filesContext = Object.entries(currentFiles)
-        .map(([filePath, content]) => `### ${filePath}\n\`\`\`\n${content}\n\`\`\``)
-        .join("\n\n");
-
-      const response = await claudeChat(
-        MODIFY_SYSTEM_PROMPT,
-        [{
-          role: "user",
-          content: `Here are the current project files:\n\n${filesContext}\n\nThis is phase ${i + 1} of ${phases.length} for: ${description}\n\nFor this phase, add: ${phase.name} — ${phase.description}\n\nReturn the COMPLETE updated project with this phase's features integrated.`,
-        }],
-        [GENERATE_TOOL]
-      );
-      result = extractResult(response);
-    }
-
-    // Update current files for next phase
-    currentFiles = {};
-    for (const file of result.files) {
-      currentFiles[file.path] = file.content;
-    }
-  }
-
-  return result!;
+export async function generateProject(description: string): Promise<GenerationResult> {
+  // Single-shot generation — fast and reliable with 64K token limit
+  const response = await claudeChat(
+    SYSTEM_PROMPT,
+    [{ role: "user", content: `Build me this application:\n\n${description}` }],
+    [GENERATE_TOOL]
+  );
+  return extractResult(response);
 }
 
 export async function modifyProject(
