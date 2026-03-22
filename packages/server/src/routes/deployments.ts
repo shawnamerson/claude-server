@@ -78,24 +78,47 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     const existingFiles = readProjectFiles(project.source_path);
     const hasExistingFiles = Object.keys(existingFiles).length > 0;
 
-    let result;
-    if (hasExistingFiles && prompt) {
-      addLog(deploymentId, "system", "Reading existing project files...");
-      addLog(deploymentId, "system", `Found ${Object.keys(existingFiles).length} existing files`);
-      addLog(deploymentId, "system", "Sending code to Claude for modifications...");
-      const chatHistory = db
-        .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
-        .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
-      result = await modifyProject(existingFiles, chatHistory, prompt);
-    } else {
-      const description = prompt || project.description;
-      if (!description) {
-        throw new Error("No description provided. Tell Claude what to build.");
+    // Heartbeat so user knows it's still working
+    const heartbeatMessages = [
+      "Choosing tech stack and framework...",
+      "Writing application code...",
+      "Setting up project structure...",
+      "Generating configuration files...",
+      "Creating Dockerfile...",
+      "Finalizing project...",
+      "Almost done...",
+    ];
+    let heartbeatIdx = 0;
+    const heartbeat = setInterval(() => {
+      if (heartbeatIdx < heartbeatMessages.length) {
+        addLog(deploymentId, "system", heartbeatMessages[heartbeatIdx]);
+        heartbeatIdx++;
+      } else {
+        addLog(deploymentId, "system", "Still generating...");
       }
-      addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
-      addLog(deploymentId, "system", "Claude is designing the architecture...");
-      addLog(deploymentId, "system", "Generating source code, configs, and Dockerfile...");
-      result = await generateProject(description);
+    }, 5000);
+
+    let result;
+    try {
+      if (hasExistingFiles && prompt) {
+        addLog(deploymentId, "system", "Reading existing project files...");
+        addLog(deploymentId, "system", `Found ${Object.keys(existingFiles).length} existing files`);
+        addLog(deploymentId, "system", "Sending code to Claude for modifications...");
+        const chatHistory = db
+          .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
+          .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
+        result = await modifyProject(existingFiles, chatHistory, prompt);
+      } else {
+        const description = prompt || project.description;
+        if (!description) {
+          throw new Error("No description provided. Tell Claude what to build.");
+        }
+        addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
+        addLog(deploymentId, "system", "Claude is designing the architecture...");
+        result = await generateProject(description);
+      }
+    } finally {
+      clearInterval(heartbeat);
     }
 
     addLog(deploymentId, "system", `Claude generated ${result.files.length} files:`);
