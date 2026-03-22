@@ -58,6 +58,11 @@ export default function ProjectList() {
 
   useEffect(() => {
     api.listProjects().then(setProjects).finally(() => setLoading(false));
+    // Poll for status updates every 5 seconds
+    const interval = setInterval(() => {
+      api.listProjects().then(setProjects);
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <div style={styles.empty}>Loading...</div>;
