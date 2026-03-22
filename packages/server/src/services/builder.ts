@@ -118,6 +118,7 @@ export async function buildWithRetry(
   sourcePath: string,
   analysis: Pick<GenerationResult, "dockerfile" | "dockerignore">
 ): Promise<string> {
+  const db = getDb();
   let dockerfile = analysis.dockerfile;
   let dockerignore = analysis.dockerignore;
   let lastError = "";
@@ -134,16 +135,26 @@ export async function buildWithRetry(
       addLog(deploymentId, "system", `Build attempt ${attempt} failed: ${lastError}`);
 
       if (attempt < config.maxBuildRetries) {
-        // Detect if it's a package/dependency issue vs Dockerfile issue
-        const isDepError = lastError.includes("npm error") || lastError.includes("ETARGET") || lastError.includes("notarget") || lastError.includes("ERESOLVE");
+        // Check build logs for dependency errors (the thrown error is generic, details are in logs)
+        const recentLogs = db.prepare(
+          "SELECT message FROM logs WHERE deployment_id = ? ORDER BY id DESC LIMIT 30"
+        ).all(deploymentId) as Array<{ message: string }>;
+        const logText = recentLogs.map(l => l.message).join("\n");
+
+        const isDepError = logText.includes("ETARGET") || logText.includes("notarget") ||
+          logText.includes("ERESOLVE") || logText.includes("npm error code E");
 
         if (isDepError) {
-          // Only wildcard versions on retry — trust Claude's versions on first attempt
+          // Wildcard all versions and bust Docker cache with a comment
           addLog(deploymentId, "system", "Dependency error — wildcarding versions for retry...");
           preBuildFix(sourcePath, deploymentId, true);
-          // Also ensure npm install in Dockerfile
           dockerfile = dockerfile.replace(/npm ci\b[^\n]*/g, "npm install --production");
           dockerfile = dockerfile.replace(/npm install\s+--only=production/g, "npm install --production");
+          // Add a unique comment to bust Docker layer cache
+          dockerfile = dockerfile.replace(
+            /(RUN npm install)/,
+            `# retry-${attempt}\n$1`
+          );
         } else {
           addLog(deploymentId, "system", "Asking Claude to fix the build error...");
 
@@ -154,7 +165,7 @@ export async function buildWithRetry(
             [
               {
                 role: "user",
-                content: `The Docker build failed with this error:\n\`\`\`\n${lastError}\n\`\`\`\n\nThe Dockerfile was:\n\`\`\`dockerfile\n${dockerfile}\n\`\`\`\n\nThe project file tree is:\n\`\`\`\n${fileTree.slice(0, 100).join("\n")}\n\`\`\`\n\nPlease provide a fixed Dockerfile.`,
+                content: `The Docker build failed with this error:\n\`\`\`\n${lastError}\n\`\`\`\n\nBuild logs:\n\`\`\`\n${logText.slice(0, 2000)}\n\`\`\`\n\nThe Dockerfile was:\n\`\`\`dockerfile\n${dockerfile}\n\`\`\`\n\nThe project file tree is:\n\`\`\`\n${fileTree.slice(0, 100).join("\n")}\n\`\`\`\n\nPlease provide a fixed Dockerfile.`,
               },
             ]
           );
@@ -163,7 +174,6 @@ export async function buildWithRetry(
           if (textBlock && textBlock.type === "text") {
             const match = textBlock.text.match(/```(?:dockerfile)?\n([\s\S]*?)```/);
             dockerfile = match ? match[1].trim() : textBlock.text.trim();
-            // Always enforce npm install
             dockerfile = dockerfile.replace(/npm ci\b[^\n]*/g, "npm install --production");
             addLog(deploymentId, "system", "Claude generated a fixed Dockerfile");
           }
