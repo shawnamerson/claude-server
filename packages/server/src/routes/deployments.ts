@@ -222,20 +222,18 @@ async function monitorAndAutoFix(
 
   const { getContainerStatus } = await import("../services/deployer.js");
 
-  // Check container health over 30 seconds (every 5 seconds)
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setTimeout(r, 5000));
-    const status = await getContainerStatus(containerId);
-    if (status !== "running" && status !== "created") {
-      // Container died — break out and fix
-      break;
-    }
-    if (i === 5) return; // Still running after 30s — all good
-  }
+  // Monitor container continuously every 10 seconds
+  let currentContainerId = containerId;
+  while (true) {
+    await new Promise((r) => setTimeout(r, 10000));
 
-  // Double-check it's actually dead
-  const finalStatus = await getContainerStatus(containerId);
-  if (finalStatus === "running") return;
+    // Check if deployment is still supposed to be running
+    const dep = db.prepare("SELECT status, container_id FROM deployments WHERE id = ?").get(deploymentId) as { status: string; container_id: string } | undefined;
+    if (!dep || dep.status === "stopped" || dep.status === "failed") return;
+
+    currentContainerId = dep.container_id || currentContainerId;
+    const status = await getContainerStatus(currentContainerId);
+    if (status === "running") continue; // All good, keep watching
 
   addLog(deploymentId, "system", "Container crashed! Auto-diagnosing...");
 
@@ -305,11 +303,16 @@ async function monitorAndAutoFix(
     addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
 
     reloadCaddyConfig().catch(() => {});
+
+    // Update containerId so the loop monitors the new container
+    currentContainerId = newId;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     addLog(deploymentId, "system", `Auto-fix failed: ${msg}`);
     updateStatus(deploymentId, "failed", { error: `Container crashed, auto-fix failed: ${msg}` });
+    return; // Stop monitoring
   }
+  } // end while
 }
 
 // Stop a deployment
