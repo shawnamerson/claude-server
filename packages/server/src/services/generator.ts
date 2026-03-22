@@ -4,6 +4,62 @@ import { claudeChat } from "./claude.js";
 import { GenerationResult, GeneratedFile } from "../types.js";
 import Anthropic from "@anthropic-ai/sdk";
 
+const PLAN_TOOL: Anthropic.Tool = {
+  name: "submit_plan",
+  description: "Submit a phased build plan for the project",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      phases: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Phase name (e.g., 'Landing Page', 'Search & Filters')" },
+            description: { type: "string", description: "What to build in this phase — be specific" },
+          },
+          required: ["name", "description"],
+        },
+        description: "Ordered list of build phases, each building on the previous",
+      },
+    },
+    required: ["phases"],
+  },
+};
+
+export interface BuildPhase {
+  name: string;
+  description: string;
+}
+
+export async function planProject(description: string): Promise<BuildPhase[]> {
+  const response = await claudeChat(
+    `You are an expert software architect. Break down the user's project into 3-5 build phases.
+
+Rules:
+- Phase 1 should always be a working landing page / homepage with navigation and basic styling
+- Each subsequent phase adds one major feature area
+- Each phase must result in a fully working, deployable application
+- Later phases build on top of earlier ones
+- Keep it practical — 3-5 phases max
+- Be specific about what each phase includes
+
+Call the submit_plan tool with your phases.`,
+    [{ role: "user", content: `Plan the build phases for: ${description}` }],
+    [PLAN_TOOL]
+  );
+
+  for (const block of response.content) {
+    if (block.type === "tool_use" && block.name === "submit_plan") {
+      const input = block.input as { phases: BuildPhase[] };
+      return input.phases;
+    }
+  }
+
+  // Fallback — single phase
+  return [{ name: "Full Build", description: description }];
+}
+
 const GENERATE_TOOL: Anthropic.Tool = {
   name: "submit_project",
   description: "Submit the generated project files including all source code, Dockerfile, and .dockerignore",
