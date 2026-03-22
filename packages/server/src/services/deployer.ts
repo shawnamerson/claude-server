@@ -58,7 +58,7 @@ export async function deployContainer(
       PortBindings: {
         [`${appPort}/tcp`]: [{ HostPort: String(hostPort) }],
       },
-      RestartPolicy: { Name: "unless-stopped" },
+      RestartPolicy: { Name: "no" },
       Memory: 512 * 1024 * 1024, // 512MB limit
       CpuPeriod: 100000,
       CpuQuota: 50000, // 50% CPU limit
@@ -137,6 +137,10 @@ export async function getContainerStatus(containerId: string): Promise<string> {
   try {
     const container = docker.getContainer(containerId);
     const info = await container.inspect();
+    // If the container keeps restarting, it's crashing
+    if (info.RestartCount > 0) {
+      return "crashed";
+    }
     return info.State.Status;
   } catch {
     return "unknown";

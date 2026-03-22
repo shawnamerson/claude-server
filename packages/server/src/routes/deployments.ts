@@ -223,7 +223,10 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 
     // Monitor container health — auto-fix if it crashes
-    monitorAndAutoFix(project, deploymentId, containerId, result).catch(() => {});
+    monitorAndAutoFix(project, deploymentId, containerId, result).catch((err) => {
+      console.error("Monitor error:", err);
+      addLog(deploymentId, "system", `Monitor error: ${err instanceof Error ? err.message : String(err)}`);
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     addLog(deploymentId, "system", `Deployment failed: ${message}`);
