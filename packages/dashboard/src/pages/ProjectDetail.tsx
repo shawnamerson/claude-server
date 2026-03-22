@@ -77,7 +77,7 @@ const styles = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "1fr 1.2fr 1fr",
     gap: "0.5rem",
     flex: 1,
     minHeight: 0,
@@ -89,11 +89,64 @@ const styles = {
     minHeight: 0,
     overflow: "hidden",
   },
+  centerPanel: {
+    display: "flex",
+    flexDirection: "column" as const,
+    minHeight: 0,
+    overflow: "hidden",
+  },
   rightPanel: {
     display: "flex",
     flexDirection: "column" as const,
     minHeight: 0,
     overflow: "hidden",
+  },
+  preview: {
+    flex: 1,
+    border: "1px solid #1e1e30",
+    borderRadius: "0.5rem",
+    overflow: "hidden",
+    background: "#fff",
+  },
+  previewIframe: {
+    width: "100%",
+    height: "100%",
+    border: "none",
+  },
+  previewEmpty: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid #1e1e30",
+    borderRadius: "0.5rem",
+    background: "#0a0a0f",
+    color: "#555",
+    fontSize: "0.9rem",
+  },
+  previewBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "0.25rem",
+    flexShrink: 0,
+  },
+  previewUrl: {
+    fontSize: "0.75rem",
+    color: "#60a5fa",
+    textDecoration: "none",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const,
+  },
+  refreshBtn: {
+    padding: "0.15rem 0.5rem",
+    background: "#1a1a2e",
+    color: "#aaa",
+    border: "1px solid #2e2e4a",
+    borderRadius: "0.35rem",
+    cursor: "pointer",
+    fontSize: "0.7rem",
   },
   tabs: {
     display: "flex",
@@ -135,6 +188,18 @@ export default function ProjectDetail() {
   const [selectedDeployment, setSelectedDeployment] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<Tab>("logs");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [prevStatus, setPrevStatus] = useState<string | null>(null);
+
+  // Auto-refresh preview when deployment goes to "running"
+  useEffect(() => {
+    const currentStatus = deployments[0]?.status;
+    if (prevStatus && prevStatus !== "running" && currentStatus === "running") {
+      // Small delay to let the container start responding
+      setTimeout(() => setPreviewKey(k => k + 1), 2000);
+    }
+    setPrevStatus(currentStatus || null);
+  }, [deployments, prevStatus]);
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -247,15 +312,8 @@ export default function ProjectDetail() {
               {(project as any).usage.deploys} deploys &middot; ${((project as any).usage.total_cost_cents / 100).toFixed(2)} API cost
             </span>
           )}
-          {runningDep?.port && (
-            <a
-              href={`${window.location.protocol}//${project.slug}.${window.location.hostname}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: "#60a5fa", fontSize: "0.8rem" }}
-            >
-              {project.slug}.{window.location.hostname}
-            </a>
+          {runningDep && (
+            <StatusBadge status="running" />
           )}
         </div>
         <div style={styles.actions}>
@@ -319,6 +377,41 @@ export default function ProjectDetail() {
           {leftTab === "database" && <DatabasePanel projectId={project.id} />}
           {leftTab === "domains" && <DomainsPanel projectId={project.id} projectSlug={project.slug} />}
           {leftTab === "github" && <GitHubPanel projectId={project.id} />}
+        </div>
+
+        {/* Center panel: Live Preview */}
+        <div style={styles.centerPanel}>
+          <div style={styles.previewBar}>
+            <div style={styles.sectionTitle}>Preview</div>
+            {runningDep && (
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <a
+                  href={`${window.location.protocol}//${project.slug}.${window.location.hostname}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={styles.previewUrl}
+                >
+                  {project.slug}.{window.location.hostname}
+                </a>
+                <button style={styles.refreshBtn} onClick={() => setPreviewKey(k => k + 1)}>Refresh</button>
+              </div>
+            )}
+          </div>
+          {runningDep ? (
+            <div style={styles.preview}>
+              <iframe
+                key={previewKey}
+                src={`${window.location.protocol}//${project.slug}.${window.location.hostname}`}
+                style={styles.previewIframe}
+                title="App Preview"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              />
+            </div>
+          ) : (
+            <div style={styles.previewEmpty}>
+              {isDeploying ? "Building your app..." : "Deploy to see preview"}
+            </div>
+          )}
         </div>
 
         {/* Right panel: Chat */}
