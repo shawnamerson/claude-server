@@ -310,7 +310,6 @@ export default function ProjectDetail() {
               if (!id) return;
               api.deploy(id, prompt).then((dep) => {
                 setSelectedDeployment(dep.id);
-                setSideTab("logs");
                 refresh();
               }).catch(() => {});
             }} />

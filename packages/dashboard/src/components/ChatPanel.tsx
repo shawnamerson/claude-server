@@ -1,16 +1,266 @@
 import { useState, useEffect, useRef } from "react";
 import { api, ChatMsg } from "../api/client";
 
-const styles = {
+interface LogLine {
+  stream: string;
+  message: string;
+  timestamp: string;
+}
+
+interface ActivityItem {
+  type: "thinking" | "files" | "command" | "command_output" | "status" | "error";
+  content: string;
+  files?: string[];
+}
+
+function parseLogToActivity(msg: string): ActivityItem | null {
+  if (msg.startsWith("Claude:")) {
+    return { type: "thinking", content: msg.slice(7).trim() };
+  }
+  if (msg.startsWith("Writing")) {
+    return { type: "status", content: msg };
+  }
+  if (msg.startsWith("  + ")) {
+    return { type: "files", content: msg.trim() };
+  }
+  if (msg.startsWith("Running:") || msg.startsWith("$ ")) {
+    return { type: "command", content: msg.replace(/^(Running:|\\$)\s*/, "") };
+  }
+  if (msg.startsWith("  Exit code:")) {
+    return { type: "command_output", content: msg.trim() };
+  }
+  if (msg.startsWith("  Command error:")) {
+    return { type: "error", content: msg.trim() };
+  }
+  if (msg.includes("error") || msg.includes("Error") || msg.includes("failed") || msg.includes("Failed")) {
+    return { type: "error", content: msg };
+  }
+  if (msg.startsWith("Notes:")) {
+    return { type: "thinking", content: msg.slice(6).trim() };
+  }
+  if (msg.startsWith("Reading") || msg.startsWith("Deleting") || msg.startsWith("Modifying")) {
+    return { type: "status", content: msg };
+  }
+  if (msg.startsWith("Project ready") || msg.startsWith("Starting app") || msg.startsWith("Deployed successfully") || msg.startsWith("Live at:")) {
+    return { type: "status", content: msg };
+  }
+  if (msg.startsWith("Claude is") || msg.startsWith("Project:") || msg.startsWith("Tokens:") || msg.startsWith("Total API")) {
+    return null; // Skip internal/meta messages
+  }
+  if (msg.startsWith("Deploying container") || msg.startsWith("Custom domain") || msg.startsWith("Container started")) {
+    return { type: "status", content: msg };
+  }
+  return null; // Skip everything else (Docker noise, etc.)
+}
+
+// Group consecutive file entries into one block
+function groupActivities(items: ActivityItem[]): ActivityItem[] {
+  const grouped: ActivityItem[] = [];
+  let fileBuffer: string[] = [];
+
+  for (const item of items) {
+    if (item.type === "files") {
+      fileBuffer.push(item.content);
+    } else {
+      if (fileBuffer.length > 0) {
+        grouped.push({ type: "files", content: `${fileBuffer.length} file${fileBuffer.length !== 1 ? "s" : ""} created`, files: fileBuffer });
+        fileBuffer = [];
+      }
+      grouped.push(item);
+    }
+  }
+  if (fileBuffer.length > 0) {
+    grouped.push({ type: "files", content: `${fileBuffer.length} file${fileBuffer.length !== 1 ? "s" : ""} created`, files: fileBuffer });
+  }
+  return grouped;
+}
+
+function ActivityBlock({ items }: { items: ActivityItem[] }) {
+  const grouped = groupActivities(items);
+  const [expandedFiles, setExpandedFiles] = useState<Set<number>>(new Set());
+
+  return (
+    <div style={s.activityContainer}>
+      {grouped.map((item, i) => {
+        if (item.type === "thinking") {
+          return <div key={i} style={s.thinkingLine}>{item.content}</div>;
+        }
+        if (item.type === "files") {
+          const expanded = expandedFiles.has(i);
+          return (
+            <div key={i} style={s.fileBlock}>
+              <div
+                style={s.fileHeader}
+                onClick={() => setExpandedFiles(prev => {
+                  const next = new Set(prev);
+                  next.has(i) ? next.delete(i) : next.add(i);
+                  return next;
+                })}
+              >
+                <span style={s.fileIcon}>{expanded ? "v" : ">"}</span>
+                <span style={s.fileLabel}>{item.content}</span>
+              </div>
+              {expanded && item.files && (
+                <div style={s.fileList}>
+                  {item.files.map((f, j) => <div key={j} style={s.fileName}>{f}</div>)}
+                </div>
+              )}
+            </div>
+          );
+        }
+        if (item.type === "command") {
+          return (
+            <div key={i} style={s.cmdBlock}>
+              <span style={s.cmdPrompt}>$</span> {item.content}
+            </div>
+          );
+        }
+        if (item.type === "command_output") {
+          return <div key={i} style={s.cmdOutput}>{item.content}</div>;
+        }
+        if (item.type === "error") {
+          return <div key={i} style={s.errorLine}>{item.content}</div>;
+        }
+        if (item.type === "status") {
+          return <div key={i} style={s.statusLine}>{item.content}</div>;
+        }
+        return null;
+      })}
+    </div>
+  );
+}
+
+interface Props {
+  projectId: string;
+  deploying?: boolean;
+  deployStatus?: string;
+  onDeploy: (prompt: string) => void;
+  deploymentId?: string | null;
+}
+
+export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy, deploymentId }: Props) {
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const messagesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    api.getChatHistory(projectId).then(setMessages);
+  }, [projectId]);
+
+  // Subscribe to deployment logs for live activity
+  useEffect(() => {
+    if (!deploying || !deploymentId) {
+      return;
+    }
+
+    setActivity([]);
+    const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream`);
+
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as LogLine;
+        if (data.stream === "system") {
+          const item = parseLogToActivity(data.message);
+          if (item) {
+            setActivity(prev => [...prev, item]);
+          }
+        }
+      } catch {}
+    };
+
+    return () => source.close();
+  }, [deploying, deploymentId]);
+
+  // When deploy finishes, clear activity and refresh chat history
+  useEffect(() => {
+    if (!deploying && activity.length > 0) {
+      setActivity([]);
+      api.getChatHistory(projectId).then(setMessages);
+    }
+  }, [deploying]);
+
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [messages, activity]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text || deploying) return;
+    setInput("");
+
+    const userMsg: ChatMsg = {
+      id: Date.now(),
+      project_id: projectId,
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+    onDeploy(text);
+  };
+
+  const statusLabel = deployStatus === "generating" ? "Claude is working..."
+    : deployStatus === "deploying" ? "Starting your app..."
+    : deploying ? "Working..." : "";
+
+  return (
+    <div style={s.container}>
+      <div ref={messagesRef} style={s.messages}>
+        {messages.length === 0 && !deploying && (
+          <div style={s.empty}>Describe what you want to build.</div>
+        )}
+        {messages.map((msg) => (
+          <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
+            {msg.content}
+          </div>
+        ))}
+        {deploying && activity.length > 0 && (
+          <div style={s.assistantMsg}>
+            <ActivityBlock items={activity} />
+          </div>
+        )}
+        {deploying && activity.length === 0 && (
+          <div style={s.assistantMsg}>
+            <span style={s.statusLine}>{statusLabel}</span>
+          </div>
+        )}
+      </div>
+      <div style={s.inputArea}>
+        <input
+          style={s.input}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          placeholder={deploying ? statusLabel : "Tell Claude what to build or change..."}
+          disabled={deploying}
+        />
+        <button
+          style={{ ...s.sendBtn, opacity: (deploying || !input.trim()) ? 0.5 : 1 }}
+          onClick={handleSend}
+          disabled={deploying || !input.trim()}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const s = {
   container: {
     display: "flex",
     flexDirection: "column" as const,
     flex: 1,
     minHeight: 0,
     overflow: "hidden",
-    background: "#0d0d14",
-    border: "1px solid #1e1e30",
-    borderRadius: "0.5rem",
   },
   messages: {
     flex: 1,
@@ -37,46 +287,16 @@ const styles = {
     color: "#e0e0e0",
     padding: "0.5rem 0.75rem",
     borderRadius: "0.75rem 0.75rem 0.75rem 0.25rem",
-    maxWidth: "85%",
+    maxWidth: "90%",
     fontSize: "0.85rem",
     whiteSpace: "pre-wrap" as const,
-  },
-  activityBlock: {
-    alignSelf: "flex-start" as const,
-    background: "#0a0a12",
-    border: "1px solid #1e1e30",
-    borderRadius: "0.5rem",
-    padding: "0.5rem 0.75rem",
-    maxWidth: "90%",
-    width: "100%",
-    fontSize: "0.78rem",
-    fontFamily: "'JetBrains Mono', monospace",
-    color: "#888",
-    maxHeight: "200px",
-    overflow: "auto",
-  },
-  activityLine: {
-    padding: "1px 0",
-    whiteSpace: "pre-wrap" as const,
-    wordBreak: "break-all" as const,
-  },
-  activityClaude: {
-    color: "#a78bfa",
-  },
-  activityFile: {
-    color: "#34d399",
-  },
-  activityCmd: {
-    color: "#f59e0b",
-  },
-  activityError: {
-    color: "#f87171",
   },
   inputArea: {
     display: "flex",
     gap: "0.5rem",
     padding: "0.5rem 0.75rem",
     borderTop: "1px solid #1e1e30",
+    background: "#0d0d14",
   },
   input: {
     flex: 1,
@@ -89,15 +309,15 @@ const styles = {
     outline: "none",
     fontFamily: "inherit",
   },
-  deployBtn: {
-    padding: "0.5rem 0.75rem",
+  sendBtn: {
+    padding: "0.5rem 1rem",
     background: "#7c3aed",
     color: "#fff",
     border: "none",
     borderRadius: "0.5rem",
     cursor: "pointer",
-    fontSize: "0.8rem",
-    whiteSpace: "nowrap" as const,
+    fontSize: "0.85rem",
+    fontWeight: 600,
   },
   empty: {
     color: "#555",
@@ -105,213 +325,75 @@ const styles = {
     padding: "2rem 1rem",
     fontSize: "0.85rem",
   },
+  // Activity styles
+  activityContainer: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "0.35rem",
+  },
+  thinkingLine: {
+    color: "#c4b5fd",
+    fontSize: "0.85rem",
+    lineHeight: "1.4",
+  },
+  fileBlock: {
+    background: "#0f0f1a",
+    borderRadius: "0.35rem",
+    overflow: "hidden",
+  },
+  fileHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.3rem 0.5rem",
+    cursor: "pointer",
+    color: "#34d399",
+    fontSize: "0.8rem",
+  },
+  fileIcon: {
+    fontSize: "0.7rem",
+    color: "#555",
+    width: "0.8rem",
+  },
+  fileLabel: {
+    color: "#34d399",
+  },
+  fileList: {
+    padding: "0 0.5rem 0.3rem 1.5rem",
+    fontSize: "0.75rem",
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+  fileName: {
+    color: "#888",
+    padding: "1px 0",
+  },
+  cmdBlock: {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: "0.78rem",
+    color: "#f59e0b",
+    background: "#0f0f1a",
+    padding: "0.3rem 0.5rem",
+    borderRadius: "0.35rem",
+  },
+  cmdPrompt: {
+    color: "#555",
+  },
+  cmdOutput: {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: "0.75rem",
+    color: "#888",
+    padding: "0.15rem 0.5rem",
+  },
+  errorLine: {
+    color: "#f87171",
+    fontSize: "0.8rem",
+    background: "#1a0a0a",
+    padding: "0.3rem 0.5rem",
+    borderRadius: "0.35rem",
+  },
+  statusLine: {
+    color: "#888",
+    fontSize: "0.8rem",
+    fontStyle: "italic" as const,
+  },
 };
-
-interface LogLine {
-  stream: string;
-  message: string;
-  timestamp: string;
-}
-
-function getActivityStyle(msg: string): React.CSSProperties {
-  if (msg.startsWith("Claude:")) return styles.activityClaude;
-  if (msg.startsWith("  +") || msg.startsWith("Writing")) return styles.activityFile;
-  if (msg.startsWith("Running:") || msg.startsWith("$")) return styles.activityCmd;
-  if (msg.includes("error") || msg.includes("Error") || msg.includes("failed")) return styles.activityError;
-  return {};
-}
-
-interface Props {
-  projectId: string;
-  deploying?: boolean;
-  deployStatus?: string;
-  onDeploy: (prompt: string) => void;
-  deploymentId?: string | null;
-}
-
-export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy, deploymentId }: Props) {
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [streamText, setStreamText] = useState("");
-  const [activityLogs, setActivityLogs] = useState<LogLine[]>([]);
-  const messagesRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    api.getChatHistory(projectId).then(setMessages);
-  }, [projectId]);
-
-  // Subscribe to deployment logs for live activity in chat
-  useEffect(() => {
-    if (!deploying || !deploymentId) {
-      setActivityLogs([]);
-      return;
-    }
-
-    setActivityLogs([]);
-    const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream`);
-
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as LogLine;
-        // Only show interesting lines — skip Docker build noise and timestamps
-        if (data.stream === "system" && data.message.trim()) {
-          setActivityLogs(prev => {
-            const next = [...prev, data];
-            // Keep last 50 lines
-            return next.length > 50 ? next.slice(-50) : next;
-          });
-        }
-      } catch {}
-    };
-
-    return () => source.close();
-  }, [deploying, deploymentId]);
-
-  useEffect(() => {
-    if (messagesRef.current) {
-      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-    }
-  }, [messages, streamText, activityLogs]);
-
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || streaming) return;
-    setInput("");
-    setStreaming(true);
-    setStreamText("");
-
-    const userMsg: ChatMsg = {
-      id: Date.now(),
-      project_id: projectId,
-      role: "user",
-      content: text,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-
-    try {
-      const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
-      const authToken = (window as any).__authToken;
-      if (authToken) authHeaders["Authorization"] = `Bearer ${authToken}`;
-
-      const res = await fetch(`/api/projects/${projectId}/chat`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ message: text }),
-      });
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.type === "text") {
-                  fullText += data.content;
-                  setStreamText(fullText);
-                }
-              } catch {}
-            }
-          }
-        }
-      }
-
-      const assistantMsg: ChatMsg = {
-        id: Date.now() + 1,
-        project_id: projectId,
-        role: "assistant",
-        content: fullText,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
-      setStreamText("");
-    } catch (err) {
-      console.error("Chat error:", err);
-    } finally {
-      setStreaming(false);
-    }
-  };
-
-  const handleDeploy = () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput("");
-
-    const userMsg: ChatMsg = {
-      id: Date.now(),
-      project_id: projectId,
-      role: "user",
-      content: text,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    onDeploy(text);
-  };
-
-  const statusText = deployStatus === "generating" ? "Generating..."
-    : deployStatus === "deploying" ? "Deploying..."
-    : "Working...";
-
-  return (
-    <div style={styles.container}>
-      <div ref={messagesRef} style={styles.messages}>
-        {messages.length === 0 && !streaming && !deploying && (
-          <div style={styles.empty}>
-            Describe what you want to build and hit Deploy.
-          </div>
-        )}
-        {messages.map((msg) => (
-          <div key={msg.id} style={msg.role === "user" ? styles.userMsg : styles.assistantMsg}>
-            {msg.content}
-          </div>
-        ))}
-        {streamText && (
-          <div style={styles.assistantMsg}>{streamText}</div>
-        )}
-        {deploying && activityLogs.length > 0 && (
-          <div style={styles.activityBlock}>
-            {activityLogs.map((log, i) => (
-              <div key={i} style={{ ...styles.activityLine, ...getActivityStyle(log.message) }}>
-                {log.message}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={styles.inputArea}>
-        <input
-          style={styles.input}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleDeploy();
-            }
-          }}
-          placeholder={deploying ? statusText : "Describe what to build..."}
-          disabled={streaming || deploying}
-        />
-        <button
-          style={{
-            ...styles.deployBtn,
-            opacity: (streaming || deploying || !input.trim()) ? 0.5 : 1,
-          }}
-          onClick={handleDeploy}
-          disabled={streaming || deploying || !input.trim()}
-        >
-          {deploying ? statusText : "Deploy"}
-        </button>
-      </div>
-    </div>
-  );
-}
