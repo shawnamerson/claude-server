@@ -51,6 +51,11 @@ Other rules:
 - Make the application functional — not a skeleton or placeholder. Include sample data if appropriate.
 - Include a health check endpoint at GET /health.
 
+IMPORTANT for the "notes" field:
+- Do NOT include instructions on how to run, build, or deploy the app. The platform handles that automatically.
+- Only describe what the app does and what features are included.
+- Keep notes brief — 2-3 sentences max.
+
 You MUST call the submit_project tool with all generated files.`;
 
 const MODIFY_SYSTEM_PROMPT = `You are an expert full-stack developer. The user has an existing project and wants to modify it. You will receive the current project files and the user's requested changes.
