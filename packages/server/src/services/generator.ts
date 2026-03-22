@@ -1,12 +1,15 @@
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
+import { execFile, exec } from "child_process";
 import { promisify } from "util";
+import Dockerode from "dockerode";
 import { claudeAgentLoop, ToolHandler } from "./claude.js";
 import { GenerationResult } from "../types.js";
 import Anthropic from "@anthropic-ai/sdk";
 
 const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
+const docker = new Dockerode();
 
 // --- Agentic tools ---
 
@@ -64,6 +67,17 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "run_command",
+    description: "Run a shell command in the project directory inside a Node.js container. Use this to: test syntax (node -c server.js), install deps (npm install), start the server briefly to check for errors, or verify files. Commands time out after 15 seconds.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        command: { type: "string", description: "Shell command to run (e.g., 'node -c server.js', 'npm install', 'node server.js &; sleep 2; curl -s localhost:3000/health')" },
+      },
+      required: ["command"],
+    },
+  },
+  {
     name: "done",
     description: "Call this when you have finished creating all project files, the Dockerfile, and the .dockerignore. The project should be complete and ready to build.",
     input_schema: {
@@ -78,12 +92,16 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
 
 const SYSTEM_PROMPT = `You are an expert full-stack developer. Build projects using the provided tools.
 
-IMPORTANT: Write multiple files per turn using write_files to minimize round-trips. Batch related files together.
+IMPORTANT: Write multiple files per turn using write_files to minimize round-trips. Batch related files together. Use run_command to test your code before finishing.
 
 WORKFLOW:
 1. First turn: write package.json + server.js together
-2. Second turn: write all public/ files (index.html, style.css, app.js) together
-3. Third turn: write Dockerfile + .dockerignore, then call done
+2. Run "node -c server.js" to syntax-check the server
+3. Write all public/ files (index.html, style.css, app.js) together
+4. Run "npm install" to verify dependencies resolve (only if you need packages not in the base image)
+5. Write Dockerfile + .dockerignore, then call done
+
+If any command reveals an error, fix the file and re-test before moving on.
 
 RULES:
 - For web apps: use a SINGLE Node.js server that serves both the API and frontend HTML.
@@ -115,10 +133,13 @@ const MODIFY_SYSTEM_PROMPT = `You are an expert full-stack developer. Modify an 
 WORKFLOW:
 1. Use list_files to see what exists
 2. Use read_file to inspect files you need to change
-3. Use write_file to update or create files
-4. Use delete_file to remove files no longer needed
-5. Make sure the Dockerfile and .dockerignore are up to date
-6. Call "done" when finished
+3. Use write_files to update or create files
+4. Use run_command to test your changes (e.g., "node -c server.js" for syntax check)
+5. Use delete_file to remove files no longer needed
+6. Make sure the Dockerfile and .dockerignore are up to date
+7. Call "done" when finished
+
+If any test reveals an error, fix it before calling done.
 
 RULES:
 - Only modify files that need to change. Don't rewrite files that are fine.
@@ -199,6 +220,19 @@ function createToolHandlers(
       },
     },
     {
+      name: "run_command",
+      execute: async (input: { command: string }) => {
+        onLog(`$ ${input.command}`);
+        try {
+          return await runInContainer(sourcePath, input.command, onLog);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          onLog(`  Command error: ${msg}`);
+          return `Error: ${msg}`;
+        }
+      },
+    },
+    {
       name: "done",
       execute: async (input: { notes: string }) => {
         onLog(`Notes: ${input.notes}`);
@@ -206,6 +240,71 @@ function createToolHandlers(
       },
     },
   ];
+}
+
+/**
+ * Run a command inside a temporary container with the project mounted.
+ * Uses the base image so node, npm, and common packages are available.
+ */
+async function runInContainer(sourcePath: string, command: string, onLog: (msg: string) => void): Promise<string> {
+  const containerName = `claude-cmd-${Date.now()}`;
+
+  // sourcePath is like /app/data/projects/xxx inside the main container.
+  // The data lives in the 'app-data' Docker volume mounted at /app/data.
+  // We mount the same volume and use the relative path within it.
+  const relativeToData = sourcePath.replace(/^\/app\/data\//, "");
+  const workDir = `/data/${relativeToData}`;
+
+  const container = await docker.createContainer({
+    Image: "claude-server/base:latest",
+    name: containerName,
+    Cmd: ["sh", "-c", command],
+    WorkingDir: workDir,
+    HostConfig: {
+      Binds: [
+        `claude-server_app-data:/data:rw`,
+      ],
+      Memory: 256 * 1024 * 1024,
+      CpuQuota: 50000,
+      CpuPeriod: 100000,
+    },
+    NetworkingConfig: {
+      EndpointsConfig: { "claude-server-network": {} },
+    },
+  });
+
+  await container.start();
+
+  // Wait for completion with timeout
+  const timeout = 15000;
+  const result = await Promise.race([
+    container.wait(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Command timed out (15s)")), timeout)
+    ),
+  ]).catch(async (err) => {
+    // Kill on timeout
+    try { await container.stop({ t: 1 }); } catch {}
+    throw err;
+  });
+
+  // Collect logs
+  const logBuffer = await container.logs({ stdout: true, stderr: true });
+  // Docker multiplexes stdout/stderr with 8-byte headers per frame.
+  // For Buffer output, strip non-printable control chars from headers.
+  const raw = Buffer.isBuffer(logBuffer) ? logBuffer.toString("utf-8") : String(logBuffer);
+  const output = raw.replace(/[\x00-\x08\x0e-\x1f]/g, "").trim();
+
+  // Clean up
+  try { await container.remove({ force: true }); } catch {}
+
+  const truncated = output.length > 3000 ? output.slice(-3000) + "\n...(truncated)" : output;
+
+  if ((result as any)?.StatusCode !== 0) {
+    onLog(`  Exit code: ${(result as any)?.StatusCode}`);
+  }
+
+  return truncated || "(no output)";
 }
 
 function listFiles(dir: string, prefix = ""): string[] {
@@ -258,6 +357,8 @@ export async function generateProject(
         if (name === "write_files") {
           const count = input.files?.length || 0;
           onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
+        } else if (name === "run_command") {
+          onLog(`Running: ${input.command}`);
         }
       },
     }
