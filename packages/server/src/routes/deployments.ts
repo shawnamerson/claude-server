@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
 import { Project, Deployment } from "../types.js";
-import { generateProject, modifyProject, writeProjectFiles, readProjectFiles, planProject } from "../services/generator.js";
+import { generateProject, modifyProject, readProjectFiles } from "../services/generator.js";
 import { buildWithRetry } from "../services/builder.js";
 import { deployContainer, stopContainer, releasePort } from "../services/deployer.js";
 import { getEnvVarsForDeploy } from "./envvars.js";
@@ -11,7 +11,7 @@ import { reloadCaddyConfig } from "../services/caddy.js";
 import { deductCredit } from "./auth.js";
 import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
 import { createDatabase, getDatabaseInfo } from "../services/database.js";
-import { validateProject, autoFixProject } from "../services/validator.js";
+// validator still available for future use but agent handles creation directly
 
 const router = Router();
 
@@ -88,63 +88,30 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
   setCurrentDeployment(deploymentId);
 
   try {
-    // Step 1: Generate or modify code with Claude
+    // Step 1: Generate or modify code with Claude (agentic — files written in real-time)
     updateStatus(deploymentId, "generating");
-    addLog(deploymentId, "system", "Claude is analyzing your request...");
 
     const existingFiles = readProjectFiles(project.source_path);
     const hasExistingFiles = Object.keys(existingFiles).length > 0;
-
-    // Heartbeat so user knows it's still working
-    const heartbeatMessages = [
-      "Choosing tech stack and framework...",
-      "Writing application code...",
-      "Setting up project structure...",
-      "Generating configuration files...",
-      "Creating Dockerfile...",
-      "Finalizing project...",
-      "Almost done...",
-    ];
-    let heartbeatIdx = 0;
-    const heartbeat = setInterval(() => {
-      if (heartbeatIdx < heartbeatMessages.length) {
-        addLog(deploymentId, "system", heartbeatMessages[heartbeatIdx]);
-        heartbeatIdx++;
-      } else {
-        addLog(deploymentId, "system", "Still generating...");
-      }
-    }, 5000);
+    const log = (msg: string) => addLog(deploymentId, "system", msg);
 
     let result;
-    try {
-      if (hasExistingFiles && prompt) {
-        addLog(deploymentId, "system", "Reading existing project files...");
-        addLog(deploymentId, "system", `Found ${Object.keys(existingFiles).length} existing files`);
-        addLog(deploymentId, "system", "Sending code to Claude for modifications...");
-        const chatHistory = db
-          .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
-          .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
-        result = await modifyProject(existingFiles, chatHistory, prompt);
-      } else {
-        const description = prompt || project.description;
-        if (!description) {
-          throw new Error("No description provided. Tell Claude what to build.");
-        }
-        addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
-        addLog(deploymentId, "system", "Claude is generating your app...");
-        result = await generateProject(description);
+    if (hasExistingFiles && prompt) {
+      addLog(deploymentId, "system", `Modifying project (${Object.keys(existingFiles).length} existing files)...`);
+      const chatHistory = db
+        .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
+        .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
+      result = await modifyProject(project.source_path, chatHistory, prompt, log);
+    } else {
+      const description = prompt || project.description;
+      if (!description) {
+        throw new Error("No description provided. Tell Claude what to build.");
       }
-    } finally {
-      clearInterval(heartbeat);
+      addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
+      result = await generateProject(project.source_path, description, log);
     }
 
-    addLog(deploymentId, "system", `Claude generated ${result.files.length} files:`);
-    for (const file of result.files) {
-      addLog(deploymentId, "system", `  + ${file.path}`);
-    }
-    if (result.notes) {
-      addLog(deploymentId, "system", `Notes: ${result.notes.slice(0, 300)}`);
-    }
+    addLog(deploymentId, "system", `Project ready — ${result.files.length} files`);
 
     // Save chat messages
     if (prompt) {
@@ -155,28 +122,6 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     db.prepare(
       "INSERT INTO chat_messages (project_id, deployment_id, role, content) VALUES (?, ?, 'assistant', ?)"
     ).run(project.id, deploymentId, result.notes || "Project generated successfully.");
-
-    // Step 2: Validate and auto-fix generated project
-    const fixes = autoFixProject(result);
-    for (const fix of fixes) {
-      addLog(deploymentId, "system", `Auto-fix: ${fix}`);
-    }
-
-    const issues = validateProject(result);
-    for (const issue of issues) {
-      addLog(deploymentId, issue.severity === "error" ? "stderr" : "system",
-        `${issue.severity.toUpperCase()}: ${issue.message}`);
-    }
-
-    const errors = issues.filter(i => i.severity === "error");
-    if (errors.length > 0) {
-      throw new Error(`Validation failed with ${errors.length} error(s): ${errors.map(e => e.message).join("; ")}`);
-    }
-
-    // Step 3: Write files to disk
-    addLog(deploymentId, "system", "Writing files to disk...");
-    writeProjectFiles(project.source_path, result);
-    addLog(deploymentId, "system", "All files written successfully");
 
     // Save dockerfile
     db.prepare("UPDATE deployments SET dockerfile = ? WHERE id = ?").run(result.dockerfile, deploymentId);
@@ -298,13 +243,14 @@ async function autoFixAndRedeploy(
   addLog(deploymentId, "system", "Claude is analyzing the error and generating a fix...");
   updateStatus(deploymentId, "generating");
 
-  const currentFiles = readProjectFiles(project.source_path);
+  const log = (msg: string) => addLog(deploymentId, "system", msg);
 
   try {
     const fixResult = await modifyProject(
-      currentFiles,
+      project.source_path,
       [],
-      `The application failed with this error. Fix ALL issues so it runs without crashing.\n\nError logs:\n\`\`\`\n${errorText}\n\`\`\`\n\nIMPORTANT:\n- Use require() not import for CommonJS modules\n- Use uuid v4 alternative if uuid causes ESM errors (use crypto.randomUUID() instead)\n- Fix any syntax errors in template literals\n- Make sure all dependencies in package.json actually exist`
+      `The application failed with this error. Fix ALL issues so it runs without crashing.\n\nError logs:\n\`\`\`\n${errorText}\n\`\`\`\n\nIMPORTANT:\n- Use require() not import for CommonJS modules\n- Use uuid v4 alternative if uuid causes ESM errors (use crypto.randomUUID() instead)\n- Fix any syntax errors in template literals\n- Make sure all dependencies in package.json actually exist`,
+      log
     );
 
     addLog(deploymentId, "system", `Claude generated fix — ${fixResult.files.length} files`);
@@ -315,9 +261,6 @@ async function autoFixAndRedeploy(
       try { await stopContainer(oldDep.container_id); } catch {}
       if (oldDep.port) releasePort(oldDep.port);
     }
-
-    // Write fixed files
-    writeProjectFiles(project.source_path, fixResult);
 
     // Rebuild
     addLog(deploymentId, "system", "Rebuilding with fix...");

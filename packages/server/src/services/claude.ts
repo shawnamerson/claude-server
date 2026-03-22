@@ -100,6 +100,103 @@ export async function claudeChat(
   }
 }
 
+export interface ToolHandler {
+  name: string;
+  execute: (input: any) => Promise<string>;
+}
+
+export async function claudeAgentLoop(
+  systemPrompt: string,
+  userMessage: string,
+  tools: Anthropic.Tool[],
+  handlers: ToolHandler[],
+  opts?: { maxTurns?: number; onText?: (text: string) => void; onToolUse?: (name: string, input: any) => void }
+): Promise<string> {
+  const client = getClient();
+  const maxTurns = opts?.maxTurns || 50;
+  const handlerMap = new Map(handlers.map(h => [h.name, h]));
+
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: userMessage },
+  ];
+
+  for (let turn = 0; turn < maxTurns; turn++) {
+    const response = await client.messages.create({
+      model: FAST_MODEL,
+      max_tokens: 16000,
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+      messages,
+      tools,
+    });
+
+    trackUsage(currentDeploymentId, response);
+
+    // Collect text and tool uses
+    const toolUses: Array<{ id: string; name: string; input: any }> = [];
+    let lastText = "";
+
+    for (const block of response.content) {
+      if (block.type === "text") {
+        lastText = block.text;
+        opts?.onText?.(block.text);
+      } else if (block.type === "tool_use") {
+        toolUses.push({ id: block.id, name: block.name, input: block.input });
+      }
+    }
+
+    // If no tool uses, we're done
+    if (toolUses.length === 0 || response.stop_reason === "end_turn") {
+      // Check if the last tool was "done"
+      if (toolUses.length > 0) {
+        // Process remaining tool calls
+        messages.push({ role: "assistant", content: response.content });
+        const results: Anthropic.ToolResultBlockParam[] = [];
+        for (const tu of toolUses) {
+          const handler = handlerMap.get(tu.name);
+          if (handler) {
+            opts?.onToolUse?.(tu.name, tu.input);
+            const result = await handler.execute(tu.input);
+            results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
+            if (tu.name === "done") return tu.input.notes || lastText || "Done";
+          }
+        }
+      }
+      return lastText || "Done";
+    }
+
+    // Execute tool calls
+    messages.push({ role: "assistant", content: response.content });
+    const results: Anthropic.ToolResultBlockParam[] = [];
+
+    for (const tu of toolUses) {
+      const handler = handlerMap.get(tu.name);
+      if (!handler) {
+        results.push({ type: "tool_result", tool_use_id: tu.id, content: `Unknown tool: ${tu.name}`, is_error: true });
+        continue;
+      }
+
+      opts?.onToolUse?.(tu.name, tu.input);
+
+      try {
+        const result = await handler.execute(tu.input);
+        results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
+
+        // If this was "done", return immediately
+        if (tu.name === "done") {
+          return tu.input.notes || lastText || "Done";
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push({ type: "tool_result", tool_use_id: tu.id, content: `Error: ${msg}`, is_error: true });
+      }
+    }
+
+    messages.push({ role: "user", content: results });
+  }
+
+  return "Reached maximum turns";
+}
+
 export function claudeStream(
   systemPrompt: string,
   messages: Anthropic.MessageParam[],
