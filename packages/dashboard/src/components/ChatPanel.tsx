@@ -177,6 +177,23 @@ export default function ChatPanel({ projectId, deploying, onDeploy }: Props) {
     const text = input.trim();
     if (!text) return;
     setInput("");
+
+    // Show confirmation in chat
+    const userMsg: ChatMsg = {
+      id: Date.now(),
+      project_id: projectId,
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    const systemMsg: ChatMsg = {
+      id: Date.now() + 1,
+      project_id: projectId,
+      role: "assistant",
+      content: "Deploying your changes now... Check the Logs tab for progress.",
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg, systemMsg]);
     onDeploy(text);
   };
 
