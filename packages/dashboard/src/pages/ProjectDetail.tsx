@@ -307,7 +307,7 @@ export default function ProjectDetail() {
         {/* Right panel: Chat */}
         <div style={styles.rightPanel}>
           <div style={styles.sectionTitle}>Chat with Claude</div>
-          <ChatPanel projectId={project.id} deploying={isDeploying} onDeploy={(prompt) => {
+          <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={deployments[0]?.status} onDeploy={(prompt) => {
             if (!id) return;
             api.deploy(id, prompt).then((dep) => {
               setSelectedDeployment(dep.id);
