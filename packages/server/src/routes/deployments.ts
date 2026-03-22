@@ -213,6 +213,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
   } catch (err) {
     setCurrentDeployment(null);
     const message = err instanceof Error ? err.message : String(err);
+    console.error("Pipeline failed:", err);
     addLog(deploymentId, "system", `Deployment failed: ${message}`);
     updateStatus(deploymentId, "failed", { error: message });
   }

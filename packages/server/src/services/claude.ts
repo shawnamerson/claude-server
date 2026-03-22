@@ -121,6 +121,8 @@ export async function claudeAgentLoop(
   ];
 
   for (let turn = 0; turn < maxTurns; turn++) {
+    console.log(`Agent turn ${turn + 1}/${maxTurns}`);
+
     const response = await client.messages.create({
       model: FAST_MODEL,
       max_tokens: 16000,
@@ -130,6 +132,7 @@ export async function claudeAgentLoop(
     });
 
     trackUsage(currentDeploymentId, response);
+    console.log(`Agent response: stop_reason=${response.stop_reason}, blocks=${response.content.map(b => b.type).join(",")}`);
 
     // Collect text and tool uses
     const toolUses: Array<{ id: string; name: string; input: any }> = [];
@@ -144,27 +147,12 @@ export async function claudeAgentLoop(
       }
     }
 
-    // If no tool uses, we're done
-    if (toolUses.length === 0 || response.stop_reason === "end_turn") {
-      // Check if the last tool was "done"
-      if (toolUses.length > 0) {
-        // Process remaining tool calls
-        messages.push({ role: "assistant", content: response.content });
-        const results: Anthropic.ToolResultBlockParam[] = [];
-        for (const tu of toolUses) {
-          const handler = handlerMap.get(tu.name);
-          if (handler) {
-            opts?.onToolUse?.(tu.name, tu.input);
-            const result = await handler.execute(tu.input);
-            results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
-            if (tu.name === "done") return tu.input.notes || lastText || "Done";
-          }
-        }
-      }
+    // No tool uses and no tool_use stop — Claude is done talking
+    if (toolUses.length === 0) {
       return lastText || "Done";
     }
 
-    // Execute tool calls
+    // Process all tool calls
     messages.push({ role: "assistant", content: response.content });
     const results: Anthropic.ToolResultBlockParam[] = [];
 
@@ -192,6 +180,9 @@ export async function claudeAgentLoop(
     }
 
     messages.push({ role: "user", content: results });
+
+    // If stop_reason was end_turn (not tool_use), Claude wanted to stop but we processed tools anyway.
+    // Continue the loop so Claude can see tool results and decide what to do next.
   }
 
   return "Reached maximum turns";
