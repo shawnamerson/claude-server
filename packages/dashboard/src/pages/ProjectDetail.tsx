@@ -224,12 +224,12 @@ export default function ProjectDetail() {
           {runningDep && <StatusBadge status="running" />}
           {runningDep?.port && (
             <a
-              href={`http://localhost:${runningDep.port}`}
+              href={`http://${window.location.hostname}:${runningDep.port}`}
               target="_blank"
               rel="noreferrer"
               style={{ color: "#60a5fa", fontSize: "0.8rem" }}
             >
-              localhost:{runningDep.port}
+              {window.location.hostname}:{runningDep.port}
             </a>
           )}
         </div>

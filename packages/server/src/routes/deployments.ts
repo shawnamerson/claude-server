@@ -6,6 +6,7 @@ import { generateProject, modifyProject, writeProjectFiles, readProjectFiles } f
 import { buildWithRetry } from "../services/builder.js";
 import { deployContainer, stopContainer, releasePort } from "../services/deployer.js";
 import { getEnvVarsForDeploy } from "./envvars.js";
+import { config } from "../config.js";
 
 const router = Router();
 
@@ -192,8 +193,9 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       port: hostPort,
     });
 
+    const domain = config.domain;
     addLog(deploymentId, "system", `Deployed successfully! Running on port ${hostPort}`);
-    addLog(deploymentId, "system", `Access your app at http://localhost:${hostPort}`);
+    addLog(deploymentId, "system", `Access your app at http://${domain}:${hostPort}`);
 
     // Update project timestamp
     db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
