@@ -89,9 +89,20 @@ Description: ${project.description}
 ## Current Project Files
 ${filesContext || "(No files generated yet)"}
 
-## Latest Deployment
-Status: ${latestDeployment?.status || "none"}
-${latestDeployment?.error ? `Error: ${latestDeployment.error}` : ""}
+## Deployments
+${(() => {
+  const allDeps = db.prepare("SELECT id, status, port, error, created_at FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT 5").all(project.id) as Array<{ id: string; status: string; port: number | null; error: string | null; created_at: string }>;
+  if (allDeps.length === 0) return "No deployments yet.";
+  return allDeps.map(d => {
+    let line = `- ${d.status.toUpperCase()} (${d.created_at})`;
+    if (d.port) line += ` — port ${d.port}`;
+    if (d.error) line += ` — Error: ${d.error}`;
+    return line;
+  }).join("\n");
+})()}
+${latestDeployment?.status && ["pending", "generating", "building", "deploying"].includes(latestDeployment.status)
+  ? "\n⚠️ A deployment is currently in progress. Do NOT suggest deploying right now — wait for it to finish."
+  : ""}
 
 ## Recent Logs
 \`\`\`
