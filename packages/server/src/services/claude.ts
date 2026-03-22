@@ -18,7 +18,7 @@ export async function claudeChat(
   const client = getClient();
   return client.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 16384,
+    max_tokens: 64000,
     system: systemPrompt,
     messages,
     tools,
