@@ -137,7 +137,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     }
     db.prepare(
       "INSERT INTO chat_messages (project_id, deployment_id, role, content) VALUES (?, ?, 'assistant', ?)"
-    ).run(project.id, deploymentId, result.notes);
+    ).run(project.id, deploymentId, result.notes || "Project generated successfully.");
 
     // Step 2: Write files to disk
     addLog(deploymentId, "system", "Writing files to disk...");
