@@ -1,8 +1,12 @@
 import { Router, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import multer from "multer";
+import os from "os";
 import { getDb } from "../db/client.js";
 import { Project } from "../types.js";
+
+const upload = multer({ dest: path.join(os.tmpdir(), "claude-server-uploads"), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = Router();
 
@@ -72,6 +76,35 @@ router.put("/projects/:id/files/*", (req: Request, res: Response) => {
   db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 
   res.json({ ok: true });
+});
+
+// Upload a file (images, assets, etc.)
+router.post("/projects/:id/upload", upload.single("file"), (req: Request, res: Response) => {
+  const db = getDb();
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id as string) as Project | undefined;
+  if (!project) { res.status(404).json({ error: "Project not found" }); return; }
+
+  const file = req.file;
+  if (!file) { res.status(400).json({ error: "No file uploaded" }); return; }
+
+  // Get the target directory from query param, default to public/
+  const targetDir = (req.body.directory || "public").replace(/\.\./g, "");
+  const destDir = path.join(project.source_path, targetDir);
+  const destPath = path.join(destDir, file.originalname);
+
+  // Prevent directory traversal
+  if (!destPath.startsWith(project.source_path)) {
+    fs.unlinkSync(file.path);
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  fs.mkdirSync(destDir, { recursive: true });
+  fs.renameSync(file.path, destPath);
+
+  db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
+
+  res.json({ ok: true, path: `${targetDir}/${file.originalname}` });
 });
 
 interface FileNode {

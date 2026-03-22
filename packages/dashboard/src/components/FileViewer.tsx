@@ -141,6 +141,7 @@ export default function FileViewer({ projectId }: { projectId: string }) {
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     api.getFileTree(projectId).then(setTree);
@@ -170,6 +171,23 @@ export default function FileViewer({ projectId }: { projectId: string }) {
     }
   };
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        await api.uploadFile(projectId, file, "public");
+      }
+      api.getFileTree(projectId).then(setTree);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
   const hasChanges = content !== originalContent;
 
   return (
@@ -184,6 +202,27 @@ export default function FileViewer({ projectId }: { projectId: string }) {
             onSelect={openFile}
           />
         ))}
+        <label style={{
+          display: "block",
+          padding: "0.4rem 0.5rem",
+          margin: "0.5rem 0.3rem 0",
+          background: "#7c3aed",
+          color: "#fff",
+          borderRadius: "0.35rem",
+          fontSize: "0.75rem",
+          textAlign: "center" as const,
+          cursor: "pointer",
+        }}>
+          {uploading ? "Uploading..." : "Upload Files"}
+          <input
+            type="file"
+            multiple
+            accept="image/*,.svg,.ico,.pdf,.json,.csv,.txt"
+            onChange={handleUpload}
+            style={{ display: "none" }}
+            disabled={uploading}
+          />
+        </label>
       </div>
       <div style={styles.editor}>
         {selectedFile ? (

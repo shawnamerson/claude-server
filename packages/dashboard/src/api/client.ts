@@ -143,6 +143,24 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ content }),
     }),
+  uploadFile: async (projectId: string, file: File, directory = "public"): Promise<{ ok: boolean; path: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("directory", directory);
+    const token = (window as any).__authToken;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(`${BASE}/projects/${projectId}/upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || res.statusText);
+    }
+    return res.json();
+  },
 
   // Environment Variables
   getEnvVars: (projectId: string) => request<EnvVar[]>(`/projects/${projectId}/env`),
