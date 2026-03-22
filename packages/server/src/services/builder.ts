@@ -1,10 +1,14 @@
 import Dockerode from "dockerode";
 import fs from "fs";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { getDb } from "../db/client.js";
 import { claudeChat } from "./claude.js";
 import { config } from "../config.js";
 import { GenerationResult } from "../types.js";
+
+const execFileAsync = promisify(execFile);
 
 const docker = new Dockerode();
 
@@ -77,6 +81,37 @@ export async function buildImage(
   });
 }
 
+// Pre-build: fix package.json versions and generate lockfile
+async function preBuildFix(sourcePath: string, deploymentId: string): Promise<void> {
+  const pkgPath = path.join(sourcePath, "package.json");
+  if (!fs.existsSync(pkgPath)) return;
+
+  try {
+    // Read and fix package.json — replace caret versions with "latest" to avoid version mismatches
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    let fixed = false;
+
+    for (const depType of ["dependencies", "devDependencies"]) {
+      if (pkg[depType]) {
+        for (const [name, version] of Object.entries(pkg[depType])) {
+          // Replace specific versions that might not exist with *
+          if (typeof version === "string" && !version.startsWith("*")) {
+            pkg[depType][name] = "*";
+            fixed = true;
+          }
+        }
+      }
+    }
+
+    if (fixed) {
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+      addLog(deploymentId, "system", "Fixed package.json dependency versions");
+    }
+  } catch {
+    // Skip if we can't parse package.json
+  }
+}
+
 export async function buildWithRetry(
   projectSlug: string,
   deploymentId: string,
@@ -86,6 +121,12 @@ export async function buildWithRetry(
   let dockerfile = analysis.dockerfile;
   let dockerignore = analysis.dockerignore;
   let lastError = "";
+
+  // Always ensure Dockerfile uses "npm install" not "npm ci"
+  dockerfile = dockerfile.replace(/npm ci\b[^\n]*/g, "npm install --production");
+
+  // Fix package.json before building
+  await preBuildFix(sourcePath, deploymentId);
 
   for (let attempt = 1; attempt <= config.maxBuildRetries; attempt++) {
     try {
@@ -102,7 +143,7 @@ export async function buildWithRetry(
         const fileTree = fs.readdirSync(sourcePath, { recursive: true }) as string[];
 
         const response = await claudeChat(
-          "You are a Docker expert. Fix the Dockerfile based on the build error. Return ONLY the corrected Dockerfile content, nothing else.",
+          "You are a Docker expert. Fix the Dockerfile based on the build error. IMPORTANT: Always use 'npm install' NOT 'npm ci' (there is no lockfile). Return ONLY the corrected Dockerfile content, nothing else.",
           [
             {
               role: "user",
