@@ -14,43 +14,36 @@ interface ActivityItem {
 }
 
 function parseLogToActivity(msg: string): ActivityItem | null {
+  if (!msg.trim()) return null;
+
+  // Skip noisy internal lines
+  if (msg.startsWith("Tokens:") || msg.startsWith("Total API")) return null;
+
+  // Claude's thinking
   if (msg.startsWith("Claude:")) {
     return { type: "thinking", content: msg.slice(7).trim() };
   }
-  if (msg.startsWith("Writing")) {
-    return { type: "status", content: msg };
-  }
+  // File writes
   if (msg.startsWith("  + ")) {
     return { type: "files", content: msg.trim() };
   }
+  // Commands
   if (msg.startsWith("Running:") || msg.startsWith("$ ")) {
-    return { type: "command", content: msg.replace(/^(Running:|\\$)\s*/, "") };
+    return { type: "command", content: msg.replace(/^(Running:|\$)\s*/, "") };
   }
-  if (msg.startsWith("  Exit code:")) {
-    return { type: "command_output", content: msg.trim() };
-  }
-  if (msg.startsWith("  Command error:")) {
+  if (msg.startsWith("  Exit code:") || msg.startsWith("  Command error:")) {
     return { type: "error", content: msg.trim() };
   }
+  // Errors
   if (msg.includes("error") || msg.includes("Error") || msg.includes("failed") || msg.includes("Failed")) {
     return { type: "error", content: msg };
   }
+  // Notes from Claude
   if (msg.startsWith("Notes:")) {
     return { type: "thinking", content: msg.slice(6).trim() };
   }
-  if (msg.startsWith("Reading") || msg.startsWith("Deleting") || msg.startsWith("Modifying")) {
-    return { type: "status", content: msg };
-  }
-  if (msg.startsWith("Project ready") || msg.startsWith("Starting app") || msg.startsWith("Deployed successfully") || msg.startsWith("Live at:")) {
-    return { type: "status", content: msg };
-  }
-  if (msg.startsWith("Claude is") || msg.startsWith("Project:") || msg.startsWith("Tokens:") || msg.startsWith("Total API")) {
-    return null;
-  }
-  if (msg.startsWith("Deploying container") || msg.startsWith("Custom domain") || msg.startsWith("Container started")) {
-    return null;
-  }
-  return null;
+  // Everything else is a status update
+  return { type: "status", content: msg };
 }
 
 function groupActivities(items: ActivityItem[]): ActivityItem[] {
@@ -205,16 +198,20 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
 
     onDeploy(text);
 
-    // Get the deployment ID immediately from the API response
-    // The onDeploy callback already calls api.deploy which sets selectedDeployment,
-    // but we also need it here for SSE. We'll re-fetch deployments to get it.
-    setTimeout(() => {
+    // Poll quickly for the new deployment ID so we can subscribe to SSE
+    const poll = setInterval(() => {
       api.listDeployments(projectId).then(deps => {
-        if (deps.length > 0 && deps[0].status !== "stopped" && deps[0].status !== "failed") {
-          setActiveDepId(deps[0].id);
+        if (deps.length > 0) {
+          const latest = deps[0];
+          if (["pending", "generating", "building", "deploying"].includes(latest.status)) {
+            setActiveDepId(latest.id);
+            clearInterval(poll);
+          }
         }
       });
-    }, 500);
+    }, 300);
+    // Stop polling after 10s
+    setTimeout(() => clearInterval(poll), 10000);
   };
 
   const isActive = building || deploying;
