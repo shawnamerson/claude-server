@@ -229,7 +229,7 @@ export default function ProjectDetail() {
       <div style={styles.topBar}>
         <div style={styles.titleRow}>
           <div style={styles.name}>{project.name}</div>
-          {runningDep && <StatusBadge status="running" />}
+
           {runningDep?.port && (
             <a
               href={`${window.location.protocol}//${project.slug}.${window.location.hostname}`}
