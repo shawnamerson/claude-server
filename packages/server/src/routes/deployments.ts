@@ -73,30 +73,38 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
   try {
     // Step 1: Generate or modify code with Claude
     updateStatus(deploymentId, "generating");
-    addLog(deploymentId, "system", "Claude is generating your project...");
+    addLog(deploymentId, "system", "Claude is analyzing your request...");
 
     const existingFiles = readProjectFiles(project.source_path);
     const hasExistingFiles = Object.keys(existingFiles).length > 0;
 
     let result;
     if (hasExistingFiles && prompt) {
-      // Modify existing project
-      addLog(deploymentId, "system", "Modifying existing project...");
+      addLog(deploymentId, "system", "Reading existing project files...");
+      addLog(deploymentId, "system", `Found ${Object.keys(existingFiles).length} existing files`);
+      addLog(deploymentId, "system", "Sending code to Claude for modifications...");
       const chatHistory = db
         .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
         .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
       result = await modifyProject(existingFiles, chatHistory, prompt);
     } else {
-      // Generate new project from description
       const description = prompt || project.description;
       if (!description) {
         throw new Error("No description provided. Tell Claude what to build.");
       }
-      addLog(deploymentId, "system", `Generating project: ${description.slice(0, 100)}...`);
+      addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
+      addLog(deploymentId, "system", "Claude is designing the architecture...");
+      addLog(deploymentId, "system", "Generating source code, configs, and Dockerfile...");
       result = await generateProject(description);
     }
 
-    addLog(deploymentId, "system", `Generated ${result.files.length} files`);
+    addLog(deploymentId, "system", `Claude generated ${result.files.length} files:`);
+    for (const file of result.files) {
+      addLog(deploymentId, "system", `  + ${file.path}`);
+    }
+    if (result.notes) {
+      addLog(deploymentId, "system", `Notes: ${result.notes.slice(0, 300)}`);
+    }
 
     // Save chat messages
     if (prompt) {
@@ -109,15 +117,18 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     ).run(project.id, deploymentId, result.notes);
 
     // Step 2: Write files to disk
+    addLog(deploymentId, "system", "Writing files to disk...");
     writeProjectFiles(project.source_path, result);
-    addLog(deploymentId, "system", "Files written to disk");
+    addLog(deploymentId, "system", "All files written successfully");
 
     // Save dockerfile
     db.prepare("UPDATE deployments SET dockerfile = ? WHERE id = ?").run(result.dockerfile, deploymentId);
 
     // Step 3: Build Docker image
     updateStatus(deploymentId, "building");
-    addLog(deploymentId, "system", "Building Docker image...");
+    addLog(deploymentId, "system", "--- Starting Docker build ---");
+    addLog(deploymentId, "system", "Pulling base image and installing dependencies...");
+    addLog(deploymentId, "system", "This may take a minute on first build...");
 
     const imageTag = await buildWithRetry(
       project.slug,
