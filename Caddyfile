@@ -1,0 +1,3 @@
+{$DOMAIN} {
+    reverse_proxy claude-server:3000
+}
