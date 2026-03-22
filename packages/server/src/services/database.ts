@@ -166,6 +166,65 @@ export function getDatabaseInfo(projectId: string): ProjectDatabase | null {
   return (db.prepare("SELECT * FROM project_databases WHERE project_id = ?").get(projectId) as ProjectDatabase) || null;
 }
 
+// Query the project's PostgreSQL database for schema info
+export async function queryProjectDatabase(projectId: string): Promise<string> {
+  const info = getDatabaseInfo(projectId);
+  if (!info || info.status !== "running") return "(No database)";
+
+  try {
+    // Use docker exec to run psql inside the postgres container
+    const container = docker.getContainer(info.container_name);
+
+    // Get table list
+    const tablesExec = await container.exec({
+      Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c",
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;"],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const tablesStream = await tablesExec.start({});
+    const tablesOutput = await streamToString(tablesStream);
+
+    // Get schema for each table
+    const schemaExec = await container.exec({
+      Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c",
+        "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;"],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const schemaStream = await schemaExec.start({});
+    const schemaOutput = await streamToString(schemaStream);
+
+    // Get row counts
+    const countExec = await container.exec({
+      Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c",
+        "SELECT schemaname, relname, n_live_tup FROM pg_stat_user_tables ORDER BY relname;"],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const countStream = await countExec.start({});
+    const countOutput = await streamToString(countStream);
+
+    return `## Database: ${info.db_name}\nHost: ${info.container_name}:5432\nUser: ${info.db_user}\n\n### Tables\n\`\`\`\n${tablesOutput}\n\`\`\`\n\n### Schema\n\`\`\`\n${schemaOutput}\n\`\`\`\n\n### Row Counts\n\`\`\`\n${countOutput}\n\`\`\``;
+  } catch (err) {
+    return `(Database query failed: ${err instanceof Error ? err.message : String(err)})`;
+  }
+}
+
+function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (chunk: Buffer) => {
+      // Skip the 8-byte Docker multiplex header
+      if (chunk.length > 8) {
+        chunks.push(chunk.subarray(8));
+      }
+    });
+    stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8").trim()));
+    stream.on("error", reject);
+  });
+}
+
 // Initialize: track existing database container ports
 export async function initializeDbPortTracking() {
   try {

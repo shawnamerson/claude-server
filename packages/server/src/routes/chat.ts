@@ -3,6 +3,8 @@ import { getDb } from "../db/client.js";
 import { claudeStream } from "../services/claude.js";
 import { readProjectFiles } from "../services/generator.js";
 import { getRecentLogs } from "../services/logger.js";
+import { getDatabaseInfo } from "../services/database.js";
+import { queryProjectDatabase } from "../services/database.js";
 import { Project, Deployment, ChatMessage } from "../types.js";
 
 const router = Router();
@@ -55,7 +57,15 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
     .map(([filePath, content]) => `### ${filePath}\n\`\`\`\n${content}\n\`\`\``)
     .join("\n\n");
 
-  const systemPrompt = `You are a helpful AI assistant integrated into a cloud deployment platform. You have full context about the user's project.
+  // Get database info if available
+  let dbContext = "";
+  try {
+    dbContext = await queryProjectDatabase(project.id);
+  } catch {
+    dbContext = "(No database)";
+  }
+
+  const systemPrompt = `You are a helpful AI assistant integrated into a cloud deployment platform. You have full context about the user's project, including their database schema and data.
 
 Project: ${project.name}
 Description: ${project.description}
@@ -72,7 +82,10 @@ ${latestDeployment?.error ? `Error: ${latestDeployment.error}` : ""}
 ${logsContext || "(No logs)"}
 \`\`\`
 
-Help the user understand their project, debug issues, suggest improvements, and answer questions. If they want to make changes, explain what you'd change. For actual code changes, suggest they use the deploy button with their modification request.`;
+## Database
+${dbContext}
+
+Help the user understand their project, debug issues, suggest improvements, and answer questions. You can see the database tables, schema, and row counts above. If they want to make changes, explain what you'd change. For actual code changes, suggest they click "Apply & Deploy" with their modification request.`;
 
   // Get chat history
   const history = db
