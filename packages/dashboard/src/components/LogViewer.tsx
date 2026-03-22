@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSSE } from "../hooks/useSSE";
 
 interface LogLine {
+  id?: number;
   stream: string;
   message: string;
   timestamp: string;
@@ -59,9 +60,18 @@ const styles = {
 export default function LogViewer({ deploymentId }: { deploymentId: string | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoFollow, setAutoFollow] = useState(true);
-  const { events: logs } = useSSE<LogLine>({
+  const { events: rawLogs } = useSSE<LogLine>({
     url: `/api/deployments/${deploymentId}/logs/stream`,
     enabled: !!deploymentId,
+  });
+
+  // Deduplicate logs by id + timestamp + message
+  const logs = rawLogs.filter((log, index) => {
+    if (log.id) {
+      return rawLogs.findIndex((l) => l.id === log.id) === index;
+    }
+    // For logs without id, dedupe by timestamp + message
+    return rawLogs.findIndex((l) => l.timestamp === log.timestamp && l.message === log.message) === index;
   });
 
   // Auto-scroll to bottom when following
