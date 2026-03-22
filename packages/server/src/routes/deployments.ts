@@ -116,27 +116,8 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
           throw new Error("No description provided. Tell Claude what to build.");
         }
         addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
-
-        // Plan the build phases
-        addLog(deploymentId, "system", "Planning build phases...");
-        const phases = await planProject(description);
-        addLog(deploymentId, "system", `Build plan (${phases.length} phases):`);
-        phases.forEach((phase, i) => {
-          addLog(deploymentId, "system", `  Phase ${i + 1}: ${phase.name} — ${phase.description}`);
-        });
-
-        // Build phase by phase
-        result = await generateProject(
-          `${description}\n\nBuild this in the following phase order. Generate ALL phases together into one complete working app:\n${phases.map((p, i) => `Phase ${i + 1} - ${p.name}: ${p.description}`).join("\n")}`
-        );
-
-        // If generation produced files, deploy it, then iterate on remaining phases
-        if (result.files.length > 0) {
-          // Save the plan for future reference
-          db.prepare(
-            "INSERT INTO chat_messages (project_id, deployment_id, role, content) VALUES (?, ?, 'assistant', ?)"
-          ).run(project.id, deploymentId, `Build plan:\n${phases.map((p, i) => `${i + 1}. **${p.name}**: ${p.description}`).join("\n")}`);
-        }
+        addLog(deploymentId, "system", "Claude is generating your app...");
+        result = await generateProject(description);
       }
     } finally {
       clearInterval(heartbeat);

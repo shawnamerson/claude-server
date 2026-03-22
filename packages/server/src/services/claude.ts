@@ -10,6 +10,11 @@ export function getClient(): Anthropic {
   return client;
 }
 
+// Fast model for code generation (speed > quality for initial generation)
+const FAST_MODEL = "claude-sonnet-4-20250514";
+// Quality model for chat and analysis
+const CHAT_MODEL = "claude-sonnet-4-20250514";
+
 export async function claudeChat(
   systemPrompt: string,
   messages: Anthropic.MessageParam[],
@@ -17,14 +22,13 @@ export async function claudeChat(
 ): Promise<Anthropic.Message> {
   const client = getClient();
 
-  // Use streaming to avoid timeout, with a 5 minute abort
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
 
   try {
     const stream = client.messages.stream(
       {
-        model: "claude-sonnet-4-20250514",
+        model: FAST_MODEL,
         max_tokens: 16000,
         system: systemPrompt,
         messages,
@@ -45,7 +49,7 @@ export function claudeStream(
 ) {
   const client = getClient();
   return client.messages.stream({
-    model: "claude-sonnet-4-20250514",
+    model: CHAT_MODEL,
     max_tokens: 8192,
     system: systemPrompt,
     messages,
