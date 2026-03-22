@@ -246,40 +246,36 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* Deployment pills */}
+      {/* Current deployment status */}
       {deployments.length > 0 && (
         <div style={styles.deploymentBar}>
-          {deployments.map((dep) => (
-            <div
-              key={dep.id}
-              style={{
-                ...styles.deployItem,
-                ...(dep.id === selectedDeployment ? styles.deployItemActive : {}),
-              }}
-              onClick={() => setSelectedDeployment(dep.id)}
-            >
-              <StatusBadge status={dep.status} />
-              <span style={{ color: "#666" }}>
-                {new Date(dep.created_at).toLocaleTimeString()}
-              </span>
-              {dep.status === "running" && (
-                <button
-                  style={styles.stopBtn}
-                  onClick={(e) => { e.stopPropagation(); handleStop(dep.id); }}
-                >
-                  Stop
-                </button>
-              )}
-              {(dep.status === "stopped" || dep.status === "failed") && dep.dockerfile && (
-                <button
-                  style={{ ...styles.stopBtn, color: "#34d399", borderColor: "#064e3b" }}
-                  onClick={(e) => { e.stopPropagation(); handleStart(dep.id); }}
-                >
-                  Start
-                </button>
-              )}
-            </div>
-          ))}
+          {(() => {
+            const current = deployments[0]; // Most recent
+            return (
+              <div
+                style={{ ...styles.deployItem, ...styles.deployItemActive }}
+                onClick={() => setSelectedDeployment(current.id)}
+              >
+                <StatusBadge status={current.status} />
+                {current.status === "running" && (
+                  <button
+                    style={styles.stopBtn}
+                    onClick={(e) => { e.stopPropagation(); handleStop(current.id); }}
+                  >
+                    Stop
+                  </button>
+                )}
+                {(current.status === "stopped" || current.status === "failed") && current.dockerfile && (
+                  <button
+                    style={{ ...styles.stopBtn, color: "#34d399", borderColor: "#064e3b" }}
+                    onClick={(e) => { e.stopPropagation(); handleStart(current.id); }}
+                  >
+                    Start
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
