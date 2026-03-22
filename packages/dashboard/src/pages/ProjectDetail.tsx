@@ -175,7 +175,7 @@ export default function ProjectDetail() {
   const handleDelete = async () => {
     if (!id) return;
     await api.deleteProject(id);
-    navigate("/");
+    navigate("/projects");
   };
 
   const deleteModal = showDeleteModal && (
