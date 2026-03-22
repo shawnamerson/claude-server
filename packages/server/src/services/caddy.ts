@@ -1,12 +1,16 @@
 import { getDb } from "../db/client.js";
 import { config } from "../config.js";
 import fs from "fs";
-import path from "path";
 
 interface CustomDomainRow {
   domain: string;
   project_id: string;
 }
+
+// Caddy runs in Docker — use service name for claude-server,
+// and Docker gateway IP for project containers (they bind to host ports)
+const MAIN_SERVER = "claude-server:3000";
+const CONTAINER_HOST = "host.docker.internal";
 
 export function generateCaddyfile(): string {
   const db = getDb();
@@ -36,7 +40,7 @@ export function generateCaddyfile(): string {
 
   // Main dashboard
   caddyfile += `${domain} {\n`;
-  caddyfile += `    reverse_proxy localhost:3000 {\n`;
+  caddyfile += `    reverse_proxy ${MAIN_SERVER} {\n`;
   caddyfile += `        flush_interval -1\n`;
   caddyfile += `        transport http {\n`;
   caddyfile += `            read_timeout 0\n`;
@@ -44,10 +48,10 @@ export function generateCaddyfile(): string {
   caddyfile += `    }\n`;
   caddyfile += `}\n\n`;
 
-  // Subdomain routing: slug.domain -> container port
+  // Subdomain routing: slug.domain -> container port via host
   for (const [_projectId, { port, slug }] of projectPorts) {
     caddyfile += `${slug}.${domain} {\n`;
-    caddyfile += `    reverse_proxy localhost:${port}\n`;
+    caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${port}\n`;
     caddyfile += `}\n\n`;
   }
 
@@ -56,7 +60,7 @@ export function generateCaddyfile(): string {
     const mapping = projectPorts.get(cd.project_id);
     if (mapping) {
       caddyfile += `${cd.domain} {\n`;
-      caddyfile += `    reverse_proxy localhost:${mapping.port}\n`;
+      caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${mapping.port}\n`;
       caddyfile += `}\n\n`;
     }
   }
@@ -66,29 +70,8 @@ export function generateCaddyfile(): string {
 
 export async function reloadCaddyConfig(): Promise<void> {
   const caddyfile = generateCaddyfile();
+  const caddyfilePath = process.env.CADDYFILE_PATH || "./Caddyfile";
 
-  // Write the Caddyfile to the shared volume
-  const caddyfilePath = path.resolve(process.env.CADDYFILE_PATH || "/app/Caddyfile");
   fs.writeFileSync(caddyfilePath, caddyfile);
-  console.log("Caddyfile updated with", caddyfile.split("\n").filter(l => l.includes("{")).length, "routes");
-
-  // Reload Caddy via its admin API
-  try {
-    const resp = await fetch("http://caddy:2019/adapt", {
-      method: "POST",
-      headers: { "Content-Type": "text/caddyfile" },
-      body: caddyfile,
-    });
-    if (resp.ok) {
-      const jsonConfig = await resp.json();
-      await fetch("http://caddy:2019/load", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(jsonConfig),
-      });
-      console.log("Caddy reloaded via admin API");
-    }
-  } catch (err) {
-    console.error("Caddy reload via API failed (will pick up on next restart):", err);
-  }
+  console.log("Caddyfile updated —", caddyfile.split("\n").filter(l => l.includes("{")).length, "routes");
 }
