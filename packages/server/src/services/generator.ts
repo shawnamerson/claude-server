@@ -12,15 +12,25 @@ const execFileAsync = promisify(execFile);
 
 const AGENT_TOOLS: Anthropic.Tool[] = [
   {
-    name: "write_file",
-    description: "Create or overwrite a file in the project. Use this to write source code, config files, HTML, CSS, JS, etc. Always provide the COMPLETE file content.",
+    name: "write_files",
+    description: "Create or overwrite multiple files at once. Use this to write several files in a single turn for speed. Always provide COMPLETE file content for each file.",
     input_schema: {
       type: "object" as const,
       properties: {
-        path: { type: "string", description: "Relative file path (e.g., server.js, public/index.html, package.json)" },
-        content: { type: "string", description: "Complete file content" },
+        files: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Relative file path (e.g., server.js, public/index.html)" },
+              content: { type: "string", description: "Complete file content" },
+            },
+            required: ["path", "content"],
+          },
+          description: "Array of files to write",
+        },
       },
-      required: ["path", "content"],
+      required: ["files"],
     },
   },
   {
@@ -66,15 +76,14 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-const SYSTEM_PROMPT = `You are an expert full-stack developer. Build projects by creating files one at a time using the provided tools.
+const SYSTEM_PROMPT = `You are an expert full-stack developer. Build projects using the provided tools.
+
+IMPORTANT: Write multiple files per turn using write_files to minimize round-trips. Batch related files together.
 
 WORKFLOW:
-1. Start with package.json
-2. Write the server file (server.js)
-3. Write HTML, CSS, and client-side JS files in the public/ folder
-4. Write the Dockerfile
-5. Write .dockerignore
-6. Call "done" when everything is ready
+1. First turn: write package.json + server.js together
+2. Second turn: write all public/ files (index.html, style.css, app.js) together
+3. Third turn: write Dockerfile + .dockerignore, then call done
 
 RULES:
 - For web apps: use a SINGLE Node.js server that serves both the API and frontend HTML.
@@ -133,17 +142,24 @@ function createToolHandlers(
 
   return [
     {
-      name: "write_file",
-      execute: async (input: { path: string; content: string }) => {
-        // Security: prevent path traversal
-        const resolved = path.resolve(sourcePath, input.path);
-        if (!resolved.startsWith(path.resolve(sourcePath))) {
-          return "Error: path traversal not allowed";
+      name: "write_files",
+      execute: async (input: { files: Array<{ path: string; content: string }> }) => {
+        if (!input.files || !Array.isArray(input.files)) {
+          return "Error: files must be an array";
         }
-        fs.mkdirSync(path.dirname(resolved), { recursive: true });
-        fs.writeFileSync(resolved, input.content);
-        onLog(`  + ${input.path} (${input.content.length} bytes)`);
-        return `File written: ${input.path}`;
+        const results: string[] = [];
+        for (const file of input.files) {
+          const resolved = path.resolve(sourcePath, file.path);
+          if (!resolved.startsWith(path.resolve(sourcePath))) {
+            results.push(`Skipped ${file.path}: path traversal not allowed`);
+            continue;
+          }
+          fs.mkdirSync(path.dirname(resolved), { recursive: true });
+          fs.writeFileSync(resolved, file.content);
+          onLog(`  + ${file.path} (${file.content.length} bytes)`);
+          results.push(`OK: ${file.path}`);
+        }
+        return results.join("\n");
       },
     },
     {
@@ -239,8 +255,9 @@ export async function generateProject(
     {
       maxTurns: 30,
       onToolUse: (name, input) => {
-        if (name === "write_file") {
-          onLog(`Writing ${input.path}...`);
+        if (name === "write_files") {
+          const count = input.files?.length || 0;
+          onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
         }
       },
     }
@@ -277,8 +294,9 @@ export async function modifyProject(
     {
       maxTurns: 30,
       onToolUse: (name, input) => {
-        if (name === "write_file") {
-          onLog(`Writing ${input.path}...`);
+        if (name === "write_files") {
+          const count = input.files?.length || 0;
+          onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
         } else if (name === "read_file") {
           onLog(`Reading ${input.path}...`);
         } else if (name === "delete_file") {
