@@ -154,7 +154,8 @@ Call "done" with a brief note about what you changed.`;
 
 function createToolHandlers(
   sourcePath: string,
-  onLog: (message: string) => void
+  onLog: (message: string) => void,
+  devContainer: DevContainer
 ): ToolHandler[] {
   // Ensure directory exists
   if (!fs.existsSync(sourcePath)) {
@@ -224,7 +225,7 @@ function createToolHandlers(
       execute: async (input: { command: string }) => {
         onLog(`$ ${input.command}`);
         try {
-          return await runInContainer(sourcePath, input.command, onLog);
+          return await devContainer.exec(input.command, onLog);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           onLog(`  Command error: ${msg}`);
@@ -243,68 +244,101 @@ function createToolHandlers(
 }
 
 /**
- * Run a command inside a temporary container with the project mounted.
- * Uses the base image so node, npm, and common packages are available.
+ * Persistent dev container for a project. Created on first command,
+ * reused for subsequent commands, cleaned up when done.
  */
-async function runInContainer(sourcePath: string, command: string, onLog: (msg: string) => void): Promise<string> {
-  const containerName = `claude-cmd-${Date.now()}`;
+class DevContainer {
+  private container: Dockerode.Container | null = null;
+  private workDir: string;
+  private sourcePath: string;
 
-  // sourcePath is like /app/data/projects/xxx inside the main container.
-  // The data lives in the 'app-data' Docker volume mounted at /app/data.
-  // We mount the same volume and use the relative path within it.
-  const relativeToData = sourcePath.replace(/^\/app\/data\//, "");
-  const workDir = `/data/${relativeToData}`;
-
-  const container = await docker.createContainer({
-    Image: "claude-server/base:latest",
-    name: containerName,
-    Cmd: ["sh", "-c", command],
-    WorkingDir: workDir,
-    HostConfig: {
-      Binds: [
-        `claude-server_app-data:/data:rw`,
-      ],
-      Memory: 256 * 1024 * 1024,
-      CpuQuota: 50000,
-      CpuPeriod: 100000,
-    },
-    NetworkingConfig: {
-      EndpointsConfig: { "claude-server-network": {} },
-    },
-  });
-
-  await container.start();
-
-  // Wait for completion with timeout
-  const timeout = 15000;
-  const result = await Promise.race([
-    container.wait(),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Command timed out (15s)")), timeout)
-    ),
-  ]).catch(async (err) => {
-    // Kill on timeout
-    try { await container.stop({ t: 1 }); } catch {}
-    throw err;
-  });
-
-  // Collect logs
-  const logBuffer = await container.logs({ stdout: true, stderr: true });
-  // Docker multiplexes stdout/stderr with 8-byte headers per frame.
-  // For Buffer output, strip non-printable control chars from headers.
-  const raw = Buffer.isBuffer(logBuffer) ? logBuffer.toString("utf-8") : String(logBuffer);
-  const output = raw.replace(/[\x00-\x08\x0e-\x1f]/g, "").trim();
-
-  // Clean up
-  try { await container.remove({ force: true }); } catch {}
-
-  const truncated = output.length > 3000 ? output.slice(-3000) + "\n...(truncated)" : output;
-
-  if ((result as any)?.StatusCode !== 0) {
-    onLog(`  Exit code: ${(result as any)?.StatusCode}`);
+  constructor(sourcePath: string) {
+    this.sourcePath = sourcePath;
+    const relativeToData = sourcePath.replace(/^\/app\/data\//, "");
+    this.workDir = `/data/${relativeToData}`;
   }
 
-  return truncated || "(no output)";
+  async ensureRunning(): Promise<void> {
+    if (this.container) {
+      // Check if still running
+      try {
+        const info = await this.container.inspect();
+        if (info.State.Running) return;
+      } catch {
+        this.container = null;
+      }
+    }
+
+    const containerName = `claude-dev-${Date.now()}`;
+    this.container = await docker.createContainer({
+      Image: "claude-server/base:latest",
+      name: containerName,
+      Cmd: ["sleep", "600"], // Keep alive for 10 minutes
+      WorkingDir: this.workDir,
+      HostConfig: {
+        Binds: [`claude-server_app-data:/data:rw`],
+        Memory: 256 * 1024 * 1024,
+        CpuQuota: 50000,
+        CpuPeriod: 100000,
+      },
+      NetworkingConfig: {
+        EndpointsConfig: { "claude-server-network": {} },
+      },
+    });
+    await this.container.start();
+  }
+
+  async exec(command: string, onLog: (msg: string) => void): Promise<string> {
+    await this.ensureRunning();
+
+    const exec = await this.container!.exec({
+      Cmd: ["sh", "-c", command],
+      AttachStdout: true,
+      AttachStderr: true,
+      WorkingDir: this.workDir,
+    });
+
+    const stream = await exec.start({});
+
+    // Collect output with timeout
+    const output = await Promise.race([
+      streamToString(stream),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("Command timed out (15s)")), 15000)
+      ),
+    ]);
+
+    // Check exit code
+    const inspectResult = await exec.inspect();
+    if (inspectResult.ExitCode !== 0) {
+      onLog(`  Exit code: ${inspectResult.ExitCode}`);
+    }
+
+    const truncated = output.length > 3000 ? output.slice(-3000) + "\n...(truncated)" : output;
+    return truncated || "(no output)";
+  }
+
+  async cleanup(): Promise<void> {
+    if (this.container) {
+      try { await this.container.stop({ t: 1 }); } catch {}
+      try { await this.container.remove({ force: true }); } catch {}
+      this.container = null;
+    }
+  }
+}
+
+function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on("data", (chunk: Buffer) => {
+      // Skip 8-byte Docker multiplex header per frame
+      if (chunk.length > 8) {
+        chunks.push(chunk.subarray(8));
+      }
+    });
+    stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8").trim()));
+    stream.on("error", reject);
+  });
 }
 
 function listFiles(dir: string, prefix = ""): string[] {
@@ -342,34 +376,38 @@ export async function generateProject(
     }
   }
 
-  const handlers = createToolHandlers(sourcePath, onLog);
+  const devContainer = new DevContainer(sourcePath);
+  const handlers = createToolHandlers(sourcePath, onLog, devContainer);
 
   onLog("Claude is building your app...");
 
-  const notes = await claudeAgentLoop(
-    SYSTEM_PROMPT,
-    `Build me this application:\n\n${description}`,
-    AGENT_TOOLS,
-    handlers,
-    {
-      maxTurns: 30,
-      onText: (text) => {
-        // Log Claude's reasoning so users can see what it's thinking
-        const trimmed = text.trim();
-        if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
-      },
-      onToolUse: (name, input) => {
-        if (name === "write_files") {
-          const count = input.files?.length || 0;
-          onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
-        } else if (name === "run_command") {
-          onLog(`Running: ${input.command}`);
-        }
-      },
-    }
-  );
+  try {
+    const notes = await claudeAgentLoop(
+      SYSTEM_PROMPT,
+      `Build me this application:\n\n${description}`,
+      AGENT_TOOLS,
+      handlers,
+      {
+        maxTurns: 30,
+        onText: (text) => {
+          const trimmed = text.trim();
+          if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
+        },
+        onToolUse: (name, input) => {
+          if (name === "write_files") {
+            const count = input.files?.length || 0;
+            onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
+          } else if (name === "run_command") {
+            onLog(`Running: ${input.command}`);
+          }
+        },
+      }
+    );
 
-  return collectResult(sourcePath, notes);
+    return collectResult(sourcePath, notes);
+  } finally {
+    await devContainer.cleanup();
+  }
 }
 
 export async function modifyProject(
@@ -378,7 +416,8 @@ export async function modifyProject(
   modification: string,
   onLog: (message: string) => void,
 ): Promise<GenerationResult> {
-  const handlers = createToolHandlers(sourcePath, onLog);
+  const devContainer = new DevContainer(sourcePath);
+  const handlers = createToolHandlers(sourcePath, onLog, devContainer);
 
   // Build context about existing files
   const existingFiles = listFiles(sourcePath);
@@ -392,33 +431,37 @@ export async function modifyProject(
 
   onLog("Claude is modifying your app...");
 
-  const notes = await claudeAgentLoop(
-    MODIFY_SYSTEM_PROMPT,
-    `${modification}${fileList}${historyContext}`,
-    AGENT_TOOLS,
-    handlers,
-    {
-      maxTurns: 30,
-      onText: (text) => {
-        const trimmed = text.trim();
-        if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
-      },
-      onToolUse: (name, input) => {
-        if (name === "write_files") {
-          const count = input.files?.length || 0;
-          onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
-        } else if (name === "run_command") {
-          onLog(`Running: ${input.command}`);
-        } else if (name === "read_file") {
-          onLog(`Reading ${input.path}...`);
-        } else if (name === "delete_file") {
-          onLog(`Deleting ${input.path}...`);
-        }
-      },
-    }
-  );
+  try {
+    const notes = await claudeAgentLoop(
+      MODIFY_SYSTEM_PROMPT,
+      `${modification}${fileList}${historyContext}`,
+      AGENT_TOOLS,
+      handlers,
+      {
+        maxTurns: 30,
+        onText: (text) => {
+          const trimmed = text.trim();
+          if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
+        },
+        onToolUse: (name, input) => {
+          if (name === "write_files") {
+            const count = input.files?.length || 0;
+            onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
+          } else if (name === "run_command") {
+            onLog(`Running: ${input.command}`);
+          } else if (name === "read_file") {
+            onLog(`Reading ${input.path}...`);
+          } else if (name === "delete_file") {
+            onLog(`Deleting ${input.path}...`);
+          }
+        },
+      }
+    );
 
-  return collectResult(sourcePath, notes);
+    return collectResult(sourcePath, notes);
+  } finally {
+    await devContainer.cleanup();
+  }
 }
 
 /**
