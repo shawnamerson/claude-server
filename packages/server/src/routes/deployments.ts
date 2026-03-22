@@ -202,10 +202,105 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
 
     // Update project timestamp
     db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
+
+    // Monitor container health — auto-fix if it crashes
+    monitorAndAutoFix(project, deploymentId, containerId, result).catch(() => {});
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     addLog(deploymentId, "system", `Deployment failed: ${message}`);
     updateStatus(deploymentId, "failed", { error: message });
+  }
+}
+
+async function monitorAndAutoFix(
+  project: Project,
+  deploymentId: string,
+  containerId: string,
+  lastResult: { dockerfile: string; dockerignore: string; files: Array<{ path: string; content: string }>; notes: string }
+) {
+  const db = getDb();
+  const maxAutoFixes = 2;
+
+  // Wait 10 seconds then check if container is still running
+  await new Promise((r) => setTimeout(r, 10000));
+
+  const { getContainerStatus } = await import("../services/deployer.js");
+  const status = await getContainerStatus(containerId);
+
+  if (status === "running") return; // All good
+
+  addLog(deploymentId, "system", "Container crashed! Auto-diagnosing...");
+
+  // Get error logs
+  const errorLogs = db
+    .prepare("SELECT message FROM logs WHERE deployment_id = ? AND stream IN ('stderr', 'stdout') ORDER BY id DESC LIMIT 50")
+    .all(deploymentId) as Array<{ message: string }>;
+
+  const errorText = errorLogs.map((l) => l.message).reverse().join("\n");
+
+  if (!errorText.trim()) {
+    addLog(deploymentId, "system", "No error logs found — container exited silently");
+    updateStatus(deploymentId, "failed", { error: "Container crashed with no error output" });
+    return;
+  }
+
+  addLog(deploymentId, "system", "Asking Claude to fix the error...");
+
+  // Get current files
+  const { readProjectFiles } = await import("../services/generator.js");
+  const currentFiles = readProjectFiles(project.source_path);
+  const filesContext = Object.entries(currentFiles)
+    .map(([p, c]) => `### ${p}\n\`\`\`\n${c}\n\`\`\``)
+    .join("\n\n");
+
+  const { modifyProject, writeProjectFiles } = await import("../services/generator.js");
+
+  try {
+    const fixResult = await modifyProject(
+      currentFiles,
+      [],
+      `The application crashed with this error:\n\`\`\`\n${errorText}\n\`\`\`\n\nFix the code to resolve this error. Make sure the app starts without crashing.`
+    );
+
+    addLog(deploymentId, "system", `Claude generated fix — ${fixResult.files.length} files`);
+
+    // Stop the crashed container
+    const { stopContainer, releasePort, deployContainer: deploy } = await import("../services/deployer.js");
+    try { await stopContainer(containerId); } catch {}
+    const oldPort = (db.prepare("SELECT port FROM deployments WHERE id = ?").get(deploymentId) as any)?.port;
+    if (oldPort) releasePort(oldPort);
+
+    // Write fixed files
+    writeProjectFiles(project.source_path, fixResult);
+
+    // Rebuild
+    addLog(deploymentId, "system", "Rebuilding with fix...");
+    updateStatus(deploymentId, "building");
+
+    const imageTag = await buildWithRetry(
+      project.slug,
+      deploymentId,
+      project.source_path,
+      { dockerfile: fixResult.dockerfile, dockerignore: fixResult.dockerignore }
+    );
+
+    // Redeploy
+    updateStatus(deploymentId, "deploying");
+    const portMatch = fixResult.dockerfile.match(/EXPOSE\s+(\d+)/);
+    const appPort = portMatch ? parseInt(portMatch[1]) : 3000;
+    const { getEnvVarsForDeploy } = await import("./envvars.js");
+    const envVars = getEnvVarsForDeploy(project.id);
+    const { containerId: newId, hostPort } = await deploy(imageTag, deploymentId, appPort, envVars, project.slug);
+
+    updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: imageTag });
+    addLog(deploymentId, "system", `Auto-fixed and redeployed on port ${hostPort}`);
+    addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
+
+    reloadCaddyConfig().catch(() => {});
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    addLog(deploymentId, "system", `Auto-fix failed: ${msg}`);
+    updateStatus(deploymentId, "failed", { error: `Container crashed, auto-fix failed: ${msg}` });
   }
 }
 
