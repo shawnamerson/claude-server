@@ -125,7 +125,7 @@ export async function claudeAgentLoop(
 
     const response = await client.messages.create({
       model: FAST_MODEL,
-      max_tokens: 16000,
+      max_tokens: 32000,
       system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages,
       tools,
