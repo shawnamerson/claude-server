@@ -193,9 +193,8 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       port: hostPort,
     });
 
-    const domain = config.domain;
     addLog(deploymentId, "system", `Deployed successfully! Running on port ${hostPort}`);
-    addLog(deploymentId, "system", `Access your app at http://${domain}:${hostPort}`);
+    addLog(deploymentId, "system", `Access your app via the "Open Preview" link above`);
 
     // Update project timestamp
     db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);

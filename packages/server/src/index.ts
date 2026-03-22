@@ -12,6 +12,7 @@ import fileRoutes from "./routes/files.js";
 import envRoutes from "./routes/envvars.js";
 import githubRoutes from "./routes/github.js";
 import databaseRoutes from "./routes/database.js";
+import proxyRoutes from "./routes/proxy.js";
 import { initializeDbPortTracking } from "./services/database.js";
 import fs from "fs";
 
@@ -29,6 +30,9 @@ app.use("/api", fileRoutes);
 app.use("/api", envRoutes);
 app.use("/api", githubRoutes);
 app.use("/api", databaseRoutes);
+
+// Proxy to deployed containers (must be before static files)
+app.use(proxyRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

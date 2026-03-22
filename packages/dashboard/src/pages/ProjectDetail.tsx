@@ -225,12 +225,12 @@ export default function ProjectDetail() {
           {runningDep && <StatusBadge status="running" />}
           {runningDep?.port && (
             <a
-              href={`http://${window.location.hostname}:${runningDep.port}`}
+              href={`/preview/${runningDep.port}`}
               target="_blank"
               rel="noreferrer"
               style={{ color: "#60a5fa", fontSize: "0.8rem" }}
             >
-              {window.location.hostname}:{runningDep.port}
+              Open Preview
             </a>
           )}
         </div>
