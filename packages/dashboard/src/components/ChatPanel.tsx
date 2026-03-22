@@ -45,15 +45,14 @@ function parseLogToActivity(msg: string): ActivityItem | null {
     return { type: "status", content: msg };
   }
   if (msg.startsWith("Claude is") || msg.startsWith("Project:") || msg.startsWith("Tokens:") || msg.startsWith("Total API")) {
-    return null; // Skip internal/meta messages
+    return null;
   }
   if (msg.startsWith("Deploying container") || msg.startsWith("Custom domain") || msg.startsWith("Container started")) {
-    return { type: "status", content: msg };
+    return null;
   }
-  return null; // Skip everything else (Docker noise, etc.)
+  return null;
 }
 
-// Group consecutive file entries into one block
 function groupActivities(items: ActivityItem[]): ActivityItem[] {
   const grouped: ActivityItem[] = [];
   let fileBuffer: string[] = [];
@@ -89,14 +88,11 @@ function ActivityBlock({ items }: { items: ActivityItem[] }) {
           const expanded = expandedFiles.has(i);
           return (
             <div key={i} style={s.fileBlock}>
-              <div
-                style={s.fileHeader}
-                onClick={() => setExpandedFiles(prev => {
-                  const next = new Set(prev);
-                  next.has(i) ? next.delete(i) : next.add(i);
-                  return next;
-                })}
-              >
+              <div style={s.fileHeader} onClick={() => setExpandedFiles(prev => {
+                const next = new Set(prev);
+                next.has(i) ? next.delete(i) : next.add(i);
+                return next;
+              })}>
                 <span style={s.fileIcon}>{expanded ? "v" : ">"}</span>
                 <span style={s.fileLabel}>{item.content}</span>
               </div>
@@ -109,11 +105,7 @@ function ActivityBlock({ items }: { items: ActivityItem[] }) {
           );
         }
         if (item.type === "command") {
-          return (
-            <div key={i} style={s.cmdBlock}>
-              <span style={s.cmdPrompt}>$</span> {item.content}
-            </div>
-          );
+          return <div key={i} style={s.cmdBlock}><span style={s.cmdPrompt}>$</span> {item.content}</div>;
         }
         if (item.type === "command_output") {
           return <div key={i} style={s.cmdOutput}>{item.content}</div>;
@@ -142,20 +134,37 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activeDepId, setActiveDepId] = useState<string | null>(null);
+  const [building, setBuilding] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.getChatHistory(projectId).then(setMessages);
   }, [projectId]);
 
-  // Subscribe to deployment logs for live activity
+  // Track building state from both local trigger and external deploying prop
   useEffect(() => {
-    if (!deploying || !deploymentId) {
-      return;
+    if (deploying) {
+      setBuilding(true);
     }
+    if (!deploying && building) {
+      // Deploy just finished
+      setBuilding(false);
+      setActivity([]);
+      setActiveDepId(null);
+      api.getChatHistory(projectId).then(setMessages);
+    }
+  }, [deploying]);
+
+  // Subscribe to deployment logs — use activeDepId (set immediately on deploy)
+  // or fall back to deploymentId from parent (set via polling)
+  const watchId = activeDepId || (deploying ? deploymentId : null);
+
+  useEffect(() => {
+    if (!watchId) return;
 
     setActivity([]);
-    const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream`);
+    const source = new EventSource(`/api/deployments/${watchId}/logs/stream`);
 
     source.onmessage = (event) => {
       try {
@@ -170,15 +179,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     };
 
     return () => source.close();
-  }, [deploying, deploymentId]);
-
-  // When deploy finishes, clear activity and refresh chat history
-  useEffect(() => {
-    if (!deploying && activity.length > 0) {
-      setActivity([]);
-      api.getChatHistory(projectId).then(setMessages);
-    }
-  }, [deploying]);
+  }, [watchId]);
 
   useEffect(() => {
     if (messagesRef.current) {
@@ -188,8 +189,10 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text || deploying) return;
+    if (!text || building) return;
     setInput("");
+    setBuilding(true);
+    setActivity([]);
 
     const userMsg: ChatMsg = {
       id: Date.now(),
@@ -199,17 +202,30 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       created_at: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMsg]);
+
     onDeploy(text);
+
+    // Get the deployment ID immediately from the API response
+    // The onDeploy callback already calls api.deploy which sets selectedDeployment,
+    // but we also need it here for SSE. We'll re-fetch deployments to get it.
+    setTimeout(() => {
+      api.listDeployments(projectId).then(deps => {
+        if (deps.length > 0 && deps[0].status !== "stopped" && deps[0].status !== "failed") {
+          setActiveDepId(deps[0].id);
+        }
+      });
+    }, 500);
   };
 
+  const isActive = building || deploying;
   const statusLabel = deployStatus === "generating" ? "Claude is working..."
     : deployStatus === "deploying" ? "Starting your app..."
-    : deploying ? "Working..." : "";
+    : isActive ? "Working..." : "";
 
   return (
     <div style={s.container}>
       <div ref={messagesRef} style={s.messages}>
-        {messages.length === 0 && !deploying && (
+        {messages.length === 0 && !isActive && (
           <div style={s.empty}>Describe what you want to build.</div>
         )}
         {messages.map((msg) => (
@@ -217,14 +233,13 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
             {msg.content}
           </div>
         ))}
-        {deploying && activity.length > 0 && (
+        {isActive && (
           <div style={s.assistantMsg}>
-            <ActivityBlock items={activity} />
-          </div>
-        )}
-        {deploying && activity.length === 0 && (
-          <div style={s.assistantMsg}>
-            <span style={s.statusLine}>{statusLabel}</span>
+            {activity.length > 0 ? (
+              <ActivityBlock items={activity} />
+            ) : (
+              <span style={s.statusLine}>{statusLabel || "Starting..."}</span>
+            )}
           </div>
         )}
       </div>
@@ -239,13 +254,13 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
               handleSend();
             }
           }}
-          placeholder={deploying ? statusLabel : "Tell Claude what to build or change..."}
-          disabled={deploying}
+          placeholder={isActive ? statusLabel : "Tell Claude what to build or change..."}
+          disabled={isActive}
         />
         <button
-          style={{ ...s.sendBtn, opacity: (deploying || !input.trim()) ? 0.5 : 1 }}
+          style={{ ...s.sendBtn, opacity: (isActive || !input.trim()) ? 0.5 : 1 }}
           onClick={handleSend}
-          disabled={deploying || !input.trim()}
+          disabled={isActive || !input.trim()}
         >
           Send
         </button>
@@ -325,7 +340,6 @@ const s = {
     padding: "2rem 1rem",
     fontSize: "0.85rem",
   },
-  // Activity styles
   activityContainer: {
     display: "flex",
     flexDirection: "column" as const,
