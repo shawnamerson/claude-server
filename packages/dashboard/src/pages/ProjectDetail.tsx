@@ -165,7 +165,7 @@ export default function ProjectDetail() {
   };
 
   const handleDelete = async () => {
-    if (!id || !confirm("Delete this project and all deployments?")) return;
+    if (!id) return;
     await api.deleteProject(id);
     navigate("/");
   };
