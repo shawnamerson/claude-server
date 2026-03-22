@@ -24,7 +24,10 @@ export function useSSE<T>(options: SSEOptions) {
     function connect() {
       if (closed) return;
 
-      const source = new EventSource(url);
+      const authToken = (window as any).__authToken;
+      const separator = url.includes("?") ? "&" : "?";
+      const fullUrl = authToken ? `${url}${separator}token=${authToken}` : url;
+      const source = new EventSource(fullUrl);
       sourceRef.current = source;
 
       source.onmessage = (event) => {

@@ -104,7 +104,8 @@ router.post("/auth/logout", (req: Request, res: Response) => {
 
 // Middleware: attach user to request if authenticated
 export function authMiddleware(req: Request, _res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.replace("Bearer ", "");
+  // Support token via Authorization header or ?token= query param (for SSE/EventSource)
+  const token = req.headers.authorization?.replace("Bearer ", "") || (req.query.token as string);
   if (!token) { next(); return; }
 
   const db = getDb();

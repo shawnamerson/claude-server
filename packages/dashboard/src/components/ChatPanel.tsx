@@ -106,7 +106,9 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
   useEffect(() => {
     if (!deploymentId || deploymentId === lastFinishedDepId) return;
 
-    const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream`);
+    const authToken = (window as any).__authToken;
+    const tokenParam = authToken ? `?token=${authToken}` : "";
+    const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream${tokenParam}`);
 
     source.onmessage = (event) => {
       try {
