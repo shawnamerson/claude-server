@@ -166,49 +166,186 @@ export function getDatabaseInfo(projectId: string): ProjectDatabase | null {
   return (db.prepare("SELECT * FROM project_databases WHERE project_id = ?").get(projectId) as ProjectDatabase) || null;
 }
 
-// Query the project's PostgreSQL database for schema info
+// Get a text summary of the database schema (for chat context)
 export async function queryProjectDatabase(projectId: string): Promise<string> {
   const info = getDatabaseInfo(projectId);
   if (!info || info.status !== "running") return "(No database)";
 
   try {
-    // Use docker exec to run psql inside the postgres container
-    const container = docker.getContainer(info.container_name);
+    const schema = await getDatabaseSchema(projectId);
+    if (schema.length === 0) return `Database: ${info.db_name} (no tables)`;
 
-    // Get table list
-    const tablesExec = await container.exec({
-      Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c",
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;"],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const tablesStream = await tablesExec.start({});
-    const tablesOutput = await streamToString(tablesStream);
-
-    // Get schema for each table
-    const schemaExec = await container.exec({
-      Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c",
-        "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;"],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const schemaStream = await schemaExec.start({});
-    const schemaOutput = await streamToString(schemaStream);
-
-    // Get row counts
-    const countExec = await container.exec({
-      Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c",
-        "SELECT schemaname, relname, n_live_tup FROM pg_stat_user_tables ORDER BY relname;"],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const countStream = await countExec.start({});
-    const countOutput = await streamToString(countStream);
-
-    return `## Database: ${info.db_name}\nHost: ${info.container_name}:5432\nUser: ${info.db_user}\n\n### Tables\n\`\`\`\n${tablesOutput}\n\`\`\`\n\n### Schema\n\`\`\`\n${schemaOutput}\n\`\`\`\n\n### Row Counts\n\`\`\`\n${countOutput}\n\`\`\``;
+    let result = `Database: ${info.db_name}\n\nTables:\n`;
+    for (const table of schema) {
+      result += `\n${table.table_name} (${table.row_count} rows):\n`;
+      for (const col of table.columns) {
+        result += `  - ${col.column_name}: ${col.data_type}${col.is_nullable === "NO" ? " NOT NULL" : ""}${col.column_default ? ` DEFAULT ${col.column_default}` : ""}\n`;
+      }
+    }
+    return result;
   } catch (err) {
     return `(Database query failed: ${err instanceof Error ? err.message : String(err)})`;
   }
+}
+
+export interface TableSchema {
+  table_name: string;
+  columns: Array<{
+    column_name: string;
+    data_type: string;
+    is_nullable: string;
+    column_default: string | null;
+  }>;
+  row_count: number;
+}
+
+// Get structured schema info for all tables in a project's database
+export async function getDatabaseSchema(projectId: string): Promise<TableSchema[]> {
+  const info = getDatabaseInfo(projectId);
+  if (!info || info.status !== "running") return [];
+
+  const container = docker.getContainer(info.container_name);
+
+  // Get columns for all tables
+  const colsExec = await container.exec({
+    Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-t", "-A", "-F", "\t", "-c",
+      "SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;"],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const colsStream = await colsExec.start({});
+  const colsOutput = await streamToString(colsStream);
+
+  // Get row counts
+  const countExec = await container.exec({
+    Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-t", "-A", "-F", "\t", "-c",
+      "SELECT relname, n_live_tup FROM pg_stat_user_tables ORDER BY relname;"],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const countStream = await countExec.start({});
+  const countOutput = await streamToString(countStream);
+
+  // Parse row counts
+  const rowCounts = new Map<string, number>();
+  for (const line of countOutput.split("\n")) {
+    const [name, count] = line.split("\t");
+    if (name && count) rowCounts.set(name.trim(), parseInt(count.trim()) || 0);
+  }
+
+  // Parse columns into tables
+  const tables = new Map<string, TableSchema>();
+  for (const line of colsOutput.split("\n")) {
+    const parts = line.split("\t");
+    if (parts.length < 4) continue;
+    const [tableName, columnName, dataType, isNullable, columnDefault] = parts.map(p => p.trim());
+    if (!tableName || !columnName) continue;
+
+    if (!tables.has(tableName)) {
+      tables.set(tableName, {
+        table_name: tableName,
+        columns: [],
+        row_count: rowCounts.get(tableName) || 0,
+      });
+    }
+    tables.get(tableName)!.columns.push({
+      column_name: columnName,
+      data_type: dataType,
+      is_nullable: isNullable,
+      column_default: columnDefault || null,
+    });
+  }
+
+  return Array.from(tables.values());
+}
+
+// Execute a SQL query against a project's database
+export async function executeQuery(projectId: string, sql: string): Promise<{
+  columns: string[];
+  rows: string[][];
+  rowCount: number;
+  error?: string;
+}> {
+  const info = getDatabaseInfo(projectId);
+  if (!info || info.status !== "running") {
+    return { columns: [], rows: [], rowCount: 0, error: "Database not running" };
+  }
+
+  // Basic safety: block dangerous statements
+  const normalized = sql.trim().toUpperCase();
+  const blocked = ["DROP DATABASE", "DROP ROLE", "DROP USER", "CREATE DATABASE", "ALTER SYSTEM"];
+  for (const b of blocked) {
+    if (normalized.includes(b)) {
+      return { columns: [], rows: [], rowCount: 0, error: `Blocked: ${b} is not allowed` };
+    }
+  }
+
+  const container = docker.getContainer(info.container_name);
+
+  try {
+    // Use CSV format for reliable parsing
+    const exec = await container.exec({
+      Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c", sql, "--csv"],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = await exec.start({});
+    const output = await streamToString(stream);
+
+    if (!output.trim()) {
+      return { columns: [], rows: [], rowCount: 0 };
+    }
+
+    // Check for error messages from psql
+    if (output.includes("ERROR:")) {
+      const errorLine = output.split("\n").find(l => l.includes("ERROR:"));
+      return { columns: [], rows: [], rowCount: 0, error: errorLine || "Query failed" };
+    }
+
+    // Parse CSV output
+    const lines = output.trim().split("\n");
+    if (lines.length === 0) {
+      return { columns: [], rows: [], rowCount: 0 };
+    }
+
+    const columns = parseCSVLine(lines[0]);
+    const rows = lines.slice(1).map(parseCSVLine);
+
+    return { columns, rows, rowCount: rows.length };
+  } catch (err) {
+    return { columns: [], rows: [], rowCount: 0, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current);
+  return result;
 }
 
 function streamToString(stream: NodeJS.ReadableStream): Promise<string> {

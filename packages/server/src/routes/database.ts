@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "../db/client.js";
 import { Project } from "../types.js";
-import { createDatabase, deleteDatabase, getDatabaseInfo } from "../services/database.js";
+import { createDatabase, deleteDatabase, getDatabaseInfo, getDatabaseSchema, executeQuery } from "../services/database.js";
 
 const router = Router();
 
@@ -54,6 +54,38 @@ router.delete("/projects/:id/database", async (req: Request, res: Response) => {
   try {
     await deleteDatabase(req.params.id as string);
     res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Get database schema (tables, columns, row counts)
+router.get("/projects/:id/database/schema", async (req: Request, res: Response) => {
+  try {
+    const schema = await getDatabaseSchema(req.params.id as string);
+    res.json(schema);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Execute a SQL query
+router.post("/projects/:id/database/query", async (req: Request, res: Response) => {
+  const { sql } = req.body;
+  if (!sql || typeof sql !== "string") {
+    res.status(400).json({ error: "Missing sql parameter" });
+    return;
+  }
+  if (sql.length > 10000) {
+    res.status(400).json({ error: "Query too long (max 10,000 characters)" });
+    return;
+  }
+
+  try {
+    const result = await executeQuery(req.params.id as string, sql);
+    res.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });

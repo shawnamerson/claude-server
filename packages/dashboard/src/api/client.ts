@@ -95,6 +95,24 @@ export interface DatabaseInfo {
   connectionString: string;
 }
 
+export interface TableSchema {
+  table_name: string;
+  columns: Array<{
+    column_name: string;
+    data_type: string;
+    is_nullable: string;
+    column_default: string | null;
+  }>;
+  row_count: number;
+}
+
+export interface QueryResult {
+  columns: string[];
+  rows: string[][];
+  rowCount: number;
+  error?: string;
+}
+
 export interface DatabaseCreateResult {
   ok: boolean;
   dbName: string;
@@ -188,6 +206,13 @@ export const api = {
     request<DatabaseCreateResult>(`/projects/${projectId}/database`, { method: "POST" }),
   deleteDatabase: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/database`, { method: "DELETE" }),
+  getDatabaseSchema: (projectId: string) =>
+    request<TableSchema[]>(`/projects/${projectId}/database/schema`),
+  queryDatabase: (projectId: string, sql: string) =>
+    request<QueryResult>(`/projects/${projectId}/database/query`, {
+      method: "POST",
+      body: JSON.stringify({ sql }),
+    }),
 
   // Domains
   getDomains: (projectId: string) => request<CustomDomain[]>(`/projects/${projectId}/domains`),
