@@ -282,7 +282,9 @@ export default function ProjectDetail() {
               </button>
             ))}
           </div>
-          {leftTab === "logs" && <LogViewer deploymentId={selectedDeployment} />}
+          <div style={{ display: leftTab === "logs" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", flexDirection: "column" }}>
+            <LogViewer deploymentId={selectedDeployment} />
+          </div>
           {leftTab === "files" && <FileViewer projectId={project.id} />}
           {leftTab === "env" && <EnvVarsPanel projectId={project.id} />}
           {leftTab === "database" && <DatabasePanel projectId={project.id} />}
