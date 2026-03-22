@@ -353,6 +353,11 @@ export async function generateProject(
     handlers,
     {
       maxTurns: 30,
+      onText: (text) => {
+        // Log Claude's reasoning so users can see what it's thinking
+        const trimmed = text.trim();
+        if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
+      },
       onToolUse: (name, input) => {
         if (name === "write_files") {
           const count = input.files?.length || 0;
@@ -394,10 +399,16 @@ export async function modifyProject(
     handlers,
     {
       maxTurns: 30,
+      onText: (text) => {
+        const trimmed = text.trim();
+        if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
+      },
       onToolUse: (name, input) => {
         if (name === "write_files") {
           const count = input.files?.length || 0;
           onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
+        } else if (name === "run_command") {
+          onLog(`Running: ${input.command}`);
         } else if (name === "read_file") {
           onLog(`Reading ${input.path}...`);
         } else if (name === "delete_file") {
