@@ -132,6 +132,7 @@ export default function ProjectDetail() {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [selectedDeployment, setSelectedDeployment] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<Tab>("logs");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -170,6 +171,46 @@ export default function ProjectDetail() {
     navigate("/");
   };
 
+  const deleteModal = showDeleteModal && (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      background: "rgba(0,0,0,0.7)", display: "flex",
+      alignItems: "center", justifyContent: "center", zIndex: 1000,
+    }} onClick={() => setShowDeleteModal(false)}>
+      <div style={{
+        background: "#12121a", border: "1px solid #1e1e30",
+        borderRadius: "0.75rem", padding: "1.5rem", maxWidth: "400px", width: "90%",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>
+          Delete Project
+        </div>
+        <div style={{ color: "#888", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
+          Are you sure you want to delete <strong style={{ color: "#e0e0e0" }}>{project?.name}</strong>? This will stop all containers and remove all files. This cannot be undone.
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+          <button
+            style={{
+              padding: "0.5rem 1rem", background: "#1a1a2e", color: "#aaa",
+              border: "1px solid #2e2e4a", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.85rem",
+            }}
+            onClick={() => setShowDeleteModal(false)}
+          >
+            Cancel
+          </button>
+          <button
+            style={{
+              padding: "0.5rem 1rem", background: "#dc2626", color: "#fff",
+              border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.85rem",
+            }}
+            onClick={() => { setShowDeleteModal(false); handleDelete(); }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (!project) return <div>Loading...</div>;
 
   const runningDep = deployments.find((d) => d.status === "running");
@@ -193,7 +234,7 @@ export default function ProjectDetail() {
           )}
         </div>
         <div style={styles.actions}>
-          <button style={styles.dangerBtn} onClick={handleDelete}>Delete</button>
+          <button style={styles.dangerBtn} onClick={() => setShowDeleteModal(true)}>Delete</button>
         </div>
       </div>
 
@@ -261,6 +302,7 @@ export default function ProjectDetail() {
           }} />
         </div>
       </div>
+      {deleteModal}
     </div>
   );
 }
