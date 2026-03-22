@@ -215,6 +215,7 @@ export default function ProjectDetail() {
   if (!project) return <div>Loading...</div>;
 
   const runningDep = deployments.find((d) => d.status === "running");
+  const isDeploying = deployments.some((d) => ["pending", "generating", "building", "deploying"].includes(d.status));
 
   return (
     <div style={styles.page}>
@@ -295,7 +296,7 @@ export default function ProjectDetail() {
         {/* Right panel: Chat */}
         <div style={styles.rightPanel}>
           <div style={styles.sectionTitle}>Chat with Claude</div>
-          <ChatPanel projectId={project.id} onDeploy={(prompt) => {
+          <ChatPanel projectId={project.id} deploying={isDeploying} onDeploy={(prompt) => {
             if (!id) return;
             api.deploy(id, prompt).then((dep) => {
               setSelectedDeployment(dep.id);

@@ -87,10 +87,11 @@ const styles = {
 
 interface Props {
   projectId: string;
+  deploying?: boolean;
   onDeploy: (prompt: string) => void;
 }
 
-export default function ChatPanel({ projectId, onDeploy }: Props) {
+export default function ChatPanel({ projectId, deploying, onDeploy }: Props) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -211,8 +212,8 @@ export default function ChatPanel({ projectId, onDeploy }: Props) {
         <button style={styles.askBtn} onClick={sendMessage} disabled={streaming || !input.trim()}>
           {streaming ? "..." : "Ask"}
         </button>
-        <button style={styles.deployBtn} onClick={handleApplyDeploy} disabled={streaming || !input.trim()}>
-          Apply & Deploy
+        <button style={styles.deployBtn} onClick={handleApplyDeploy} disabled={streaming || deploying || !input.trim()}>
+          {deploying ? "Deploying..." : "Apply & Deploy"}
         </button>
       </div>
     </div>
