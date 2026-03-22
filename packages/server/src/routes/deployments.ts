@@ -4,7 +4,7 @@ import { getDb } from "../db/client.js";
 import { Project, Deployment } from "../types.js";
 import { generateProject, modifyProject, readProjectFiles } from "../services/generator.js";
 import { buildWithRetry } from "../services/builder.js";
-import { deployContainer, stopContainer, releasePort } from "../services/deployer.js";
+import { deployContainer, stopContainer, releasePort, logEmitter } from "../services/deployer.js";
 import { getEnvVarsForDeploy } from "./envvars.js";
 import { config } from "../config.js";
 import { reloadCaddyConfig } from "../services/caddy.js";
@@ -18,6 +18,8 @@ const router = Router();
 function addLog(deploymentId: string, stream: string, message: string) {
   const db = getDb();
   db.prepare("INSERT INTO logs (deployment_id, stream, message) VALUES (?, ?, ?)").run(deploymentId, stream, message);
+  // Push to SSE so the frontend gets it in real-time
+  logEmitter.emit(`log:${deploymentId}`, { stream, message, timestamp: new Date().toISOString() });
 }
 
 function updateStatus(deploymentId: string, status: string, extra: Record<string, unknown> = {}) {
