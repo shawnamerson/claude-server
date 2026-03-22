@@ -80,7 +80,7 @@ export async function claudeChat(
     const stream = client.messages.stream(
       {
         model: FAST_MODEL,
-        max_tokens: 16000,
+        max_tokens: 64000,
         system: systemPrompt,
         messages,
         tools,

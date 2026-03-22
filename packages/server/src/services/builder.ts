@@ -81,31 +81,31 @@ export async function buildImage(
   });
 }
 
-// Pre-build: fix package.json versions and generate lockfile
-async function preBuildFix(sourcePath: string, deploymentId: string): Promise<void> {
+// Pre-build: fix package.json versions — only wildcard on retry
+function preBuildFix(sourcePath: string, deploymentId: string, wildcardVersions: boolean): void {
   const pkgPath = path.join(sourcePath, "package.json");
   if (!fs.existsSync(pkgPath)) return;
 
   try {
-    // Read and fix package.json — replace caret versions with "latest" to avoid version mismatches
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     let fixed = false;
 
-    for (const depType of ["dependencies", "devDependencies"]) {
-      if (pkg[depType]) {
-        for (const [name, version] of Object.entries(pkg[depType])) {
-          // Replace specific versions that might not exist with *
-          if (typeof version === "string" && !version.startsWith("*")) {
-            pkg[depType][name] = "*";
-            fixed = true;
+    if (wildcardVersions) {
+      // Retry mode: replace all versions with * to bypass version resolution errors
+      for (const depType of ["dependencies", "devDependencies"]) {
+        if (pkg[depType]) {
+          for (const [name, version] of Object.entries(pkg[depType])) {
+            if (typeof version === "string" && !version.startsWith("*")) {
+              pkg[depType][name] = "*";
+              fixed = true;
+            }
           }
         }
       }
-    }
-
-    if (fixed) {
-      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
-      addLog(deploymentId, "system", "Fixed package.json dependency versions");
+      if (fixed) {
+        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+        addLog(deploymentId, "system", "Wildcarded all dependency versions for retry");
+      }
     }
   } catch {
     // Skip if we can't parse package.json
@@ -125,9 +125,6 @@ export async function buildWithRetry(
   // Always ensure Dockerfile uses "npm install" not "npm ci"
   dockerfile = dockerfile.replace(/npm ci\b[^\n]*/g, "npm install --production");
 
-  // Fix package.json before building
-  await preBuildFix(sourcePath, deploymentId);
-
   for (let attempt = 1; attempt <= config.maxBuildRetries; attempt++) {
     try {
       addLog(deploymentId, "system", `Build attempt ${attempt}/${config.maxBuildRetries}`);
@@ -141,9 +138,9 @@ export async function buildWithRetry(
         const isDepError = lastError.includes("npm error") || lastError.includes("ETARGET") || lastError.includes("notarget") || lastError.includes("ERESOLVE");
 
         if (isDepError) {
-          // Fix package.json — re-run preBuildFix with wildcard versions
-          addLog(deploymentId, "system", "Fixing dependency versions...");
-          await preBuildFix(sourcePath, deploymentId);
+          // Only wildcard versions on retry — trust Claude's versions on first attempt
+          addLog(deploymentId, "system", "Dependency error — wildcarding versions for retry...");
+          preBuildFix(sourcePath, deploymentId, true);
           // Also ensure npm install in Dockerfile
           dockerfile = dockerfile.replace(/npm ci\b[^\n]*/g, "npm install --production");
           dockerfile = dockerfile.replace(/npm install\s+--only=production/g, "npm install --production");

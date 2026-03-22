@@ -11,6 +11,7 @@ import { reloadCaddyConfig } from "../services/caddy.js";
 import { deductCredit } from "./auth.js";
 import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
 import { createDatabase, getDatabaseInfo } from "../services/database.js";
+import { validateProject, autoFixProject } from "../services/validator.js";
 
 const router = Router();
 
@@ -130,8 +131,10 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
           throw new Error("No description provided. Tell Claude what to build.");
         }
         addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
-        addLog(deploymentId, "system", "Claude is generating your app...");
-        result = await generateProject(description);
+        addLog(deploymentId, "system", "Claude is planning and generating your app...");
+        result = await generateProject(description, (phase, index, total) => {
+          addLog(deploymentId, "system", `Phase ${index + 1}/${total}: ${phase}`);
+        });
       }
     } finally {
       clearInterval(heartbeat);
@@ -155,7 +158,24 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       "INSERT INTO chat_messages (project_id, deployment_id, role, content) VALUES (?, ?, 'assistant', ?)"
     ).run(project.id, deploymentId, result.notes || "Project generated successfully.");
 
-    // Step 2: Write files to disk
+    // Step 2: Validate and auto-fix generated project
+    const fixes = autoFixProject(result);
+    for (const fix of fixes) {
+      addLog(deploymentId, "system", `Auto-fix: ${fix}`);
+    }
+
+    const issues = validateProject(result);
+    for (const issue of issues) {
+      addLog(deploymentId, issue.severity === "error" ? "stderr" : "system",
+        `${issue.severity.toUpperCase()}: ${issue.message}`);
+    }
+
+    const errors = issues.filter(i => i.severity === "error");
+    if (errors.length > 0) {
+      throw new Error(`Validation failed with ${errors.length} error(s): ${errors.map(e => e.message).join("; ")}`);
+    }
+
+    // Step 3: Write files to disk
     addLog(deploymentId, "system", "Writing files to disk...");
     writeProjectFiles(project.source_path, result);
     addLog(deploymentId, "system", "All files written successfully");
@@ -343,23 +363,33 @@ async function monitorContainer(project: Project, deploymentId: string, containe
   let autoFixCount = 0;
 
   async function checkHealth(port: number): Promise<boolean> {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const resp = await fetch(`http://${DOCKER_HOST}:${port}/health`, { signal: controller.signal });
-      clearTimeout(timeout);
-      return resp.ok;
-    } catch {
-      return false;
+    // Try /health first, then fall back to / — any HTTP response means the server is alive
+    for (const path of ["/health", "/"]) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const resp = await fetch(`http://${DOCKER_HOST}:${port}${path}`, {
+          signal: controller.signal,
+          redirect: "follow",
+        });
+        clearTimeout(timeout);
+        // Any response (even 404) means the server is running and accepting connections
+        return true;
+      } catch {
+        continue;
+      }
     }
+    return false;
   }
 
   let currentContainerId = containerId;
-  let firstCheck = true;
+  let checkCount = 0;
 
   while (autoFixCount < MAX_AUTO_FIXES) {
-    await new Promise((r) => setTimeout(r, firstCheck ? 3000 : 10000));
-    firstCheck = false;
+    // Give containers more time on first few checks (startup grace period)
+    const delay = checkCount < 2 ? 8000 : 15000;
+    await new Promise((r) => setTimeout(r, delay));
+    checkCount++;
 
     // Check if deployment is still supposed to be running
     const dep = db.prepare("SELECT status, container_id, port FROM deployments WHERE id = ?").get(deploymentId) as { status: string; container_id: string; port: number | null } | undefined;
@@ -377,14 +407,14 @@ async function monitorContainer(project: Project, deploymentId: string, containe
           autoFixCount = 0; // Reset on healthy
           continue;
         }
-        // Check 3 more times
+        // Recheck several times before declaring unresponsive
         let fails = 0;
-        for (let i = 0; i < 3; i++) {
-          await new Promise((r) => setTimeout(r, 5000));
+        for (let i = 0; i < 4; i++) {
+          await new Promise((r) => setTimeout(r, 8000));
           if (await checkHealth(dep.port)) break;
           fails++;
         }
-        if (fails < 3) continue;
+        if (fails < 4) continue;
       } else {
         continue;
       }
@@ -402,7 +432,7 @@ async function monitorContainer(project: Project, deploymentId: string, containe
 
     if (!newId) return; // Fix failed, stop monitoring
     currentContainerId = newId;
-    firstCheck = true; // Quick check after fix
+    checkCount = 0; // Reset for grace period after fix
   }
 
   if (autoFixCount >= MAX_AUTO_FIXES) {

@@ -128,24 +128,112 @@ IMPORTANT for the "notes" field:
 
 You MUST call the submit_project tool with all generated files.`;
 
+const MODIFY_TOOL: Anthropic.Tool = {
+  name: "submit_changes",
+  description: "Submit only the files that changed, were added, or should be deleted. Unchanged files are preserved automatically.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      changed_files: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Relative file path" },
+            content: { type: "string", description: "Complete new file content" },
+          },
+          required: ["path", "content"],
+        },
+        description: "Files that were modified or newly created — include the COMPLETE file content",
+      },
+      deleted_files: {
+        type: "array",
+        items: { type: "string" },
+        description: "File paths to delete (if any). Omit or leave empty if nothing was deleted.",
+      },
+      dockerfile: { type: "string", description: "Complete Dockerfile content (always include even if unchanged)" },
+      dockerignore: { type: "string", description: "Complete .dockerignore content" },
+      notes: { type: "string", description: "Brief description of what was changed" },
+    },
+    required: ["changed_files", "dockerfile", "dockerignore", "notes"],
+  },
+};
+
 const MODIFY_SYSTEM_PROMPT = `You are an expert full-stack developer. The user has an existing project and wants to modify it. You will receive the current project files and the user's requested changes.
 
-Generate the COMPLETE updated project — include ALL files, even ones that haven't changed. This ensures the project stays complete and buildable.
+IMPORTANT: Only return files that you are CHANGING or ADDING. Unchanged files are kept automatically — do NOT re-submit them. If you need to delete a file, list it in deleted_files.
 
 IMPORTANT RULES:
 - NEVER put HTML inside JavaScript template literals (backticks) — this causes syntax errors. Keep HTML in separate .html files in the public folder, CSS in .css files, and client-side JS in .js files. The server.js should only contain Express API routes and serve static files with express.static('public').
 - For any data persistence, ALWAYS use PostgreSQL via process.env.DATABASE_URL with the "pg" npm package. The platform provides a built-in database. NEVER use SQLite, JSON files, or in-memory storage.
+- Always include the complete Dockerfile and .dockerignore even if they haven't changed.
 
-You MUST call the submit_project tool with the complete set of files, the updated Dockerfile, and .dockerignore.`;
+You MUST call the submit_changes tool with your changes.`;
 
-export async function generateProject(description: string): Promise<GenerationResult> {
-  const response = await claudeChat(
-    SYSTEM_PROMPT,
-    [{ role: "user", content: `Build me this application:\n\n${description}` }],
-    [GENERATE_TOOL]
-  );
+export async function generateProject(
+  description: string,
+  onPhaseStart?: (phase: string, index: number, total: number) => void,
+): Promise<GenerationResult> {
+  // Plan phases for the project
+  const phases = await planProject(description);
 
-  return extractResult(response);
+  if (phases.length <= 1) {
+    // Simple project — single-shot generation
+    onPhaseStart?.("Full Build", 0, 1);
+    const response = await claudeChat(
+      SYSTEM_PROMPT,
+      [{ role: "user", content: `Build me this application:\n\n${description}` }],
+      [GENERATE_TOOL]
+    );
+    return extractResult(response);
+  }
+
+  // Multi-phase: build incrementally
+  let currentFiles: Record<string, string> = {};
+  let result: GenerationResult | null = null;
+
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i];
+    onPhaseStart?.(phase.name, i, phases.length);
+
+    const hasFiles = Object.keys(currentFiles).length > 0;
+
+    if (!hasFiles) {
+      // Phase 1: generate from scratch
+      const response = await claudeChat(
+        SYSTEM_PROMPT,
+        [{
+          role: "user",
+          content: `Build me this application:\n\n${description}\n\nThis is phase ${i + 1} of ${phases.length}. For this phase, focus on: ${phase.name} — ${phase.description}\n\nBuild a solid foundation that the next phases will extend.`,
+        }],
+        [GENERATE_TOOL]
+      );
+      result = extractResult(response);
+    } else {
+      // Subsequent phases: build on existing files
+      const filesContext = Object.entries(currentFiles)
+        .map(([filePath, content]) => `### ${filePath}\n\`\`\`\n${content}\n\`\`\``)
+        .join("\n\n");
+
+      const response = await claudeChat(
+        MODIFY_SYSTEM_PROMPT,
+        [{
+          role: "user",
+          content: `Here are the current project files:\n\n${filesContext}\n\nThis is phase ${i + 1} of ${phases.length} for: ${description}\n\nFor this phase, add: ${phase.name} — ${phase.description}\n\nReturn the COMPLETE updated project with this phase's features integrated.`,
+        }],
+        [GENERATE_TOOL]
+      );
+      result = extractResult(response);
+    }
+
+    // Update current files for next phase
+    currentFiles = {};
+    for (const file of result.files) {
+      currentFiles[file.path] = file.content;
+    }
+  }
+
+  return result!;
 }
 
 export async function modifyProject(
@@ -165,8 +253,73 @@ export async function modifyProject(
     },
   ];
 
-  const response = await claudeChat(MODIFY_SYSTEM_PROMPT, messages, [GENERATE_TOOL]);
-  return extractResult(response);
+  const response = await claudeChat(MODIFY_SYSTEM_PROMPT, messages, [MODIFY_TOOL]);
+  return extractModifyResult(response, currentFiles);
+}
+
+function extractModifyResult(response: Anthropic.Message, currentFiles: Record<string, string>): GenerationResult {
+  console.log("Claude response blocks:", response.content.map(b => b.type));
+
+  for (const block of response.content) {
+    if (block.type === "tool_use" && block.name === "submit_changes") {
+      const input = block.input as {
+        changed_files: GeneratedFile[];
+        deleted_files?: string[];
+        dockerfile: string;
+        dockerignore: string;
+        notes: string;
+      };
+
+      if (!input.changed_files || !Array.isArray(input.changed_files)) {
+        console.error("Invalid tool result - missing changed_files:", JSON.stringify(input).slice(0, 500));
+        throw new Error("Claude returned an invalid response (no changed_files). Please try again.");
+      }
+
+      // Merge: start with existing files, apply changes, remove deletions
+      const mergedFiles = new Map<string, string>();
+      for (const [filePath, content] of Object.entries(currentFiles)) {
+        mergedFiles.set(filePath, content);
+      }
+
+      // Apply changed/new files
+      for (const file of input.changed_files) {
+        mergedFiles.set(file.path, file.content);
+      }
+
+      // Remove deleted files
+      if (input.deleted_files) {
+        for (const del of input.deleted_files) {
+          mergedFiles.delete(del);
+        }
+      }
+
+      const files = Array.from(mergedFiles.entries()).map(([path, content]) => ({ path, content }));
+
+      console.log(`Claude changed ${input.changed_files.length} files, deleted ${input.deleted_files?.length || 0} files, total ${files.length} files`);
+
+      return {
+        files,
+        dockerfile: input.dockerfile,
+        dockerignore: input.dockerignore,
+        notes: input.notes,
+      };
+    }
+  }
+
+  // Fallback: check if Claude used the old submit_project tool
+  for (const block of response.content) {
+    if (block.type === "tool_use" && block.name === "submit_project") {
+      return extractResult(response);
+    }
+  }
+
+  const textBlocks = response.content.filter(b => b.type === "text");
+  if (textBlocks.length > 0) {
+    console.error("Claude responded with text instead of tool call:",
+      (textBlocks[0] as { text: string }).text.slice(0, 500));
+  }
+
+  throw new Error("Claude did not generate the changes. Please try again.");
 }
 
 function extractResult(response: Anthropic.Message): GenerationResult {
