@@ -219,15 +219,23 @@ async function monitorAndAutoFix(
   lastResult: { dockerfile: string; dockerignore: string; files: Array<{ path: string; content: string }>; notes: string }
 ) {
   const db = getDb();
-  const maxAutoFixes = 2;
-
-  // Wait 10 seconds then check if container is still running
-  await new Promise((r) => setTimeout(r, 10000));
 
   const { getContainerStatus } = await import("../services/deployer.js");
-  const status = await getContainerStatus(containerId);
 
-  if (status === "running") return; // All good
+  // Check container health over 30 seconds (every 5 seconds)
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const status = await getContainerStatus(containerId);
+    if (status !== "running" && status !== "created") {
+      // Container died — break out and fix
+      break;
+    }
+    if (i === 5) return; // Still running after 30s — all good
+  }
+
+  // Double-check it's actually dead
+  const finalStatus = await getContainerStatus(containerId);
+  if (finalStatus === "running") return;
 
   addLog(deploymentId, "system", "Container crashed! Auto-diagnosing...");
 
