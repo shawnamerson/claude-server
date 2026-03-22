@@ -11,6 +11,8 @@ import chatRoutes from "./routes/chat.js";
 import fileRoutes from "./routes/files.js";
 import envRoutes from "./routes/envvars.js";
 import githubRoutes from "./routes/github.js";
+import databaseRoutes from "./routes/database.js";
+import { initializeDbPortTracking } from "./services/database.js";
 import fs from "fs";
 
 const app = express();
@@ -26,6 +28,7 @@ app.use("/api", chatRoutes);
 app.use("/api", fileRoutes);
 app.use("/api", envRoutes);
 app.use("/api", githubRoutes);
+app.use("/api", databaseRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
@@ -60,6 +63,7 @@ async function start() {
 
   // Track existing container ports
   await initializePortTracking();
+  await initializeDbPortTracking();
 
   app.listen(config.port, () => {
     console.log(`Claude Server running on http://localhost:${config.port}`);

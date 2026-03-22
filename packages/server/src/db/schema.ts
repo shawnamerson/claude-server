@@ -63,6 +63,19 @@ export function initializeDatabase(db: Database.Database): void {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS project_databases (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id      TEXT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+      container_id    TEXT,
+      container_name  TEXT NOT NULL,
+      db_name         TEXT NOT NULL,
+      db_user         TEXT NOT NULL,
+      db_password     TEXT NOT NULL,
+      port            INTEGER NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'running',
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_deployments_project ON deployments(project_id);
     CREATE INDEX IF NOT EXISTS idx_logs_deployment ON logs(deployment_id);
     CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_messages(project_id);

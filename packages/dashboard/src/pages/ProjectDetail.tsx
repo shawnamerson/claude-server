@@ -7,8 +7,9 @@ import ChatPanel from "../components/ChatPanel";
 import FileViewer from "../components/FileViewer";
 import EnvVarsPanel from "../components/EnvVarsPanel";
 import GitHubPanel from "../components/GitHubPanel";
+import DatabasePanel from "../components/DatabasePanel";
 
-type Tab = "logs" | "files" | "env" | "github";
+type Tab = "logs" | "files" | "env" | "database" | "github";
 
 const styles = {
   page: {
@@ -230,19 +231,20 @@ export default function ProjectDetail() {
         {/* Left panel: Tabs for Logs / Files / Env / GitHub */}
         <div style={styles.leftPanel}>
           <div style={styles.tabs}>
-            {(["logs", "files", "env", "github"] as Tab[]).map((tab) => (
+            {(["logs", "files", "env", "database", "github"] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 style={{ ...styles.tab, ...(leftTab === tab ? styles.tabActive : {}) }}
                 onClick={() => setLeftTab(tab)}
               >
-                {tab === "logs" ? "Logs" : tab === "files" ? "Files" : tab === "env" ? "Env Vars" : "GitHub"}
+                {{ logs: "Logs", files: "Files", env: "Env Vars", database: "Database", github: "GitHub" }[tab]}
               </button>
             ))}
           </div>
           {leftTab === "logs" && <LogViewer deploymentId={selectedDeployment} />}
           {leftTab === "files" && <FileViewer projectId={project.id} />}
           {leftTab === "env" && <EnvVarsPanel projectId={project.id} />}
+          {leftTab === "database" && <DatabasePanel projectId={project.id} />}
           {leftTab === "github" && <GitHubPanel projectId={project.id} />}
         </div>
 

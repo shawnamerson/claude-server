@@ -72,6 +72,25 @@ export interface GitHubConnection {
   webhookUrl: string;
 }
 
+export interface DatabaseInfo {
+  status: string;
+  dbName: string;
+  user: string;
+  port: number;
+  host: string;
+  connectionString: string;
+}
+
+export interface DatabaseCreateResult {
+  ok: boolean;
+  dbName: string;
+  user: string;
+  port: number;
+  host: string;
+  connectionString: string;
+  message: string;
+}
+
 export const api = {
   // Projects
   listProjects: () => request<Project[]>("/projects"),
@@ -128,4 +147,11 @@ export const api = {
     }),
   disconnectGitHub: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/github`, { method: "DELETE" }),
+
+  // Database
+  getDatabase: (projectId: string) => request<DatabaseInfo | null>(`/projects/${projectId}/database`),
+  createDatabase: (projectId: string) =>
+    request<DatabaseCreateResult>(`/projects/${projectId}/database`, { method: "POST" }),
+  deleteDatabase: (projectId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/database`, { method: "DELETE" }),
 };
