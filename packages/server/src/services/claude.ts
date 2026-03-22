@@ -123,13 +123,14 @@ export async function claudeAgentLoop(
   for (let turn = 0; turn < maxTurns; turn++) {
     console.log(`Agent turn ${turn + 1}/${maxTurns}`);
 
-    const response = await client.messages.create({
+    const stream = client.messages.stream({
       model: FAST_MODEL,
       max_tokens: 32000,
       system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages,
       tools,
     });
+    const response = await stream.finalMessage();
 
     trackUsage(currentDeploymentId, response);
     console.log(`Agent response: stop_reason=${response.stop_reason}, blocks=${response.content.map(b => b.type).join(",")}`);
