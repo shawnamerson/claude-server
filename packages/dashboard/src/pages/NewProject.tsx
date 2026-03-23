@@ -150,6 +150,20 @@ export default function NewProject() {
           {loading ? "Creating..." : "Create Project"}
         </button>
       </form>
+      <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
+        <span style={{ color: "#555", fontSize: "0.82rem" }}>Have existing code? </span>
+        <span
+          style={{ color: "#60a5fa", fontSize: "0.82rem", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "2px" }}
+          onClick={() => {
+            if (!name.trim()) { showError("Enter a project name first"); return; }
+            setLoading(true);
+            api.createProject(name, "").then(p => navigate(`/project/${p.id}?tab=github`)).catch(err => {
+              showError(err instanceof Error ? err.message : "Failed to create project");
+              setLoading(false);
+            });
+          }}
+        >Deploy from GitHub</span>
+      </div>
     </div>
   );
 }

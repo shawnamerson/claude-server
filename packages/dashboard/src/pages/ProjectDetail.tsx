@@ -187,7 +187,7 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [selectedDeployment, setSelectedDeployment] = useState<string | null>(searchParams.get("dep"));
-  const [sideTab, setSideTab] = useState<SideTab>("chat");
+  const [sideTab, setSideTab] = useState<SideTab>((searchParams.get("tab") as SideTab) || "chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const lastRunningIdRef = useRef<string | null>(null);
   const initialLoadRef = useRef(true);
