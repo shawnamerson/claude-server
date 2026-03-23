@@ -290,11 +290,12 @@ export function canDeploy(userId: string): { allowed: boolean; reason?: string }
   return { allowed: true };
 }
 
-// Check if user can create a project (plan-based)
+// Check if user can create a project (plan-based + email verification)
 export function canCreateProject(userId: string): { allowed: boolean; reason?: string } {
   const db = getDb();
-  const user = db.prepare("SELECT plan FROM users WHERE id = ?").get(userId) as { plan: string } | undefined;
+  const user = db.prepare("SELECT plan, email_verified FROM users WHERE id = ?").get(userId) as { plan: string; email_verified: number } | undefined;
   if (!user) return { allowed: false, reason: "User not found" };
+  if (!user.email_verified) return { allowed: false, reason: "Please verify your email before creating a project" };
 
   const limits = getPlanLimits(user.plan);
   if (limits.projects === -1) return { allowed: true };
