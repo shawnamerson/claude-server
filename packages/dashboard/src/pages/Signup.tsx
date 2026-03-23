@@ -49,15 +49,15 @@ export default function Signup({ onSignup }: { onSignup: (email: string, passwor
         <form onSubmit={handleSubmit} style={s.form}>
           <div>
             <label style={s.label}>Email</label>
-            <input style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required autoFocus />
+            <input style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required autoFocus autoComplete="email" />
           </div>
           <div>
             <label style={s.label}>Password</label>
-            <input style={s.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required minLength={8} />
+            <input style={s.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required minLength={8} autoComplete="new-password" />
           </div>
           <div>
             <label style={s.label}>Confirm password</label>
-            <input style={s.input} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Type it again" required />
+            <input style={s.input} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Type it again" required autoComplete="new-password" />
           </div>
           {error && <div style={s.error}>{error}</div>}
           <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>
