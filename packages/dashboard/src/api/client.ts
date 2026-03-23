@@ -214,6 +214,9 @@ export const api = {
       body: JSON.stringify({ sql }),
     }),
 
+  // Email verification
+  verifyEmail: (code: string) => request<{ ok: boolean }>("/auth/verify", { method: "POST", body: JSON.stringify({ code }) }),
+
   // Billing
   getBillingStatus: () => request<{ plan: string; deploysThisMonth: number; deployLimit: number; projectCount: number; projectLimit: number; hasSubscription: boolean }>("/billing/status"),
   getBillingPlans: () => request<Array<{ id: string; name: string; price: number; deploys: number; projects: number; features: string[] }>>("/billing/plans"),

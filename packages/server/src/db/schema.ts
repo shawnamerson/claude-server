@@ -137,4 +137,10 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT");
     db.exec("ALTER TABLE users ADD COLUMN plan_expires_at TEXT");
   }
+  if (!userCols.find(c => c.name === "email_verified")) {
+    db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
+    db.exec("ALTER TABLE users ADD COLUMN verification_code TEXT");
+    // Mark existing users as verified
+    db.exec("UPDATE users SET email_verified = 1 WHERE email_verified = 0");
+  }
 }

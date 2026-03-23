@@ -5,6 +5,7 @@ interface User {
   email: string;
   name: string;
   credits: number;
+  email_verified?: boolean;
 }
 
 const API = "/api";

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { config } from "./config.js";
 import { getDb, closeDb } from "./db/client.js";
 import { errorHandler } from "./middleware/error.js";
@@ -25,6 +26,16 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Rate limiting
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Too many attempts. Try again in 15 minutes." } });
+const deployLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, message: { error: "Too many deploys. Wait a minute." } });
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: "Too many requests. Slow down." } });
+
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/signup", authLimiter);
+app.use("/api/projects/*/deploy", deployLimiter);
+app.use("/api", apiLimiter);
 
 // Auth middleware — attaches user to request if token present
 app.use(authMiddleware);

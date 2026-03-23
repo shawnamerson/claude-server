@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { api } from "./api/client";
 import ProjectList from "./pages/ProjectList";
 import ProjectDetail from "./pages/ProjectDetail";
 import NewProject from "./pages/NewProject";
@@ -68,7 +70,46 @@ const styles = {
   },
 };
 
-function AppShell({ children, user, onLogout }: { children: React.ReactNode; user: any; onLogout: () => void }) {
+function VerifyBanner({ onVerified }: { onVerified: () => void }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleVerify = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await api.verifyEmail(code);
+      onVerified();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ background: "#1a1a2e", border: "1px solid #7c3aed44", padding: "0.75rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.85rem" }}>
+      <span style={{ color: "#f59e0b" }}>Verify your email to start deploying.</span>
+      <input
+        style={{ padding: "0.35rem 0.5rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.35rem", color: "#e0e0e0", fontSize: "0.85rem", width: "100px", outline: "none" }}
+        placeholder="6-digit code"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleVerify()}
+      />
+      <button
+        style={{ padding: "0.35rem 0.75rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.35rem", cursor: "pointer", fontSize: "0.8rem" }}
+        onClick={handleVerify}
+        disabled={loading}
+      >{loading ? "..." : "Verify"}</button>
+      {error && <span style={{ color: "#f87171", fontSize: "0.8rem" }}>{error}</span>}
+      <span style={{ color: "#555", fontSize: "0.75rem", marginLeft: "auto" }}>Check your email for the code</span>
+    </div>
+  );
+}
+
+function AppShell({ children, user, onLogout, onRefresh }: { children: React.ReactNode; user: any; onLogout: () => void; onRefresh: () => void }) {
   return (
     <div style={styles.app}>
       <nav style={styles.nav}>
@@ -85,6 +126,9 @@ function AppShell({ children, user, onLogout }: { children: React.ReactNode; use
           )}
         </div>
       </nav>
+      {user && !user.email_verified && (
+        <VerifyBanner onVerified={onRefresh} />
+      )}
       <main style={styles.main}>
         {children}
       </main>
@@ -93,7 +137,7 @@ function AppShell({ children, user, onLogout }: { children: React.ReactNode; use
 }
 
 export default function App() {
-  const { user, loading, login, signup, logout, token } = useAuth();
+  const { user, loading, login, signup, logout, token, refreshUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -143,7 +187,7 @@ export default function App() {
   }
 
   return (
-    <AppShell user={user} onLogout={logout}>
+    <AppShell user={user} onLogout={logout} onRefresh={refreshUser}>
       <Routes>
         <Route path="/projects" element={<ProjectList />} />
         <Route path="/new" element={<NewProject />} />

@@ -30,25 +30,60 @@ router.post("/auth/signup", async (req: Request, res: Response) => {
     return;
   }
 
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+
   const id = nanoid(12);
   const hashed = await bcrypt.hash(password, 10);
+  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
 
-  db.prepare("INSERT INTO users (id, email, password, name, credits) VALUES (?, ?, ?, ?, 3)").run(
-    id, email.toLowerCase().trim(), hashed, name || ""
+  db.prepare("INSERT INTO users (id, email, password, name, credits, email_verified, verification_code) VALUES (?, ?, ?, ?, 3, 0, ?)").run(
+    id, email.toLowerCase().trim(), hashed, name || "", verificationCode
   );
 
   // Create session
   const sessionId = nanoid(32);
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").run(sessionId, id, expiresAt);
 
-  // Log credit transaction
   db.prepare("INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, 3, 'signup', 'Welcome bonus')").run(id);
+
+  // TODO: Send verification email. For now, return the code in the response.
+  console.log(`Verification code for ${email}: ${verificationCode}`);
 
   res.json({
     token: sessionId,
-    user: { id, email, name: name || "", credits: 3 },
+    user: { id, email, name: name || "", credits: 3, email_verified: false },
+    verificationCode, // Remove this once email sending is implemented
   });
+});
+
+// Verify email
+router.post("/auth/verify", (req: Request, res: Response) => {
+  const { code } = req.body;
+  const user = (req as any).user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const db = getDb();
+  const userData = db.prepare("SELECT verification_code, email_verified FROM users WHERE id = ?").get(user.id) as any;
+
+  if (userData?.email_verified) {
+    res.json({ ok: true, message: "Already verified" });
+    return;
+  }
+
+  if (!code || code !== userData?.verification_code) {
+    res.status(400).json({ error: "Invalid verification code" });
+    return;
+  }
+
+  db.prepare("UPDATE users SET email_verified = 1, verification_code = NULL WHERE id = ?").run(user.id);
+  res.json({ ok: true });
 });
 
 // Login
@@ -89,7 +124,7 @@ router.get("/auth/me", (req: Request, res: Response) => {
     res.status(401).json({ error: "Not logged in" });
     return;
   }
-  res.json({ id: user.id, email: user.email, name: user.name, credits: user.credits });
+  res.json({ id: user.id, email: user.email, name: user.name, credits: user.credits, email_verified: !!user.email_verified });
 });
 
 // Logout
@@ -118,7 +153,7 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     return;
   }
 
-  const user = db.prepare("SELECT id, email, name, credits FROM users WHERE id = ?").get(session.user_id);
+  const user = db.prepare("SELECT id, email, name, credits, email_verified FROM users WHERE id = ?").get(session.user_id);
   (req as any).user = user;
   next();
 }
@@ -206,11 +241,12 @@ export function getPlanLimits(plan: string) {
   return PLAN_LIMITS[plan] || PLAN_LIMITS.free;
 }
 
-// Check if user can deploy (plan-based)
+// Check if user can deploy (plan-based + email verification)
 export function canDeploy(userId: string): { allowed: boolean; reason?: string } {
   const db = getDb();
-  const user = db.prepare("SELECT plan FROM users WHERE id = ?").get(userId) as { plan: string } | undefined;
+  const user = db.prepare("SELECT plan, email_verified FROM users WHERE id = ?").get(userId) as { plan: string; email_verified: number } | undefined;
   if (!user) return { allowed: false, reason: "User not found" };
+  if (!user.email_verified) return { allowed: false, reason: "Please verify your email before deploying" };
 
   const limits = getPlanLimits(user.plan);
 
