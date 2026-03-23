@@ -86,6 +86,27 @@ function ActivityBlock({ items }: { items: ActivityItem[] }) {
   );
 }
 
+function parseRecommendations(text: string): Array<{ text: string; prompt: string }> | null {
+  // Match numbered items like "1. Fix the rate limiter" or "1) Add error handling"
+  const lines = text.split("\n");
+  const items: Array<{ text: string; prompt: string }> = [];
+  let current = "";
+
+  for (const line of lines) {
+    const match = line.match(/^\s*(\d+)[.)]\s+(.+)/);
+    if (match) {
+      if (current) items.push({ text: current.trim(), prompt: current.trim() });
+      current = match[2];
+    } else if (current && line.trim()) {
+      current += " " + line.trim();
+    }
+  }
+  if (current) items.push({ text: current.trim(), prompt: current.trim() });
+
+  // Only return if we found multiple distinct recommendations
+  return items.length >= 2 ? items : null;
+}
+
 interface Props {
   projectId: string;
   deploying?: boolean;
@@ -330,16 +351,45 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
             );
           }
 
+          // Parse numbered recommendations for individual deploy buttons
+          const recommendations = showDeployBtn ? parseRecommendations(msg.content) : null;
+
           return (
             <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
-              {isEmpty ? <span style={s.statusLine}>Claude is thinking...</span> : msg.content}
-              {showDeployBtn && (
-                <button
-                  style={s.inlineDeployBtn}
-                  onClick={() => handleDeploy("Apply the changes you suggested in our conversation")}
-                >
-                  Apply & Deploy
-                </button>
+              {isEmpty ? <span style={s.statusLine}>Claude is thinking...</span> : (
+                recommendations && recommendations.length > 1 ? (
+                  <>
+                    {recommendations.map((rec, i) => (
+                      <div key={i} style={s.recCard}>
+                        <div style={s.recText}>{rec.text}</div>
+                        <button
+                          style={s.recDeployBtn}
+                          onClick={() => handleDeploy(rec.prompt)}
+                        >
+                          Apply this fix
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      style={s.inlineDeployBtn}
+                      onClick={() => handleDeploy("Apply ALL the changes you suggested in our conversation")}
+                    >
+                      Apply all & Deploy
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {msg.content}
+                    {showDeployBtn && (
+                      <button
+                        style={s.inlineDeployBtn}
+                        onClick={() => handleDeploy("Apply the changes you suggested in our conversation")}
+                      >
+                        Apply & Deploy
+                      </button>
+                    )}
+                  </>
+                )
               )}
             </div>
           );
@@ -387,6 +437,9 @@ const s = {
   input: { flex: 1, padding: "0.5rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.5rem", color: "#e0e0e0", fontSize: "0.85rem", outline: "none", fontFamily: "inherit" },
   sendBtn: { width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "1rem", fontWeight: 700, flexShrink: 0, lineHeight: 1 },
   inlineDeployBtn: { display: "block", marginTop: "0.6rem", padding: "0.5rem 1rem", background: "#16a34a", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, fontFamily: "inherit", boxShadow: "0 0 12px rgba(22,163,74,0.3)", width: "100%" },
+  recCard: { background: "#0f0f1a", border: "1px solid #1e1e30", borderRadius: "0.4rem", padding: "0.5rem 0.65rem", marginBottom: "0.4rem" },
+  recText: { fontSize: "0.82rem", color: "#ccc", marginBottom: "0.35rem", lineHeight: 1.4 },
+  recDeployBtn: { padding: "0.3rem 0.6rem", background: "#1a2e1a", color: "#34d399", border: "1px solid #064e3b", borderRadius: "0.35rem", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" },
   upgradeBox: { background: "#1a1020", border: "1px solid #7c3aed44", borderRadius: "0.75rem", padding: "1rem", textAlign: "center" as const },
   upgradeTitle: { fontSize: "0.95rem", fontWeight: 600, color: "#e0e0e0", marginBottom: "0.35rem" },
   upgradeReason: { fontSize: "0.82rem", color: "#888", marginBottom: "0.75rem", lineHeight: 1.4 },
