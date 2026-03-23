@@ -54,6 +54,7 @@ services:
       - NEVER_SLEEP_SLUGS=${NEVER_SLEEP_SLUGS}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - ADMIN_EMAILS=${ADMIN_EMAILS}
     volumes:
       - app-data:/app/data
       - ./:/host-caddyfile

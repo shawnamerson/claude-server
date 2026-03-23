@@ -17,6 +17,7 @@ import domainRoutes from "./routes/domains.js";
 import proxyRoutes from "./routes/proxy.js";
 import authRoutes, { authMiddleware, requireProjectOwner, requireDeploymentOwner } from "./routes/auth.js";
 import billingRoutes from "./routes/billing.js";
+import adminRoutes, { isAdmin } from "./routes/admin.js";
 import { initializeDbPortTracking } from "./services/database.js";
 import { reloadCaddyConfig } from "./services/caddy.js";
 import { cleanupOrphanedDevContainers } from "./services/generator.js";
@@ -59,6 +60,9 @@ app.use(authMiddleware);
 // API routes — public
 app.use("/api", authRoutes);
 app.use("/api", billingRoutes);
+
+// Admin routes — check endpoint is public (returns isAdmin: true/false), rest require admin auth
+app.use("/api/admin", adminRoutes);
 
 // API routes — project-scoped (require auth + ownership)
 app.use("/api/projects", projectRoutes); // list/create don't need ownership; individual routes do

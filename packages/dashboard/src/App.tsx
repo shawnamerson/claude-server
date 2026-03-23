@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api/client";
 import ProjectList from "./pages/ProjectList";
@@ -12,6 +12,7 @@ import About from "./pages/About";
 import Blog from "./pages/Blog";
 import FAQ from "./pages/FAQ";
 import Privacy from "./pages/Privacy";
+import Admin from "./pages/Admin";
 import { useAuth } from "./hooks/useAuth";
 
 const styles = {
@@ -112,7 +113,20 @@ function VerifyBanner({ onVerified }: { onVerified: () => void }) {
   );
 }
 
-function AppShell({ children, user, onLogout, onRefresh }: { children: React.ReactNode; user: any; onLogout: () => void; onRefresh: () => void }) {
+function useAdminCheck(token: string | null) {
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (!token) { setIsAdmin(false); return; }
+    const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+    fetch("/api/admin/check", { headers })
+      .then((r) => r.json())
+      .then((data: { isAdmin: boolean }) => setIsAdmin(data.isAdmin))
+      .catch(() => setIsAdmin(false));
+  }, [token]);
+  return isAdmin;
+}
+
+function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: React.ReactNode; user: any; onLogout: () => void; onRefresh: () => void; isAdmin: boolean }) {
   return (
     <div style={styles.app}>
       <style>{`
@@ -141,6 +155,7 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
         <Link to="/projects" style={styles.navLink}>Projects</Link>
         <Link to="/new" style={styles.navLink}>New Project</Link>
         <Link to="/billing" style={styles.navLink}>Billing</Link>
+        {isAdmin && <Link to="/admin" style={{ ...styles.navLink, color: "#f59e0b" }}>Admin</Link>}
         <div style={styles.navRight}>
           {user && (
             <>
@@ -162,6 +177,7 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
 
 export default function App() {
   const { user, loading, login, signup, logout, token, refreshUser } = useAuth();
+  const isAdmin = useAdminCheck(token);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -223,12 +239,13 @@ export default function App() {
   }
 
   return (
-    <AppShell user={user} onLogout={() => { logout(); navigate("/"); }} onRefresh={refreshUser}>
+    <AppShell user={user} onLogout={() => { logout(); navigate("/"); }} onRefresh={refreshUser} isAdmin={isAdmin}>
       <Routes>
         <Route path="/projects" element={<ProjectList />} />
         <Route path="/new" element={<NewProject />} />
         <Route path="/project/:id" element={<ProjectDetail />} />
         <Route path="/billing" element={<Billing />} />
+        {isAdmin && <Route path="/admin" element={<Admin />} />}
       </Routes>
     </AppShell>
   );
