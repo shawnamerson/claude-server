@@ -12,6 +12,7 @@ import { canDeploy } from "./auth.js";
 import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
 import { createDatabase, getDatabaseInfo } from "../services/database.js";
 import { detectProjectConfig } from "../services/project-detect.js";
+import { getAdaptationPrompt } from "../services/project-adapt.js";
 
 const router = Router();
 
@@ -100,11 +101,22 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
 
     let result;
     if (hasExistingFiles && prompt) {
-      addLog(deploymentId, "system", `Modifying project (${Object.keys(existingFiles).length} existing files)...`);
+      // Check if this is a GitHub repo that needs adaptation
+      const adaptPrompt = getAdaptationPrompt(project.source_path);
+      const effectivePrompt = adaptPrompt
+        ? `${adaptPrompt}\n\nUser's deploy message: ${prompt}`
+        : prompt;
+
+      if (adaptPrompt) {
+        addLog(deploymentId, "system", `Adapting project for single-service deployment...`);
+      } else {
+        addLog(deploymentId, "system", `Modifying project (${Object.keys(existingFiles).length} existing files)...`);
+      }
+
       const chatHistory = db
         .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
         .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
-      result = await modifyProject(project.source_path, chatHistory, prompt, log);
+      result = await modifyProject(project.source_path, chatHistory, effectivePrompt, log);
     } else {
       const description = prompt || project.description;
       if (!description) {
