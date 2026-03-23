@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api, DatabaseInfo, TableSchema, QueryResult } from "../api/client";
+import { useToast } from "./Toast";
 
 const styles = {
   container: {
@@ -332,6 +333,7 @@ function QueryRunner({ projectId }: { projectId: string }) {
 }
 
 export default function DatabasePanel({ projectId }: { projectId: string }) {
+  const { showError } = useToast();
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null | undefined>(undefined);
   const [creating, setCreating] = useState(false);
   const [connString, setConnString] = useState<string | null>(null);
@@ -348,7 +350,7 @@ export default function DatabasePanel({ projectId }: { projectId: string }) {
       setConnString(result.connectionString);
       api.getDatabase(projectId).then(setDbInfo);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create database");
+      showError(err instanceof Error ? err.message : "Failed to create database");
     } finally {
       setCreating(false);
     }
@@ -361,7 +363,7 @@ export default function DatabasePanel({ projectId }: { projectId: string }) {
       setDbInfo(null);
       setConnString(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete database");
+      showError(err instanceof Error ? err.message : "Failed to delete database");
     }
   };
 

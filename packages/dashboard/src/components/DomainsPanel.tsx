@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api, CustomDomain } from "../api/client";
+import { useToast } from "./Toast";
 
 const styles = {
   container: {
@@ -83,6 +84,7 @@ const styles = {
 };
 
 export default function DomainsPanel({ projectId, projectSlug }: { projectId: string; projectSlug: string }) {
+  const { showError } = useToast();
   const [domains, setDomains] = useState<CustomDomain[]>([]);
   const [newDomain, setNewDomain] = useState("");
   const [adding, setAdding] = useState(false);
@@ -99,7 +101,7 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
       setNewDomain("");
       api.getDomains(projectId).then(setDomains);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add domain");
+      showError(err instanceof Error ? err.message : "Failed to add domain");
     } finally {
       setAdding(false);
     }

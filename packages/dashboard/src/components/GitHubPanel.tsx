@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api, GitHubConnection } from "../api/client";
+import { useToast } from "./Toast";
 
 const styles = {
   container: {
@@ -73,6 +74,7 @@ const styles = {
 };
 
 export default function GitHubPanel({ projectId }: { projectId: string }) {
+  const { showError } = useToast();
   const [connection, setConnection] = useState<GitHubConnection | null>(null);
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("main");
@@ -92,7 +94,7 @@ export default function GitHubPanel({ projectId }: { projectId: string }) {
       setConnection({ repoUrl, branch, webhookUrl: result.webhookUrl });
       setRepoUrl("");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to connect");
+      showError(err instanceof Error ? err.message : "Failed to connect");
     } finally {
       setLoading(false);
     }

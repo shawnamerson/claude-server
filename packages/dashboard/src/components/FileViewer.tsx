@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { api, FileNode } from "../api/client";
+import { useToast } from "./Toast";
 
 const langMap: Record<string, string> = {
   js: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript",
@@ -118,6 +119,7 @@ function TreeNode({
 }
 
 export default function FileViewer({ projectId }: { projectId: string }) {
+  const { showError } = useToast();
   const [tree, setTree] = useState<FileNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -146,7 +148,7 @@ export default function FileViewer({ projectId }: { projectId: string }) {
       await api.updateFile(projectId, selectedFile, content);
       setOriginalContent(content);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Save failed");
+      showError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -162,7 +164,7 @@ export default function FileViewer({ projectId }: { projectId: string }) {
       }
       api.getFileTree(projectId).then(setTree);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Upload failed");
+      showError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
       e.target.value = "";

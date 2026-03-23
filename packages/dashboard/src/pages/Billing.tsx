@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api/client";
+import { useToast } from "../components/Toast";
 
 const s = {
   page: { maxWidth: "800px", padding: "1rem 0" },
@@ -23,6 +24,7 @@ const s = {
 };
 
 export default function Billing() {
+  const { showError } = useToast();
   const [status, setStatus] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export default function Billing() {
       const { url } = await api.subscribe(planId);
       window.location.href = url;
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to start checkout");
+      showError(err instanceof Error ? err.message : "Failed to start checkout");
     }
   };
 
@@ -48,7 +50,7 @@ export default function Billing() {
       await api.cancelSubscription();
       setStatus((s: any) => ({ ...s, plan: "free", hasSubscription: false }));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to cancel");
+      showError(err instanceof Error ? err.message : "Failed to cancel");
     }
   };
 

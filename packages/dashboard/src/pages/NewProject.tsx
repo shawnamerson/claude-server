@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
+import { useToast } from "../components/Toast";
 
 const styles = {
   container: { maxWidth: "600px" },
@@ -46,6 +47,7 @@ const styles = {
 
 export default function NewProject() {
   const navigate = useNavigate();
+  const { showError } = useToast();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,7 +77,7 @@ export default function NewProject() {
       }
       return;
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create project");
+      showError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
       setLoading(false);
     }
