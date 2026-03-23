@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState, useRef } from "react";
 
-// Compact terminal that just shows the build process — no preview
-function BuildTerminal() {
+function HeroDemo() {
   const [lines, setLines] = useState<Array<{ text: string; style: Record<string, string> }>>([]);
+  const [deployed, setDeployed] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const demoUrl = `${window.location.protocol}//vacation-rental.${window.location.hostname}`;
 
   useEffect(() => {
     const cursor = setInterval(() => setCursorVisible(v => !v), 530);
@@ -34,6 +35,7 @@ function BuildTerminal() {
     function runScript() {
       if (cancelled) return;
       setLines([]);
+      setDeployed(false);
       let cumDelay = 0;
 
       for (const item of script) {
@@ -46,7 +48,11 @@ function BuildTerminal() {
         }, d));
       }
 
-      timeouts.push(setTimeout(() => { if (!cancelled) runScript(); }, totalDuration + 5000));
+      // Show the live app after "Deployed!" appears
+      timeouts.push(setTimeout(() => { if (!cancelled) setDeployed(true); }, totalDuration + 300));
+
+      // Loop
+      timeouts.push(setTimeout(() => { if (!cancelled) runScript(); }, totalDuration + 7000));
     }
 
     runScript();
@@ -54,44 +60,55 @@ function BuildTerminal() {
   }, []);
 
   return (
-    <div style={t.terminal}>
-      <div style={t.bar}>
-        <div style={t.dots}>
-          <span style={{ ...t.dot, background: "#f87171" }} />
-          <span style={{ ...t.dot, background: "#f59e0b" }} />
-          <span style={{ ...t.dot, background: "#34d399" }} />
-        </div>
-        <span style={t.barTitle}>JustVibe</span>
-      </div>
-      <div ref={containerRef} style={t.body}>
-        {lines.map((line, i) => (
-          <div key={i} style={{ ...t.line, ...line.style }}>{line.text}</div>
-        ))}
-        {lines.length === 0 && (
-          <div style={t.line}>
-            <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed" }}>|</span>
+    <div className="jv-hero-demo">
+      {/* Left: terminal */}
+      <div>
+        <div className="jv-hero-label">How it's built</div>
+        <div style={t.terminal}>
+          <div style={t.bar}>
+            <div style={t.dots}>
+              <span style={{ ...t.dot, background: "#f87171" }} />
+              <span style={{ ...t.dot, background: "#f59e0b" }} />
+              <span style={{ ...t.dot, background: "#34d399" }} />
+            </div>
+            <span style={t.barTitle}>JustVibe</span>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Mini browser showing a live deployed app
-function LivePreview() {
-  const demoUrl = `${window.location.protocol}//vacation-rental.${window.location.hostname}`;
-
-  return (
-    <div style={t.browser}>
-      <div style={t.browserBar}>
-        <div style={t.dots}>
-          <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f87171" }} />
-          <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f59e0b" }} />
-          <span style={{ ...t.dot, width: "8px", height: "8px", background: "#34d399" }} />
+          <div ref={containerRef} style={t.body}>
+            {lines.map((line, i) => (
+              <div key={i} style={{ ...t.line, ...line.style }}>{line.text}</div>
+            ))}
+            {lines.length === 0 && (
+              <div style={t.line}>
+                <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed" }}>|</span>
+              </div>
+            )}
+          </div>
         </div>
-        <div style={t.urlChip}>rentals.justvibe.dev</div>
       </div>
-      <iframe src={demoUrl} style={t.iframeWrap} title="Live demo" loading="eager" scrolling="no" />
+
+      {/* Right: preview */}
+      <div>
+        <div className="jv-hero-label">The result</div>
+        <div style={t.browser}>
+          <div style={t.browserBar}>
+            <div style={t.dots}>
+              <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f87171" }} />
+              <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f59e0b" }} />
+              <span style={{ ...t.dot, width: "8px", height: "8px", background: "#34d399" }} />
+            </div>
+            <div style={t.urlChip}>{deployed ? "rentals.justvibe.dev" : ""}</div>
+          </div>
+          {deployed ? (
+            <iframe src={demoUrl} style={t.iframeWrap} title="Live demo" loading="eager" scrolling="no" />
+          ) : (
+            <div style={t.buildingState}>
+              <div style={t.spinner} />
+              <div style={{ color: "#7c3aed", fontSize: "0.85rem" }}>Building your app...</div>
+              <div style={{ color: "#444", fontSize: "0.75rem" }}>Watch the terminal for progress</div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -108,11 +125,14 @@ const t = {
   browserBar: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.75rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
   urlChip: { flex: 1, padding: "0.2rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.3rem", fontSize: "0.72rem", color: "#60a5fa", fontFamily: "'JetBrains Mono', monospace" },
   iframeWrap: { width: "200%", height: "calc((100% - 34px) * 2)", transform: "scale(0.5)", transformOrigin: "top left", border: "none", display: "block", background: "#fff", pointerEvents: "none" as const, position: "absolute" as const, top: "34px", left: "0" },
+  buildingState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "0.75rem", height: "calc(100% - 34px)", background: "#08080c" },
+  spinner: { width: "24px", height: "24px", border: "2px solid #1e1e30", borderTop: "2px solid #7c3aed", borderRadius: "50%", animation: "jv-spin 0.8s linear infinite" },
 };
 
 const responsiveCSS = `
   .jv-landing { scrollbar-width: none; -ms-overflow-style: none; }
   .jv-landing::-webkit-scrollbar { display: none; }
+  @keyframes jv-spin { to { transform: rotate(360deg); } }
   .jv-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
   .jv-steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
   .jv-comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
@@ -162,16 +182,7 @@ export default function Landing() {
         </div>
 
         {/* Side-by-side: terminal on left, live app on right */}
-        <div className="jv-hero-demo">
-          <div>
-            <div className="jv-hero-label">How it's built</div>
-            <BuildTerminal />
-          </div>
-          <div>
-            <div className="jv-hero-label">The result</div>
-            <LivePreview />
-          </div>
-        </div>
+        <HeroDemo />
       </div>
 
       {/* Features */}
