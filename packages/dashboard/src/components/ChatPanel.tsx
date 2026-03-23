@@ -289,9 +289,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
   };
 
   // Deploy: trigger a full deploy (costs a deploy). Can be called from inline button.
+  const [deployingLocal, setDeployingLocal] = useState(false);
   const handleDeploy = async (prompt?: string) => {
     const text = prompt || input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
-    if (!text || deploying || chatStreaming) return;
+    if (!text || deployingLocal || chatStreaming) return;
+    setDeployingLocal(true);
     if (!prompt) setInput("");
     setHasSuggestion(false);
 
@@ -319,10 +321,12 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         content: isLimitError ? `__UPGRADE__${msg}` : msg,
         created_at: new Date().toISOString(),
       }]);
+    } finally {
+      setDeployingLocal(false);
     }
   };
 
-  const isActive = !!deploying || chatStreaming;
+  const isActive = !!deploying || chatStreaming || deployingLocal;
   const statusLabel = deployStatus === "generating" ? "Claude is working..."
     : deployStatus === "deploying" ? "Starting your app..."
     : deploying ? "Working..." : "";
