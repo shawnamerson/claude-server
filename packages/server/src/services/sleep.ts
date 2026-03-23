@@ -5,6 +5,9 @@ import { reloadCaddyConfig } from "./caddy.js";
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
+// Slugs that should never sleep (e.g. landing page demo)
+const NEVER_SLEEP = new Set((process.env.NEVER_SLEEP_SLUGS || "").split(",").map(s => s.trim()).filter(Boolean));
+
 // Track last request time per project slug
 const lastActivity = new Map<string, number>();
 
@@ -41,6 +44,9 @@ export async function sleepIdleContainers(): Promise<void> {
 
   let slept = 0;
   for (const dep of deployments) {
+    // Never sleep the demo project
+    if (NEVER_SLEEP.has(dep.slug)) continue;
+
     const lastReq = lastActivity.get(dep.slug) || 0;
     const idle = now - lastReq;
 

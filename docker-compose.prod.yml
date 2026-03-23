@@ -51,6 +51,7 @@ services:
       - CADDYFILE_PATH=/host-caddyfile/Caddyfile
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - RESEND_API_KEY=${RESEND_API_KEY}
+      - NEVER_SLEEP_SLUGS=${NEVER_SLEEP_SLUGS}
     volumes:
       - app-data:/app/data
       - ./:/host-caddyfile
