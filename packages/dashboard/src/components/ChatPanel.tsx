@@ -290,6 +290,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
 
   // Deploy: trigger a full deploy (costs a deploy). Can be called from inline button.
   const [deployingLocal, setDeployingLocal] = useState(false);
+  const [appliedFixes, setAppliedFixes] = useState<Set<string>>(new Set());
   const handleDeploy = async (prompt?: string) => {
     const text = prompt || input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
     if (!text || deployingLocal || chatStreaming) return;
@@ -387,17 +388,24 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
               {isEmpty ? <span style={s.statusLine}>Claude is thinking...</span> : (
                 recommendations && recommendations.length > 1 ? (
                   <>
-                    {recommendations.map((rec, i) => (
-                      <div key={i} style={s.recCard}>
-                        <div style={s.recText}>{rec.text}</div>
-                        <button
-                          style={s.recDeployBtn}
-                          onClick={() => handleDeploy(rec.prompt)}
-                        >
-                          Apply this fix
-                        </button>
-                      </div>
-                    ))}
+                    {recommendations.map((rec, i) => {
+                      const applied = appliedFixes.has(rec.prompt);
+                      return (
+                        <div key={i} style={s.recCard}>
+                          <div style={s.recText}>{rec.text}</div>
+                          {applied ? (
+                            <span style={s.recApplied}>&#10003; Fix applied</span>
+                          ) : (
+                            <button
+                              style={s.recDeployBtn}
+                              onClick={() => { setAppliedFixes(prev => new Set(prev).add(rec.prompt)); handleDeploy(rec.prompt); }}
+                            >
+                              Apply this fix
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                     <button
                       style={s.inlineDeployBtn}
                       onClick={() => handleDeploy("Apply ALL the changes you suggested in our conversation")}
@@ -468,6 +476,7 @@ const s = {
   recCard: { background: "#0f0f1a", border: "1px solid #1e1e30", borderRadius: "0.4rem", padding: "0.5rem 0.65rem", marginBottom: "0.4rem" },
   recText: { fontSize: "0.82rem", color: "#ccc", marginBottom: "0.35rem", lineHeight: 1.4 },
   recDeployBtn: { padding: "0.3rem 0.6rem", background: "#1a2e1a", color: "#34d399", border: "1px solid #064e3b", borderRadius: "0.35rem", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" },
+  recApplied: { fontSize: "0.75rem", color: "#34d399", fontWeight: 600 },
   upgradeBox: { background: "#1a1020", border: "1px solid #7c3aed44", borderRadius: "0.75rem", padding: "1rem", textAlign: "center" as const },
   upgradeTitle: { fontSize: "0.95rem", fontWeight: 600, color: "#e0e0e0", marginBottom: "0.35rem" },
   upgradeReason: { fontSize: "0.82rem", color: "#888", marginBottom: "0.75rem", lineHeight: 1.4 },
