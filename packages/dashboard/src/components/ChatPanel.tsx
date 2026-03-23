@@ -186,10 +186,10 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     onDeploy(text);
   };
 
-  const isActive = deploying || activity.length > 0;
+  const isActive = !!deploying;
   const statusLabel = deployStatus === "generating" ? "Claude is working..."
     : deployStatus === "deploying" ? "Starting your app..."
-    : isActive ? "Working..." : "";
+    : deploying ? "Working..." : "";
 
   return (
     <div style={s.container}>
