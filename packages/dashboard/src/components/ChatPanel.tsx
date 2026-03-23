@@ -316,7 +316,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
             </div>
           );
         })}
-        {isActive && (
+        {isActive && !chatStreaming && (
           <div style={s.assistantMsg}>
             {activity.length > 0 ? (
               <ActivityBlock items={activity} />
