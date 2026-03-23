@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api, CustomDomain } from "../api/client";
 import { useToast } from "./Toast";
 
@@ -165,28 +165,67 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
     setShowSetup(null);
   };
 
-  const checkDns = async (domain: string) => {
-    setDnsChecking(domain);
+  const checkDnsOnce = async (domain: string): Promise<boolean> => {
     try {
       const controller = new AbortController();
-      setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(`https://${domain}/`, { mode: "no-cors", signal: controller.signal });
-      // If we got here without throwing, DNS resolves and TLS works
-      setDnsVerified(prev => new Set(prev).add(domain));
+      setTimeout(() => controller.abort(), 6000);
+      await fetch(`https://${domain}/`, { mode: "no-cors", signal: controller.signal });
+      return true;
     } catch {
-      // Try http as fallback — cert might not be ready yet
       try {
         const controller2 = new AbortController();
         setTimeout(() => controller2.abort(), 5000);
         await fetch(`http://${domain}/`, { mode: "no-cors", signal: controller2.signal });
-        setDnsVerified(prev => new Set(prev).add(domain));
+        return true;
       } catch {
-        showError("DNS not pointing to this server yet. Add the A record and wait a few minutes.");
+        return false;
       }
-    } finally {
-      setDnsChecking(null);
     }
   };
+
+  // Poll DNS until verified
+  const dnsPollingRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+
+  const startDnsPolling = (domain: string) => {
+    if (dnsPollingRef.current.has(domain)) return;
+    setDnsChecking(domain);
+
+    const poll = setInterval(async () => {
+      const ok = await checkDnsOnce(domain);
+      if (ok) {
+        clearInterval(poll);
+        dnsPollingRef.current.delete(domain);
+        setDnsVerified(prev => new Set(prev).add(domain));
+        setDnsChecking(prev => prev === domain ? null : prev);
+      }
+    }, 10000);
+
+    dnsPollingRef.current.set(domain, poll);
+
+    // Also check immediately
+    checkDnsOnce(domain).then(ok => {
+      if (ok) {
+        clearInterval(poll);
+        dnsPollingRef.current.delete(domain);
+        setDnsVerified(prev => new Set(prev).add(domain));
+        setDnsChecking(prev => prev === domain ? null : prev);
+      }
+    });
+  };
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      dnsPollingRef.current.forEach(interval => clearInterval(interval));
+    };
+  }, []);
+
+  // Auto-start polling for newly added domains
+  useEffect(() => {
+    if (showSetup && !dnsVerified.has(showSetup)) {
+      startDnsPolling(showSetup);
+    }
+  }, [showSetup]);
 
   const baseDomain = window.location.hostname;
 
@@ -248,13 +287,17 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
                 <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", color: "#34d399", fontSize: "0.78rem", fontWeight: 600 }}>
                   <span style={{ fontSize: "1rem" }}>&#10003;</span> DNS Verified — HTTPS active
                 </div>
+              ) : dnsChecking === d.domain ? (
+                <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "#f59e0b", fontSize: "0.78rem" }}>
+                  <span style={{ display: "inline-block", width: "12px", height: "12px", border: "2px solid #1e1e30", borderTop: "2px solid #f59e0b", borderRadius: "50%", animation: "pvSpin 0.8s linear infinite" }} />
+                  Waiting for DNS to propagate...
+                </div>
               ) : (
                 <button
-                  style={{ ...styles.btn, marginTop: "0.5rem", fontSize: "0.75rem", opacity: dnsChecking ? 0.5 : 1 }}
-                  onClick={() => checkDns(d.domain)}
-                  disabled={!!dnsChecking}
+                  style={{ ...styles.btn, marginTop: "0.5rem", fontSize: "0.75rem" }}
+                  onClick={() => startDnsPolling(d.domain)}
                 >
-                  {dnsChecking === d.domain ? "Checking..." : "Verify DNS"}
+                  Verify DNS
                 </button>
               )}
             </div>
