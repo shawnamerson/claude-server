@@ -223,6 +223,8 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
               if (data.type === "text") {
                 assistantText += data.content;
                 setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: assistantText } : m));
+                // Auto-scroll during streaming
+                if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
               }
             } catch {}
           }
