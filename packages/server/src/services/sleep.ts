@@ -2,6 +2,7 @@ import { getDb } from "../db/client.js";
 import { stopContainer, deployFromVolume } from "./deployer.js";
 import { getEnvVarsForDeploy } from "../routes/envvars.js";
 import { reloadCaddyConfig } from "./caddy.js";
+import { detectProjectConfig } from "./project-detect.js";
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -94,10 +95,10 @@ export async function wakeContainer(slug: string): Promise<{ port: number } | nu
   recordActivity(slug);
 
   try {
-    const startCommand = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null; node server.js";
+    const wakeConfig = detectProjectConfig(dep.source_path);
     const envVars = getEnvVarsForDeploy(dep.project_id);
     const { containerId, hostPort } = await deployFromVolume(
-      dep.source_path, dep.id, 3000, startCommand, envVars, dep.slug
+      dep.source_path, dep.id, wakeConfig.appPort, wakeConfig.startCommand, envVars, dep.slug
     );
 
     db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")

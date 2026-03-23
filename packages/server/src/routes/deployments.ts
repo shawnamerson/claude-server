@@ -11,7 +11,7 @@ import { reloadCaddyConfig } from "../services/caddy.js";
 import { canDeploy } from "./auth.js";
 import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
 import { createDatabase, getDatabaseInfo } from "../services/database.js";
-// validator still available for future use but agent handles creation directly
+import { detectProjectConfig } from "../services/project-detect.js";
 
 const router = Router();
 
@@ -197,15 +197,12 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     updateStatus(deploymentId, "deploying");
     addLog(deploymentId, "system", "Starting app...");
 
-    const appPort = 3000;
-
-    // Start command: install deps (fast with base image cache) then start server
-    // npm install runs inside the container at startup — no separate dev container needed
-    const startCommand = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null; node server.js";
+    const projectConfig = detectProjectConfig(project.source_path);
+    addLog(deploymentId, "system", `Detected start: ${projectConfig.startCommand.slice(0, 100)}`);
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, appPort, startCommand, envVars, project.slug
+      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug
     );
 
     db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run("claude-server/base:latest", deploymentId);
@@ -312,11 +309,11 @@ async function autoFixAndRedeploy(
     // Redeploy from volume — no build needed
     updateStatus(deploymentId, "deploying");
     addLog(deploymentId, "system", "Starting fixed app...");
-    const startCommand = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null; node server.js";
+    const fixConfig = detectProjectConfig(project.source_path);
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId: newId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, 3000, startCommand, envVars, project.slug
+      project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug
     );
 
     updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: "claude-server/base:latest" });
@@ -477,10 +474,10 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
   }
 
   try {
-    const startCommand = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null; node server.js";
+    const restartConfig = detectProjectConfig(project.source_path);
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deployment.id, 3000, startCommand, envVars, project.slug
+      project.source_path, deployment.id, restartConfig.appPort, restartConfig.startCommand, envVars, project.slug
     );
 
     db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")
