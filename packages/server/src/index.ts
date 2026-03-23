@@ -117,13 +117,16 @@ app.get("/api/check-dns/:domain", async (req, res) => {
     return;
   }
   try {
-    const { execFile } = await import("child_process");
+    const dns = await import("dns");
     const { promisify } = await import("util");
-    const execFileAsync = promisify(execFile);
-    const { stdout } = await execFileAsync("dig", ["+short", domain], { timeout: 5000 });
-    const ips = stdout.trim().split("\n").map(s => s.trim());
-    const serverIp = cachedServerIp || (await fetch("https://api.ipify.org?format=json").then(r => r.json()) as { ip: string }).ip;
-    res.json({ verified: ips.includes(serverIp), resolvedTo: ips, expected: serverIp });
+    const resolve4 = promisify(dns.resolve4);
+    const ips = await resolve4(domain);
+    // Get server IP if not cached
+    if (!cachedServerIp) {
+      const r = await fetch("https://api.ipify.org?format=json");
+      cachedServerIp = ((await r.json()) as { ip: string }).ip;
+    }
+    res.json({ verified: ips.includes(cachedServerIp), resolvedTo: ips, expected: cachedServerIp });
   } catch {
     res.json({ verified: false });
   }
