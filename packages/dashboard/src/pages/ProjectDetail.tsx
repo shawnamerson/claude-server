@@ -194,6 +194,7 @@ export default function ProjectDetail() {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeSrcSet = useRef(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const runningDep = deployments.find((d) => d.status === "running");
 
   // Double-buffer reload: load in a hidden iframe, swap when ready
@@ -344,6 +345,7 @@ export default function ProjectDetail() {
       }
       // Reset iframe and retry at increasing intervals
       iframeSrcSet.current = false;
+      setIframeLoaded(false);
       if (iframeRef.current) iframeRef.current.removeAttribute("src");
 
       const retries = [3000, 8000, 15000, 25000];
@@ -431,9 +433,16 @@ export default function ProjectDetail() {
           <div ref={previewContainerRef} style={previewContainerStyle}>
             <iframe
               ref={iframeRef}
-              style={previewIframeStyle}
+              style={{ ...previewIframeStyle, opacity: iframeLoaded ? 1 : 0 }}
               title="App Preview"
+              onLoad={() => setIframeLoaded(true)}
             />
+            {!iframeLoaded && (
+              <div style={{ ...styles.previewEmpty, position: "absolute", inset: 0, zIndex: 1 }}>
+                <div style={spinnerStyle} />
+                <div style={styles.previewSpinner}>Starting your app...</div>
+              </div>
+            )}
           </div>
         ) : (
           <div style={styles.previewEmpty}>
