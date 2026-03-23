@@ -180,20 +180,42 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const lastRunningIdRef = useRef<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const runningDep = deployments.find((d) => d.status === "running");
 
-  // Reload iframe without destroying it (avoids white flash)
+  // Double-buffer reload: load in a hidden iframe, swap when ready
   const reloadPreview = useCallback(() => {
-    const iframe = iframeRef.current;
-    if (iframe) {
-      try {
-        iframe.contentWindow?.location.reload();
-      } catch {
-        // Cross-origin — fall back to re-setting src
-        iframe.src = iframe.src;
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const currentIframe = container.querySelector("iframe");
+    if (!currentIframe) return;
+
+    const url = currentIframe.src;
+    const hidden = document.createElement("iframe");
+    hidden.src = url;
+    hidden.title = "App Preview";
+    Object.assign(hidden.style, {
+      width: "100%", height: "100%", border: "none",
+      position: "absolute", top: "0", left: "0",
+      opacity: "0",
+    });
+
+    container.appendChild(hidden);
+    hidden.addEventListener("load", () => {
+      hidden.style.opacity = "1";
+      if (currentIframe !== hidden) {
+        currentIframe.remove();
       }
-    }
+    });
+    // If load takes too long, swap anyway after 10s
+    setTimeout(() => {
+      if (hidden.style.opacity === "0") {
+        hidden.style.opacity = "1";
+        if (currentIframe !== hidden && currentIframe.parentNode) {
+          currentIframe.remove();
+        }
+      }
+    }, 10000);
   }, []);
 
   // When a NEW running deployment appears, reload preview multiple times
@@ -367,11 +389,10 @@ export default function ProjectDetail() {
 
         {/* Preview iframe or placeholder */}
         {runningDep ? (
-          <div style={styles.preview}>
+          <div ref={previewContainerRef} style={{ ...styles.preview, position: "relative" }}>
             <iframe
-              ref={iframeRef}
               src={previewUrl}
-              style={styles.previewIframe}
+              style={{ ...styles.previewIframe, position: "absolute", top: 0, left: 0 }}
               title="App Preview"
             />
           </div>
