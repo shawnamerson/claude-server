@@ -87,23 +87,40 @@ function ActivityBlock({ items }: { items: ActivityItem[] }) {
 }
 
 function parseRecommendations(text: string): Array<{ text: string; prompt: string }> | null {
-  // Match numbered items like "1. Fix the rate limiter" or "1) Add error handling"
   const lines = text.split("\n");
   const items: Array<{ text: string; prompt: string }> = [];
-  let current = "";
+  let currentTitle = "";
+  let currentBody = "";
 
   for (const line of lines) {
-    const match = line.match(/^\s*(\d+)[.)]\s+(.+)/);
+    // Match: "1. text", "1) text", "## 1. text", "## **1. text**", "- **text**", "**1. text**"
+    const match = line.match(/^\s*(?:#{1,3}\s+)?(?:\*{0,2})?\s*(\d+)[.)]\s*\*{0,2}\s*(.+?)(?:\*{0,2})\s*(?:⭐.*)?$/);
+    const bulletMatch = !match && line.match(/^\s*[-•]\s+\*{0,2}(.+?)\*{0,2}\s*$/);
+
     if (match) {
-      if (current) items.push({ text: current.trim(), prompt: current.trim() });
-      current = match[2];
-    } else if (current && line.trim()) {
-      current += " " + line.trim();
+      if (currentTitle) {
+        const desc = currentBody ? `${currentTitle}: ${currentBody}` : currentTitle;
+        items.push({ text: desc.trim(), prompt: currentTitle.trim() });
+      }
+      currentTitle = match[2].replace(/\*\*/g, "").trim();
+      currentBody = "";
+    } else if (bulletMatch && items.length === 0 && !currentTitle) {
+      // Top-level bullet list without numbers
+      items.push({ text: bulletMatch[1].replace(/\*\*/g, "").trim(), prompt: bulletMatch[1].replace(/\*\*/g, "").trim() });
+    } else if (currentTitle && line.trim()) {
+      // Collect description lines under the current item
+      const cleaned = line.replace(/^\s*[-•]\s+/, "").replace(/\*\*/g, "").trim();
+      if (cleaned.startsWith("Why") || cleaned.startsWith("Impact") || cleaned.startsWith("Key")) {
+        if (!currentBody) currentBody = cleaned;
+        else currentBody += ". " + cleaned;
+      }
     }
   }
-  if (current) items.push({ text: current.trim(), prompt: current.trim() });
+  if (currentTitle) {
+    const desc = currentBody ? `${currentTitle}: ${currentBody}` : currentTitle;
+    items.push({ text: desc.trim(), prompt: currentTitle.trim() });
+  }
 
-  // Only return if we found multiple distinct recommendations
   return items.length >= 2 ? items : null;
 }
 
