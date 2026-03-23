@@ -59,10 +59,8 @@ const styles = {
   },
   main: {
     flex: 1,
-    padding: "0.5rem 1rem",
+    padding: "0",
     overflow: "hidden",
-    width: "100%",
-    maxWidth: "1400px",
     margin: "0 auto",
     display: "flex",
     flexDirection: "column" as const,

@@ -4,6 +4,10 @@ import { api, Project } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
 
 const styles = {
+  container: {
+    padding: "0.5rem 1.5rem",
+    maxWidth: "1400px",
+  },
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -121,7 +125,7 @@ export default function ProjectList() {
 
   if (loading) {
     return (
-      <div>
+      <div style={styles.container}>
         <div style={styles.header}>
           <h1 style={styles.title}>Projects</h1>
           <Link to="/new" style={styles.newBtn}>New Project</Link>
@@ -136,7 +140,7 @@ export default function ProjectList() {
   }
 
   return (
-    <div>
+    <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Projects</h1>
         <Link to="/new" style={styles.newBtn}>New Project</Link>

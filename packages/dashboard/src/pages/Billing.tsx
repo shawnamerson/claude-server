@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 
 const s = {
-  page: { maxWidth: "800px", padding: "1rem 0" },
+  page: { maxWidth: "800px", padding: "0.5rem 1.5rem" },
   title: { fontSize: "1.3rem", fontWeight: 700, marginBottom: "1.5rem" },
   statusCard: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "1.25rem", marginBottom: "1.5rem" },
   statusRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" },

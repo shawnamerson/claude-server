@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 
 const styles = {
-  container: { maxWidth: "600px" },
+  container: { maxWidth: "600px", padding: "0.5rem 1.5rem" },
   title: { fontSize: "1.5rem", fontWeight: 600, marginBottom: "1.5rem" },
   form: { display: "flex", flexDirection: "column" as const, gap: "1rem" },
   label: { fontSize: "0.85rem", color: "#aaa", marginBottom: "0.25rem" },
