@@ -111,6 +111,8 @@ const t = {
 };
 
 const responsiveCSS = `
+  .jv-landing { scrollbar-width: none; -ms-overflow-style: none; }
+  .jv-landing::-webkit-scrollbar { display: none; }
   .jv-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
   .jv-steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
   .jv-comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
@@ -134,7 +136,7 @@ const responsiveCSS = `
 
 export default function Landing() {
   return (
-    <div style={s.page}>
+    <div className="jv-landing" style={s.page}>
       <style>{responsiveCSS}</style>
       {/* Nav */}
       <nav style={s.nav}>
