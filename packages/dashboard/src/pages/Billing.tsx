@@ -57,6 +57,8 @@ export default function Billing() {
   if (loading) return <div style={{ color: "#666", padding: "2rem" }}>Loading...</div>;
 
   const deployPct = status ? (status.deploysThisMonth / status.deployLimit) * 100 : 0;
+  const chatPct = status ? (status.chatsThisMonth / status.chatLimit) * 100 : 0;
+  const projectPct = status && status.projectLimit > 0 ? (status.projectCount / status.projectLimit) * 100 : 0;
 
   return (
     <div style={s.page}>
@@ -68,21 +70,26 @@ export default function Billing() {
             <span style={s.statusLabel}>Current plan</span>
             <span style={s.planBadge(true)}>{status.plan.charAt(0).toUpperCase() + status.plan.slice(1)}</span>
           </div>
+
           <div style={s.statusRow}>
-            <span style={s.statusLabel}>Deploys this month</span>
+            <span style={s.statusLabel}>Deploys</span>
             <span style={s.statusValue}>{status.deploysThisMonth} / {status.deployLimit}</span>
           </div>
-          <div style={s.progressBar}>
-            <div style={s.progressFill(deployPct)} />
-          </div>
+          <div style={s.progressBar}><div style={s.progressFill(deployPct)} /></div>
+
           <div style={s.statusRow}>
-            <span style={s.statusLabel}>Chats this month</span>
+            <span style={s.statusLabel}>Chats</span>
             <span style={s.statusValue}>{status.chatsThisMonth?.toLocaleString()} / {status.chatLimit?.toLocaleString()}</span>
           </div>
+          <div style={s.progressBar}><div style={s.progressFill(chatPct)} /></div>
+
           <div style={s.statusRow}>
             <span style={s.statusLabel}>Projects</span>
-            <span style={s.statusValue}>{status.projectCount}{status.projectLimit > 0 ? ` / ${status.projectLimit}` : ""}</span>
+            <span style={s.statusValue}>{status.projectCount}{status.projectLimit > 0 ? ` / ${status.projectLimit}` : " / ∞"}</span>
           </div>
+          {status.projectLimit > 0 && (
+            <div style={s.progressBar}><div style={s.progressFill(projectPct)} /></div>
+          )}
         </div>
       )}
 
