@@ -92,7 +92,7 @@ router.post("/billing/subscribe", requireAuth, async (req: Request, res: Respons
     line_items: [{
       price_data: {
         currency: "usd",
-        product_data: { name: `JustVibe ${plan.name}` },
+        product_data: { name: `VibeStack ${plan.name}` },
         unit_amount: plan.price,
         recurring: { interval: "month" },
       },

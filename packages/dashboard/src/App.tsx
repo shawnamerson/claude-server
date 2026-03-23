@@ -132,7 +132,7 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
       `}</style>
       <nav style={styles.nav}>
-        <Link to="/" style={styles.logo}>JustVibe</Link>
+        <Link to="/" style={styles.logo}>VibeStack</Link>
         <Link to="/projects" style={styles.navLink}>Projects</Link>
         <Link to="/new" style={styles.navLink}>New Project</Link>
         <div style={styles.navRight}>

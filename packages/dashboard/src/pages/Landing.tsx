@@ -25,7 +25,7 @@ function HeroDemo() {
       { delay: 700, text: "$ node -c server.js", style: { color: "#f59e0b", fontSize: "0.75rem" } },
       { delay: 500, text: "Syntax OK", style: { color: "#888", fontSize: "0.75rem" } },
       { delay: 400, text: "Starting app...", style: { color: "#888", fontSize: "0.75rem" } },
-      { delay: 1200, text: "Deployed! Live at rentals.justvibe.dev", style: { color: "#34d399", fontWeight: "600" } },
+      { delay: 1200, text: "Deployed! Live at rentals.vibestack.build", style: { color: "#34d399", fontWeight: "600" } },
     ];
 
     const totalDuration = script.reduce((sum, s) => sum + s.delay, 0);
@@ -71,7 +71,7 @@ function HeroDemo() {
               <span style={{ ...t.dot, background: "#f59e0b" }} />
               <span style={{ ...t.dot, background: "#34d399" }} />
             </div>
-            <span style={t.barTitle}>JustVibe</span>
+            <span style={t.barTitle}>VibeStack</span>
           </div>
           <div ref={containerRef} style={t.body}>
             {lines.map((line, i) => (
@@ -96,7 +96,7 @@ function HeroDemo() {
               <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f59e0b" }} />
               <span style={{ ...t.dot, width: "8px", height: "8px", background: "#34d399" }} />
             </div>
-            <div style={t.urlChip}>{deployed ? "rentals.justvibe.dev" : ""}</div>
+            <div style={t.urlChip}>{deployed ? "rentals.vibestack.build" : ""}</div>
           </div>
           {deployed ? (
             <iframe src={demoUrl} style={t.iframeEl} title="Live demo" loading="eager" scrolling="no" />
@@ -160,7 +160,7 @@ export default function Landing() {
       <style>{responsiveCSS}</style>
       {/* Nav */}
       <nav style={s.nav}>
-        <div style={s.logo}>JustVibe</div>
+        <div style={s.logo}>VibeStack</div>
         <div className="jv-nav-links">
           <a href="#features" style={s.navLink}>Features</a>
           <a href="#how" style={s.navLink}>How it works</a>
@@ -171,7 +171,7 @@ export default function Landing() {
 
       {/* Hero */}
       <div style={s.hero}>
-        <div style={s.badge}>Vibe coding, perfected</div>
+        <div style={s.badge}>Describe it. Ship it.</div>
         <h1 className="jv-title" style={s.title}>Describe your app.<br />Watch it build.</h1>
         <p style={s.subtitle}>
           Tell AI what you want. Watch it write code, test it, and deploy — all in real-time.
@@ -223,7 +223,7 @@ export default function Landing() {
 
       {/* vs Bolt comparison */}
       <div style={s.comparison}>
-        <h2 style={s.sectionTitle}>Why JustVibe?</h2>
+        <h2 style={s.sectionTitle}>Why VibeStack?</h2>
         <div className="jv-comp-grid">
           <div style={s.compCard}>
             <div style={s.compTitle}>Other tools</div>
@@ -235,7 +235,7 @@ export default function Landing() {
             </div>
           </div>
           <div style={{ ...s.compCard, borderColor: "#7c3aed" }}>
-            <div style={{ ...s.compTitle, color: "#a78bfa" }}>JustVibe</div>
+            <div style={{ ...s.compTitle, color: "#a78bfa" }}>VibeStack</div>
             <div style={s.compList}>
               <div style={s.compItem}><span style={s.compCheck}>+</span> Real apps with real URLs</div>
               <div style={s.compItem}><span style={s.compCheck}>+</span> PostgreSQL databases included</div>
@@ -253,7 +253,7 @@ export default function Landing() {
         <Link to="/signup" style={s.cta}>Start building free</Link>
       </div>
 
-      <div style={s.footer}>JustVibe — Vibe coding, perfected</div>
+      <div style={s.footer}>VibeStack — Describe it. Ship it.</div>
     </div>
   );
 }
