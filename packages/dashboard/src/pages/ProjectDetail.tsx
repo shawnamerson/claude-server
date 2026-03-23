@@ -396,7 +396,9 @@ export default function ProjectDetail() {
               api.deploy(id, prompt).then((dep) => {
                 setSelectedDeployment(dep.id);
                 refresh();
-              }).catch(() => {});
+              }).catch((err) => {
+                alert(err instanceof Error ? err.message : "Deploy failed");
+              });
             }} />
           )}
           <div style={{ display: sideTab === "logs" ? "flex" : "none", flex: 1, minHeight: 0, flexDirection: "column" }}>
