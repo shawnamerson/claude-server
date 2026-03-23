@@ -136,8 +136,8 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
 
   useEffect(() => {
     api.getDomains(projectId).then(setDomains);
-    // Get server IP from a public API
-    fetch("https://api.ipify.org?format=json")
+    // Get server IP from our backend
+    fetch("/api/server-ip", { headers: { Authorization: `Bearer ${(window as any).__authToken}` } })
       .then(r => r.json())
       .then(d => setServerIp(d.ip))
       .catch(() => setServerIp("(check your server IP)"));

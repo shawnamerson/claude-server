@@ -109,6 +109,21 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Server IP for DNS setup instructions
+let cachedServerIp: string | null = null;
+app.get("/api/server-ip", async (_req, res) => {
+  if (!cachedServerIp) {
+    try {
+      const r = await fetch("https://api.ipify.org?format=json");
+      const data = await r.json() as { ip: string };
+      cachedServerIp = data.ip;
+    } catch {
+      cachedServerIp = process.env.SERVER_IP || "unknown";
+    }
+  }
+  res.json({ ip: cachedServerIp });
+});
+
 // In production, serve the dashboard's built static files
 import path from "path";
 import { fileURLToPath } from "url";
