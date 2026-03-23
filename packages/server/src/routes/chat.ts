@@ -38,7 +38,8 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
     "INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'user', ?)"
   ).run(project.id, message);
 
-  // Build context
+  // Build context — cap total file content to avoid exceeding context limits
+  const MAX_FILE_CONTEXT = 50000; // ~50K chars max for file context
   const files = readProjectFiles(project.source_path);
   const latestDeployment = db
     .prepare("SELECT * FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT 1")
@@ -53,9 +54,36 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
       .join("\n");
   }
 
-  const filesContext = Object.entries(files)
-    .map(([filePath, content]) => `### ${filePath}\n\`\`\`\n${content}\n\`\`\``)
-    .join("\n\n");
+  // Prioritize key files, truncate large ones
+  const fileEntries = Object.entries(files);
+  const priorityFiles = ["server.js", "server/index.js", "package.json", "index.js", "app.js"];
+  fileEntries.sort((a, b) => {
+    const aP = priorityFiles.findIndex(p => a[0].endsWith(p));
+    const bP = priorityFiles.findIndex(p => b[0].endsWith(p));
+    if (aP !== -1 && bP === -1) return -1;
+    if (aP === -1 && bP !== -1) return 1;
+    return a[0].localeCompare(b[0]);
+  });
+
+  let filesContext = "";
+  let totalChars = 0;
+  const includedFiles: string[] = [];
+  const skippedFiles: string[] = [];
+
+  for (const [filePath, content] of fileEntries) {
+    const entry = `### ${filePath}\n\`\`\`\n${content}\n\`\`\`\n\n`;
+    if (totalChars + entry.length > MAX_FILE_CONTEXT) {
+      skippedFiles.push(filePath);
+      continue;
+    }
+    filesContext += entry;
+    totalChars += entry.length;
+    includedFiles.push(filePath);
+  }
+
+  if (skippedFiles.length > 0) {
+    filesContext += `\n(${skippedFiles.length} additional files not shown: ${skippedFiles.slice(0, 10).join(", ")}${skippedFiles.length > 10 ? "..." : ""})\n`;
+  }
 
   // Get database info if available
   let dbContext = "";
