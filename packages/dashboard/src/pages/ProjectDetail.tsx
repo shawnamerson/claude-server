@@ -356,7 +356,6 @@ export default function ProjectDetail() {
               src={previewUrl}
               style={styles.previewIframe}
               title="App Preview"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
             />
           </div>
         ) : (
