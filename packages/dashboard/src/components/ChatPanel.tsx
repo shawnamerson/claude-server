@@ -337,7 +337,13 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         )}
         {messages.map((msg, idx) => {
           const isLast = idx === messages.length - 1;
-          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !deploying && !chatStreaming && !!msg.content && !msg.content.startsWith("__UPGRADE__");
+          const looksActionable = hasSuggestion || (msg.content && (
+            /```/.test(msg.content) ||
+            /\b(server\.js|index\.(js|ts|html)|package\.json|style\.css|app\.(js|ts)|\.env)\b/.test(msg.content) ||
+            /should I apply|want me to|shall I|I can (apply|make|implement|add|fix|update)|would you like me to/i.test(msg.content) ||
+            /\b(fix|change|modify|update|add|remove|implement|apply)\b/i.test(msg.content)
+          ));
+          const showDeployBtn = msg.role === "assistant" && isLast && looksActionable && !deploying && !chatStreaming && !!msg.content && !msg.content.startsWith("__UPGRADE__");
           const isEmpty = !msg.content && msg.role === "assistant";
           const isUpgrade = msg.content?.startsWith("__UPGRADE__");
 
