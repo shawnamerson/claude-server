@@ -179,22 +179,35 @@ export default function ProjectDetail() {
   const [selectedDeployment, setSelectedDeployment] = useState<string | null>(searchParams.get("dep"));
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [previewKey, setPreviewKey] = useState(0);
   const lastRunningIdRef = useRef<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const runningDep = deployments.find((d) => d.status === "running");
 
-  // When a NEW running deployment appears, refresh preview multiple times
+  // Reload iframe without destroying it (avoids white flash)
+  const reloadPreview = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (iframe) {
+      try {
+        iframe.contentWindow?.location.reload();
+      } catch {
+        // Cross-origin — fall back to re-setting src
+        iframe.src = iframe.src;
+      }
+    }
+  }, []);
+
+  // When a NEW running deployment appears, reload preview multiple times
   // npm install can take 5-15s, so retry at 8s, 15s, and 25s
   useEffect(() => {
     const runningId = runningDep?.id || null;
     if (runningId && runningId !== lastRunningIdRef.current) {
       lastRunningIdRef.current = runningId;
-      const t1 = setTimeout(() => setPreviewKey(k => k + 1), 8000);
-      const t2 = setTimeout(() => setPreviewKey(k => k + 1), 15000);
-      const t3 = setTimeout(() => setPreviewKey(k => k + 1), 25000);
+      const t1 = setTimeout(reloadPreview, 8000);
+      const t2 = setTimeout(reloadPreview, 15000);
+      const t3 = setTimeout(reloadPreview, 25000);
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
-  }, [runningDep?.id]);
+  }, [runningDep?.id, reloadPreview]);
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -345,7 +358,7 @@ export default function ProjectDetail() {
             />
             {runningDep && (
               <>
-                <button style={styles.refreshBtn} onClick={() => setPreviewKey(k => k + 1)}>Refresh</button>
+                <button style={styles.refreshBtn} onClick={reloadPreview}>Refresh</button>
                 <a href={previewUrl} target="_blank" rel="noreferrer" style={styles.openBtn}>Open</a>
               </>
             )}
@@ -356,7 +369,7 @@ export default function ProjectDetail() {
         {runningDep ? (
           <div style={styles.preview}>
             <iframe
-              key={previewKey}
+              ref={iframeRef}
               src={previewUrl}
               style={styles.previewIframe}
               title="App Preview"
