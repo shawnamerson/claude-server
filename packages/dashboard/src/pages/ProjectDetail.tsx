@@ -180,13 +180,37 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [previewReady, setPreviewReady] = useState(false);
   const [prevStatus, setPrevStatus] = useState<string | null>(null);
 
-  // Auto-refresh preview when deployment goes to "running"
+  // When deployment goes to "running", poll the health endpoint before showing preview
   useEffect(() => {
     const currentStatus = deployments[0]?.status;
     if (prevStatus && prevStatus !== "running" && currentStatus === "running") {
-      setTimeout(() => setPreviewKey(k => k + 1), 2000);
+      setPreviewReady(false);
+      let attempts = 0;
+      const checkHealth = setInterval(async () => {
+        attempts++;
+        try {
+          const url = `${window.location.protocol}//${project?.slug}.${window.location.hostname}/health`;
+          const res = await fetch(url, { mode: "no-cors" });
+          // no-cors returns opaque response, but if it doesn't throw, the server is up
+          clearInterval(checkHealth);
+          setPreviewReady(true);
+          setPreviewKey(k => k + 1);
+        } catch {
+          if (attempts > 15) {
+            // Give up after 15 attempts, show anyway
+            clearInterval(checkHealth);
+            setPreviewReady(true);
+            setPreviewKey(k => k + 1);
+          }
+        }
+      }, 1000);
+      return () => clearInterval(checkHealth);
+    } else if (currentStatus === "running" && !previewReady) {
+      // Already running on page load
+      setPreviewReady(true);
     }
     setPrevStatus(currentStatus || null);
   }, [deployments, prevStatus]);
@@ -347,7 +371,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Preview iframe or placeholder */}
-        {runningDep ? (
+        {runningDep && previewReady ? (
           <div style={styles.preview}>
             <iframe
               key={previewKey}
@@ -359,7 +383,12 @@ export default function ProjectDetail() {
           </div>
         ) : (
           <div style={styles.previewEmpty}>
-            {isDeploying ? (
+            {runningDep && !previewReady ? (
+              <>
+                <div style={styles.previewSpinner}>Starting up...</div>
+                <div style={{ fontSize: "0.8rem", color: "#444" }}>Waiting for app to respond</div>
+              </>
+            ) : isDeploying ? (
               <>
                 <div style={styles.previewSpinner}>Building your app...</div>
                 <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Logs tab for progress</div>
