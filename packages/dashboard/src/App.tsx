@@ -195,7 +195,7 @@ export default function App() {
   }
 
   return (
-    <AppShell user={user} onLogout={logout} onRefresh={refreshUser}>
+    <AppShell user={user} onLogout={() => { logout(); navigate("/"); }} onRefresh={refreshUser}>
       <Routes>
         <Route path="/projects" element={<ProjectList />} />
         <Route path="/new" element={<NewProject />} />
