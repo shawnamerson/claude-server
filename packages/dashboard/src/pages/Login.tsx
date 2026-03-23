@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const s = {
   page: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0a0a0f", padding: "1rem" },
@@ -39,7 +39,7 @@ export default function Login({ onLogin }: { onLogin: (email: string, password: 
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <div style={s.logo}>JustVibe</div>
+        <Link to="/" style={{ ...s.logo, textDecoration: "none" }}>JustVibe</Link>
         <div style={s.subtitle}>Welcome back</div>
         <form onSubmit={handleSubmit} style={s.form}>
           <div>
