@@ -6,7 +6,7 @@ import StatusBadge from "../components/StatusBadge";
 const styles = {
   container: {
     padding: "0.5rem 1.5rem",
-    maxWidth: "1400px",
+    width: "100%",
   },
   header: {
     display: "flex",
