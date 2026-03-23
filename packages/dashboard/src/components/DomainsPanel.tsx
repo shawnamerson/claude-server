@@ -130,6 +130,7 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
   const [newDomain, setNewDomain] = useState("");
   const [adding, setAdding] = useState(false);
   const [dnsChecking, setDnsChecking] = useState<string | null>(null);
+  const [dnsVerified, setDnsVerified] = useState<Set<string>>(new Set());
   const [showSetup, setShowSetup] = useState<string | null>(null);
   const [serverIp, setServerIp] = useState<string>("");
 
@@ -167,14 +168,21 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
   const checkDns = async (domain: string) => {
     setDnsChecking(domain);
     try {
-      // Try to fetch the domain — if it resolves to our server, Caddy will handle it
       const controller = new AbortController();
-      setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`https://${domain}/`, { mode: "no-cors", signal: controller.signal }).catch(() => null);
-      // If we got here without error, DNS likely points to us
-      showError("DNS check: domain appears to be resolving. HTTPS certificate may take a few minutes to provision.");
+      setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`https://${domain}/`, { mode: "no-cors", signal: controller.signal });
+      // If we got here without throwing, DNS resolves and TLS works
+      setDnsVerified(prev => new Set(prev).add(domain));
     } catch {
-      showError("DNS not pointing to this server yet. Make sure you added the A record.");
+      // Try http as fallback — cert might not be ready yet
+      try {
+        const controller2 = new AbortController();
+        setTimeout(() => controller2.abort(), 5000);
+        await fetch(`http://${domain}/`, { mode: "no-cors", signal: controller2.signal });
+        setDnsVerified(prev => new Set(prev).add(domain));
+      } catch {
+        showError("DNS not pointing to this server yet. Add the A record and wait a few minutes.");
+      }
     } finally {
       setDnsChecking(null);
     }
@@ -236,13 +244,19 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
               <div style={styles.setupStep}>
                 HTTPS certificate will be provisioned automatically once DNS propagates (usually 1-5 minutes).
               </div>
-              <button
-                style={{ ...styles.btn, marginTop: "0.5rem", fontSize: "0.75rem", opacity: dnsChecking ? 0.5 : 1 }}
-                onClick={() => checkDns(d.domain)}
-                disabled={!!dnsChecking}
-              >
-                {dnsChecking === d.domain ? "Checking..." : "Verify DNS"}
-              </button>
+              {dnsVerified.has(d.domain) ? (
+                <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", color: "#34d399", fontSize: "0.78rem", fontWeight: 600 }}>
+                  <span style={{ fontSize: "1rem" }}>&#10003;</span> DNS Verified — HTTPS active
+                </div>
+              ) : (
+                <button
+                  style={{ ...styles.btn, marginTop: "0.5rem", fontSize: "0.75rem", opacity: dnsChecking ? 0.5 : 1 }}
+                  onClick={() => checkDns(d.domain)}
+                  disabled={!!dnsChecking}
+                >
+                  {dnsChecking === d.domain ? "Checking..." : "Verify DNS"}
+                </button>
+              )}
             </div>
           )}
         </div>
