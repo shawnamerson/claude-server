@@ -62,6 +62,16 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
   const hostPort = await findAvailableDbPort();
   const containerName = `claude-server-db-${projectSlug}`;
 
+  // Remove stale container with same name if it exists
+  try {
+    const stale = docker.getContainer(containerName);
+    await stale.stop({ t: 2 }).catch(() => {});
+    await stale.remove({ force: true });
+    console.log(`Removed stale database container: ${containerName}`);
+  } catch {
+    // Container doesn't exist — that's fine
+  }
+
   // Pull postgres image if needed
   try {
     await docker.getImage("postgres:16-alpine").inspect();

@@ -13,95 +13,90 @@ const docker = new Dockerode();
 
 // --- Agentic tools ---
 
-const AGENT_TOOLS: Anthropic.Tool[] = [
-  {
-    name: "write_files",
-    description: "Create or overwrite multiple files at once. Use this to write several files in a single turn for speed. Always provide COMPLETE file content for each file.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        files: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              path: { type: "string", description: "Relative file path (e.g., server.js, public/index.html)" },
-              content: { type: "string", description: "Complete file content" },
-            },
-            required: ["path", "content"],
+const WRITE_FILES_TOOL: Anthropic.Tool = {
+  name: "write_files",
+  description: "Create or overwrite multiple files at once. Write ALL files in a single call for speed.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      files: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Relative file path (e.g., server.js, public/index.html)" },
+            content: { type: "string", description: "Complete file content" },
           },
-          description: "Array of files to write",
+          required: ["path", "content"],
         },
       },
-      required: ["files"],
     },
+    required: ["files"],
   },
+};
+
+const DONE_TOOL: Anthropic.Tool = {
+  name: "done",
+  description: "Call this when all files are written. The project should be complete and ready to deploy.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      notes: { type: "string", description: "Brief description of what the app does (2-3 sentences)" },
+    },
+    required: ["notes"],
+  },
+};
+
+// Fast tools for new projects — write + done only
+const FAST_TOOLS: Anthropic.Tool[] = [WRITE_FILES_TOOL, DONE_TOOL];
+
+// Full tools for modifications — includes read, delete, run
+const FULL_TOOLS: Anthropic.Tool[] = [
+  WRITE_FILES_TOOL,
   {
     name: "read_file",
     description: "Read the contents of an existing file in the project.",
     input_schema: {
       type: "object" as const,
-      properties: {
-        path: { type: "string", description: "Relative file path to read" },
-      },
+      properties: { path: { type: "string", description: "Relative file path to read" } },
       required: ["path"],
     },
   },
   {
     name: "list_files",
     description: "List all files currently in the project directory.",
-    input_schema: {
-      type: "object" as const,
-      properties: {},
-    },
+    input_schema: { type: "object" as const, properties: {} },
   },
   {
     name: "delete_file",
     description: "Delete a file from the project.",
     input_schema: {
       type: "object" as const,
-      properties: {
-        path: { type: "string", description: "Relative file path to delete" },
-      },
+      properties: { path: { type: "string", description: "Relative file path to delete" } },
       required: ["path"],
     },
   },
   {
     name: "run_command",
-    description: "Run a shell command in the project directory inside a Node.js container. Use this to: test syntax (node -c server.js), install deps (npm install), start the server briefly to check for errors, or verify files. Commands time out after 15 seconds.",
+    description: "Run a shell command in the project directory inside a Node.js container. Use for testing: node -c server.js, npm install, etc. Times out after 12 seconds.",
     input_schema: {
       type: "object" as const,
-      properties: {
-        command: { type: "string", description: "Shell command to run (e.g., 'node -c server.js', 'npm install', 'node server.js &; sleep 2; curl -s localhost:3000/health')" },
-      },
+      properties: { command: { type: "string", description: "Shell command to run" } },
       required: ["command"],
     },
   },
-  {
-    name: "done",
-    description: "Call this when you have finished creating all project files, the Dockerfile, and the .dockerignore. The project should be complete and ready to build.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        notes: { type: "string", description: "Brief description of what the app does (2-3 sentences, no deployment instructions)" },
-      },
-      required: ["notes"],
-    },
-  },
+  DONE_TOOL,
 ];
 
 const SYSTEM_PROMPT = `You are an expert full-stack developer. Build projects using the provided tools.
 
-IMPORTANT: Write multiple files per turn using write_files to minimize round-trips. Batch related files together. Use run_command to test your code before finishing.
+IMPORTANT: Be fast. Write ALL files in as few turns as possible using write_files. Batch everything together.
 
 WORKFLOW:
-1. First turn: write package.json + main server/source files together
-2. Run "node -c server.js" to syntax-check the server
-3. Write frontend files together
-4. Run "npm install" to verify dependencies resolve (only if you need packages not in the base image)
-5. Write Dockerfile + .dockerignore, then call done
+1. First turn: write package.json, server.js, and ALL frontend files (HTML, CSS, JS) together in ONE write_files call
+2. Second turn: write Dockerfile + .dockerignore, then call done immediately
 
-If any command reveals an error, fix the file and re-test before moving on.
+Do NOT run commands for new projects — just write the files correctly and call done. The platform will test and deploy automatically.
 
 CHOOSE THE RIGHT ARCHITECTURE based on what the user describes:
 - For simple sites (landing pages, portfolios, blogs): Express serving static HTML/CSS/JS from public/ folder
@@ -250,6 +245,21 @@ function createToolHandlers(
  * Persistent dev container for a project. Created on first command,
  * reused for subsequent commands, cleaned up when done.
  */
+// Clean up any orphaned dev containers from previous runs
+export async function cleanupOrphanedDevContainers(): Promise<void> {
+  try {
+    const containers = await docker.listContainers({ all: true, filters: { name: ["claude-dev-"] } });
+    for (const c of containers) {
+      try {
+        const container = docker.getContainer(c.Id);
+        await container.stop({ t: 1 }).catch(() => {});
+        await container.remove({ force: true });
+        console.log(`Cleaned up orphaned dev container: ${c.Names[0]}`);
+      } catch {}
+    }
+  } catch {}
+}
+
 class DevContainer {
   private container: Dockerode.Container | null = null;
   private workDir: string;
@@ -390,38 +400,33 @@ export async function generateProject(
     }
   }
 
-  const devContainer = new DevContainer(sourcePath);
-  const handlers = createToolHandlers(sourcePath, onLog, devContainer);
+  // No dev container for new projects — fast path: write files + done
+  const dummyDevContainer = new DevContainer(sourcePath);
+  const handlers = createToolHandlers(sourcePath, onLog, dummyDevContainer);
 
   onLog("Claude is building your app...");
 
-  try {
-    const notes = await claudeAgentLoop(
-      SYSTEM_PROMPT,
-      `Build me this application:\n\n${description}`,
-      AGENT_TOOLS,
-      handlers,
-      {
-        maxTurns: 30,
-        onText: (text) => {
-          const trimmed = text.trim();
-          if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
-        },
-        onToolUse: (name, input) => {
-          if (name === "write_files") {
-            const count = input.files?.length || 0;
-            onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
-          } else if (name === "run_command") {
-            onLog(`Running: ${input.command}`);
-          }
-        },
-      }
-    );
+  const notes = await claudeAgentLoop(
+    SYSTEM_PROMPT,
+    `Build me this application:\n\n${description}`,
+    FAST_TOOLS,
+    handlers,
+    {
+      maxTurns: 10,
+      onText: (text) => {
+        const trimmed = text.trim();
+        if (trimmed) onLog(`Claude: ${trimmed.slice(0, 500)}`);
+      },
+      onToolUse: (name, input) => {
+        if (name === "write_files") {
+          const count = input.files?.length || 0;
+          onLog(`Writing ${count} file${count !== 1 ? "s" : ""}...`);
+        }
+      },
+    }
+  );
 
-    return collectResult(sourcePath, notes);
-  } finally {
-    await devContainer.cleanup();
-  }
+  return collectResult(sourcePath, notes);
 }
 
 export async function modifyProject(
@@ -449,7 +454,7 @@ export async function modifyProject(
     const notes = await claudeAgentLoop(
       MODIFY_SYSTEM_PROMPT,
       `${modification}${fileList}${historyContext}`,
-      AGENT_TOOLS,
+      FULL_TOOLS,
       handlers,
       {
         maxTurns: 30,

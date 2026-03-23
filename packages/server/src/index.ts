@@ -18,6 +18,7 @@ import authRoutes, { authMiddleware, requireProjectOwner, requireDeploymentOwner
 import billingRoutes from "./routes/billing.js";
 import { initializeDbPortTracking } from "./services/database.js";
 import { reloadCaddyConfig } from "./services/caddy.js";
+import { cleanupOrphanedDevContainers } from "./services/generator.js";
 import fs from "fs";
 
 const app = express();
@@ -80,9 +81,10 @@ async function start() {
   getDb();
   console.log("Database initialized");
 
-  // Track existing container ports
+  // Track existing container ports and clean up orphans
   await initializePortTracking();
   await initializeDbPortTracking();
+  await cleanupOrphanedDevContainers();
 
   // Generate initial Caddy config
   reloadCaddyConfig().catch(() => console.log("Caddy not available yet — config will update on first deploy"));

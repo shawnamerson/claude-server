@@ -1,5 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Editor from "@monaco-editor/react";
 import { api, FileNode } from "../api/client";
+
+const langMap: Record<string, string> = {
+  js: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript",
+  json: "json", html: "html", css: "css", md: "markdown",
+  py: "python", sh: "shell", yml: "yaml", yaml: "yaml",
+  sql: "sql", dockerfile: "dockerfile",
+};
+
+function getLanguage(path: string): string {
+  const name = path.split("/").pop() || "";
+  if (name === "Dockerfile" || name === "dockerfile") return "dockerfile";
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  return langMap[ext] || "plaintext";
+}
 
 const styles = {
   container: {
@@ -12,7 +27,7 @@ const styles = {
     background: "#0a0a0f",
   },
   tree: {
-    width: "200px",
+    width: "180px",
     borderRight: "1px solid #1e1e30",
     overflow: "auto",
     padding: "0.5rem 0",
@@ -21,7 +36,7 @@ const styles = {
   treeItem: {
     padding: "0.2rem 0.5rem",
     cursor: "pointer",
-    fontSize: "0.8rem",
+    fontSize: "0.78rem",
     fontFamily: "'JetBrains Mono', monospace",
     whiteSpace: "nowrap" as const,
     overflow: "hidden",
@@ -46,9 +61,9 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "0.4rem 0.75rem",
+    padding: "0.3rem 0.75rem",
     borderBottom: "1px solid #1e1e30",
-    fontSize: "0.8rem",
+    fontSize: "0.78rem",
     color: "#888",
     flexShrink: 0,
   },
@@ -61,20 +76,6 @@ const styles = {
     cursor: "pointer",
     fontSize: "0.75rem",
   },
-  textarea: {
-    flex: 1,
-    width: "100%",
-    background: "transparent",
-    color: "#e0e0e0",
-    border: "none",
-    outline: "none",
-    padding: "0.75rem",
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    fontSize: "0.8rem",
-    resize: "none" as const,
-    lineHeight: 1.5,
-    tabSize: 2,
-  },
   empty: {
     flex: 1,
     display: "flex",
@@ -86,15 +87,9 @@ const styles = {
 };
 
 function TreeNode({
-  node,
-  depth,
-  selectedPath,
-  onSelect,
+  node, depth, selectedPath, onSelect,
 }: {
-  node: FileNode;
-  depth: number;
-  selectedPath: string | null;
-  onSelect: (path: string) => void;
+  node: FileNode; depth: number; selectedPath: string | null; onSelect: (path: string) => void;
 }) {
   const [open, setOpen] = useState(depth < 2);
   const paddingLeft = `${0.5 + depth * 0.75}rem`;
@@ -102,20 +97,11 @@ function TreeNode({
   if (node.type === "directory") {
     return (
       <>
-        <div
-          style={{ ...styles.treeItem, ...styles.treeDir, paddingLeft }}
-          onClick={() => setOpen(!open)}
-        >
+        <div style={{ ...styles.treeItem, ...styles.treeDir, paddingLeft }} onClick={() => setOpen(!open)}>
           {open ? "\u25BE " : "\u25B8 "}{node.name}/
         </div>
         {open && node.children?.map((child) => (
-          <TreeNode
-            key={child.path}
-            node={child}
-            depth={depth + 1}
-            selectedPath={selectedPath}
-            onSelect={onSelect}
-          />
+          <TreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
         ))}
       </>
     );
@@ -123,11 +109,7 @@ function TreeNode({
 
   return (
     <div
-      style={{
-        ...styles.treeItem,
-        paddingLeft,
-        ...(selectedPath === node.path ? styles.treeItemActive : {}),
-      }}
+      style={{ ...styles.treeItem, paddingLeft, ...(selectedPath === node.path ? styles.treeItemActive : {}) }}
       onClick={() => onSelect(node.path)}
     >
       {node.name}
@@ -142,6 +124,7 @@ export default function FileViewer({ projectId }: { projectId: string }) {
   const [originalContent, setOriginalContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const editorRef = useRef<any>(null);
 
   useEffect(() => {
     api.getFileTree(projectId).then(setTree);
@@ -153,9 +136,7 @@ export default function FileViewer({ projectId }: { projectId: string }) {
       setSelectedFile(filePath);
       setContent(file.content);
       setOriginalContent(file.content);
-    } catch {
-      // binary or unreadable file
-    }
+    } catch {}
   };
 
   const saveFile = async () => {
@@ -194,34 +175,16 @@ export default function FileViewer({ projectId }: { projectId: string }) {
     <div style={styles.container}>
       <div style={styles.tree}>
         {tree.map((node) => (
-          <TreeNode
-            key={node.path}
-            node={node}
-            depth={0}
-            selectedPath={selectedFile}
-            onSelect={openFile}
-          />
+          <TreeNode key={node.path} node={node} depth={0} selectedPath={selectedFile} onSelect={openFile} />
         ))}
         <label style={{
-          display: "block",
-          padding: "0.4rem 0.5rem",
-          margin: "0.5rem 0.3rem 0",
-          background: "#7c3aed",
-          color: "#fff",
-          borderRadius: "0.35rem",
-          fontSize: "0.75rem",
-          textAlign: "center" as const,
-          cursor: "pointer",
+          display: "block", padding: "0.4rem 0.5rem", margin: "0.5rem 0.3rem 0",
+          background: "#7c3aed", color: "#fff", borderRadius: "0.35rem",
+          fontSize: "0.75rem", textAlign: "center" as const, cursor: "pointer",
         }}>
           {uploading ? "Uploading..." : "Upload Files"}
-          <input
-            type="file"
-            multiple
-            accept="image/*,.svg,.ico,.pdf,.json,.csv,.txt"
-            onChange={handleUpload}
-            style={{ display: "none" }}
-            disabled={uploading}
-          />
+          <input type="file" multiple accept="image/*,.svg,.ico,.pdf,.json,.csv,.txt"
+            onChange={handleUpload} style={{ display: "none" }} disabled={uploading} />
         </label>
       </div>
       <div style={styles.editor}>
@@ -229,38 +192,40 @@ export default function FileViewer({ projectId }: { projectId: string }) {
           <>
             <div style={styles.editorHeader}>
               <span>{selectedFile}</span>
-              {hasChanges && (
-                <button style={styles.saveBtn} onClick={saveFile} disabled={saving}>
-                  {saving ? "Saving..." : "Save"}
+              <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                {hasChanges && <span style={{ color: "#f59e0b", fontSize: "0.7rem" }}>Modified</span>}
+                <button style={{ ...styles.saveBtn, opacity: hasChanges ? 1 : 0.4 }} onClick={saveFile} disabled={saving || !hasChanges}>
+                  {saving ? "Saving..." : "Save (Ctrl+S)"}
                 </button>
-              )}
+              </div>
             </div>
-            <textarea
-              style={styles.textarea}
+            <Editor
+              height="100%"
+              language={getLanguage(selectedFile)}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={(e) => {
+              onChange={(val) => setContent(val || "")}
+              onMount={(editor) => {
+                editorRef.current = editor;
                 // Ctrl+S to save
-                if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-                  e.preventDefault();
+                editor.addCommand(2048 + 49, () => { // Monaco.KeyMod.CtrlCmd | Monaco.KeyCode.KeyS
                   if (hasChanges) saveFile();
-                }
-                // Tab key inserts spaces
-                if (e.key === "Tab") {
-                  e.preventDefault();
-                  const start = e.currentTarget.selectionStart;
-                  const end = e.currentTarget.selectionEnd;
-                  setContent(content.substring(0, start) + "  " + content.substring(end));
-                  setTimeout(() => {
-                    e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 2;
-                  }, 0);
-                }
+                });
               }}
-              spellCheck={false}
+              theme="vs-dark"
+              options={{
+                minimap: { enabled: false },
+                fontSize: 13,
+                lineNumbers: "on",
+                scrollBeyondLastLine: false,
+                wordWrap: "on",
+                tabSize: 2,
+                automaticLayout: true,
+                padding: { top: 8 },
+              }}
             />
           </>
         ) : (
-          <div style={styles.empty}>Select a file to view</div>
+          <div style={styles.empty}>Select a file to edit</div>
         )}
       </div>
     </div>
