@@ -40,7 +40,7 @@ router.get("/", (req: Request, res: Response) => {
           (SELECT d.port FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1)
         ) as latest_port,
         (SELECT COUNT(*) FROM deployments d WHERE d.project_id = p.id) as deploy_count,
-        (SELECT COALESCE(SUM(d.cost_cents), 0) FROM deployments d WHERE d.project_id = p.id) as total_cost_cents
+        (SELECT COUNT(*) FROM deployments d WHERE d.project_id = p.id AND d.created_at >= date('now', 'start of month')) as deploys_this_month
        FROM projects p ${whereClause} ORDER BY p.updated_at DESC`
     )
     .all(...params);

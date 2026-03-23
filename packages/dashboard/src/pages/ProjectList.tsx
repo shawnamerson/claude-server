@@ -102,9 +102,7 @@ function ProjectCard({ project }: { project: Project }) {
       </div>
       <div style={styles.cardFooter}>
         <StatusBadge status={project.latest_status || "none"} />
-        {(project as any).total_cost_cents > 0 && (
-          <span>${((project as any).total_cost_cents / 100).toFixed(2)}</span>
-        )}
+        <span>{(project as any).deploys_this_month || 0} deploys this month</span>
       </div>
     </Link>
   );
