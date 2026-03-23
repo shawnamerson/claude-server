@@ -54,21 +54,24 @@ export default function LogViewer({ deploymentId }: { deploymentId: string | nul
     return rawLogs.findIndex((l) => l.timestamp === log.timestamp && l.message === log.message) === index;
   });
 
-  // Auto-scroll to bottom on new logs
+  // Keep scroll at top so newest logs are visible
   useEffect(() => {
     if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      containerRef.current.scrollTop = 0;
     }
   }, [logs.length]);
+
+  // Reverse: newest first
+  const reversedLogs = [...logs].reverse();
 
   return (
     <div ref={containerRef} style={styles.container}>
       {!deploymentId ? (
         <div style={styles.empty}>No deployment selected</div>
-      ) : logs.length === 0 ? (
+      ) : reversedLogs.length === 0 ? (
         <div style={styles.empty}>Waiting for logs...</div>
       ) : (
-        logs.map((log, i) => (
+        reversedLogs.map((log, i) => (
           <div key={i} style={{ ...styles.line, color: streamColors[log.stream] || "#e0e0e0" }}>
             <span style={{ color: "#555" }}>[{log.stream}] </span>
             {log.message}
