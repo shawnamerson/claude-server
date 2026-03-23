@@ -71,7 +71,7 @@ function AppShell({ children, user, onLogout }: { children: React.ReactNode; use
   return (
     <div style={styles.app}>
       <nav style={styles.nav}>
-        <Link to="/" style={styles.logo}>Claude Server</Link>
+        <Link to="/" style={styles.logo}>JustVibe</Link>
         <Link to="/projects" style={styles.navLink}>Projects</Link>
         <Link to="/new" style={styles.navLink}>New Project</Link>
         <div style={styles.navRight}>
