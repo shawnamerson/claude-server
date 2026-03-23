@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../hooks/useAuth";
 
 const styles = {
   container: { maxWidth: "600px", padding: "0.5rem 1.5rem" },
@@ -48,6 +49,7 @@ const styles = {
 export default function NewProject() {
   const navigate = useNavigate();
   const { showError } = useToast();
+  const { user } = useAuth();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -82,6 +84,22 @@ export default function NewProject() {
       setLoading(false);
     }
   };
+
+  if (user && !user.email_verified) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, minHeight: "60vh" }}>
+        <div style={{ background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "2.5rem", textAlign: "center", maxWidth: "420px" }}>
+          <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Verify your email</div>
+          <div style={{ color: "#888", fontSize: "0.95rem", marginBottom: "1rem" }}>
+            Check your inbox for a 6-digit verification code. Enter it in the banner above to start building.
+          </div>
+          <div style={{ color: "#666", fontSize: "0.85rem" }}>
+            Didn't get it? Check spam, or the banner above has a resend option.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (limitReached) {
     return (
