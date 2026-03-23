@@ -7,9 +7,10 @@ import "../types.js";
 const router = Router();
 
 const PLANS = [
-  { id: "free", name: "Free", price: 0, deploys: 10, projects: 3, features: ["3 projects", "10 deploys/month", "Community support"] },
-  { id: "pro", name: "Pro", price: 1900, deploys: 100, projects: -1, features: ["Unlimited projects", "100 deploys/month", "Custom domains", "Priority builds"] },
-  { id: "team", name: "Team", price: 4900, deploys: 500, projects: -1, features: ["Everything in Pro", "500 deploys/month", "Database backups", "Team sharing"] },
+  { id: "free", name: "Free", price: 0, deploys: 20, projects: 1, chats: 1000, features: ["1 project", "20 deploys/month", "1,000 chats/month"] },
+  { id: "pro", name: "Pro", price: 1900, deploys: 100, projects: 5, chats: 5000, features: ["5 projects", "100 deploys/month", "5,000 chats/month", "Custom domains"] },
+  { id: "growth", name: "Growth", price: 3900, deploys: 300, projects: 20, chats: 15000, features: ["20 projects", "300 deploys/month", "15,000 chats/month", "Custom domains", "Database backups"] },
+  { id: "team", name: "Team", price: 7900, deploys: 1000, projects: -1, chats: 50000, features: ["Unlimited projects", "1,000 deploys/month", "50,000 chats/month", "Everything in Growth", "Priority support"] },
 ];
 
 function getStripe(): Stripe | null {
@@ -40,6 +41,10 @@ router.get("/billing/status", requireAuth, (req: Request, res: Response) => {
 
   const projectCount = db.prepare("SELECT COUNT(*) as cnt FROM projects WHERE user_id = ?").get(user.id) as { cnt: number };
 
+  const chatsThisMonth = db.prepare(
+    "SELECT COUNT(*) as cnt FROM chat_messages cm JOIN projects p ON p.id = cm.project_id WHERE p.user_id = ? AND cm.role = 'user' AND cm.created_at >= ?"
+  ).get(user.id, monthStart.toISOString()) as { cnt: number };
+
   const plan = userData?.plan || "free";
   const limits = getPlanLimits(plan);
 
@@ -49,6 +54,8 @@ router.get("/billing/status", requireAuth, (req: Request, res: Response) => {
     deployLimit: limits.deploys,
     projectCount: projectCount.cnt,
     projectLimit: limits.projects,
+    chatsThisMonth: chatsThisMonth.cnt,
+    chatLimit: limits.chats,
     hasSubscription: !!userData?.stripe_subscription_id,
   });
 });

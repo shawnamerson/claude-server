@@ -6,6 +6,8 @@ import { getRecentLogs } from "../services/logger.js";
 import { getDatabaseInfo } from "../services/database.js";
 import { queryProjectDatabase } from "../services/database.js";
 import { Project, Deployment, ChatMessage } from "../types.js";
+import { canChat } from "./auth.js";
+import "../types.js";
 
 const router = Router();
 
@@ -31,6 +33,16 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
   if (!message) {
     res.status(400).json({ error: "Message is required" });
     return;
+  }
+
+  // Check chat limits
+  const user = req.user;
+  if (user) {
+    const chatCheck = canChat(user.id);
+    if (!chatCheck.allowed) {
+      res.status(402).json({ error: chatCheck.reason });
+      return;
+    }
   }
 
   // Save user message

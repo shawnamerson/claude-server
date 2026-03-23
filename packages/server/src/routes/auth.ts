@@ -256,10 +256,11 @@ export function requireDeploymentOwner(req: Request, res: Response, next: NextFu
 }
 
 // Plan limits
-const PLAN_LIMITS: Record<string, { deploys: number; projects: number }> = {
-  free: { deploys: 10, projects: 3 },
-  pro: { deploys: 100, projects: -1 }, // -1 = unlimited
-  team: { deploys: 500, projects: -1 },
+const PLAN_LIMITS: Record<string, { deploys: number; projects: number; chats: number }> = {
+  free:   { deploys: 20,   projects: 1,  chats: 1000 },
+  pro:    { deploys: 100,  projects: 5,  chats: 5000 },
+  growth: { deploys: 300,  projects: 20, chats: 15000 },
+  team:   { deploys: 1000, projects: -1, chats: 50000 }, // -1 = unlimited
 };
 
 export function getPlanLimits(plan: string) {
@@ -306,6 +307,28 @@ export function canCreateProject(userId: string): { allowed: boolean; reason?: s
 
   if (projectCount.cnt >= limits.projects) {
     return { allowed: false, reason: `Project limit reached (${limits.projects}). Upgrade your plan for more.` };
+  }
+
+  return { allowed: true };
+}
+
+// Check if user can chat (plan-based)
+export function canChat(userId: string): { allowed: boolean; reason?: string } {
+  const db = getDb();
+  const user = db.prepare("SELECT plan FROM users WHERE id = ?").get(userId) as { plan: string } | undefined;
+  if (!user) return { allowed: false, reason: "User not found" };
+
+  const limits = getPlanLimits(user.plan);
+
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const chatsThisMonth = db.prepare(
+    "SELECT COUNT(*) as cnt FROM chat_messages cm JOIN projects p ON p.id = cm.project_id WHERE p.user_id = ? AND cm.role = 'user' AND cm.created_at >= ?"
+  ).get(userId, monthStart.toISOString()) as { cnt: number };
+
+  if (chatsThisMonth.cnt >= limits.chats) {
+    return { allowed: false, reason: `Monthly chat limit reached (${limits.chats.toLocaleString()}). Upgrade your plan for more.` };
   }
 
   return { allowed: true };

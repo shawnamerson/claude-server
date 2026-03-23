@@ -12,7 +12,7 @@ const s = {
   planBadge: (active: boolean) => ({ display: "inline-block", padding: "0.2rem 0.6rem", background: active ? "#7c3aed20" : "#1a1a2e", color: active ? "#a78bfa" : "#666", borderRadius: "9999px", fontSize: "0.8rem", fontWeight: 600 }),
   progressBar: { height: "6px", background: "#1e1e30", borderRadius: "3px", marginTop: "0.25rem", marginBottom: "0.75rem" },
   progressFill: (pct: number) => ({ height: "100%", background: pct > 80 ? "#f59e0b" : "#7c3aed", borderRadius: "3px", width: `${Math.min(pct, 100)}%`, transition: "width 0.3s" }),
-  grid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem" },
   card: (current: boolean) => ({ background: "#12121a", border: `1px solid ${current ? "#7c3aed" : "#1e1e30"}`, borderRadius: "0.75rem", padding: "1.5rem", position: "relative" as const }),
   cardName: { fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.25rem" },
   cardPrice: { fontSize: "1.8rem", fontWeight: 800, color: "#e0e0e0", marginBottom: "0.15rem" },
@@ -76,6 +76,10 @@ export default function Billing() {
             <div style={s.progressFill(deployPct)} />
           </div>
           <div style={s.statusRow}>
+            <span style={s.statusLabel}>Chats this month</span>
+            <span style={s.statusValue}>{status.chatsThisMonth?.toLocaleString()} / {status.chatLimit?.toLocaleString()}</span>
+          </div>
+          <div style={s.statusRow}>
             <span style={s.statusLabel}>Projects</span>
             <span style={s.statusValue}>{status.projectCount}{status.projectLimit > 0 ? ` / ${status.projectLimit}` : ""}</span>
           </div>
@@ -85,7 +89,7 @@ export default function Billing() {
       <div style={s.grid}>
         {plans.map(plan => {
           const isCurrent = status?.plan === plan.id;
-          const planRank: Record<string, number> = { free: 0, pro: 1, team: 2 };
+          const planRank: Record<string, number> = { free: 0, pro: 1, growth: 2, team: 3 };
           const currentRank = planRank[status?.plan] ?? 0;
           const thisRank = planRank[plan.id] ?? 0;
           const isUpgrade = thisRank > currentRank;
