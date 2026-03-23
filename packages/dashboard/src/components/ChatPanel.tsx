@@ -99,6 +99,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
   const [input, setInput] = useState("");
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [lastFinishedDepId, setLastFinishedDepId] = useState<string | null>(null);
+  const [chatStreaming, setChatStreaming] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const activityRef = useRef<ActivityItem[]>([]);
 
@@ -167,9 +168,75 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     }
   }, [messages, activity]);
 
-  const handleSend = () => {
+  // Chat: send a message and stream Claude's response (no deploy, free)
+  const handleChat = async () => {
     const text = input.trim();
-    if (!text || deploying) return;
+    if (!text || deploying || chatStreaming) return;
+    setInput("");
+
+    const userMsg: ChatMsg = {
+      id: Date.now(),
+      project_id: projectId,
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+    setChatStreaming(true);
+
+    try {
+      const authToken = (window as any).__authToken;
+      const res = await fetch(`/api/projects/${projectId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+        body: JSON.stringify({ message: text }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Chat failed" }));
+        throw new Error(err.error);
+      }
+
+      // Read SSE stream
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let assistantText = "";
+      const assistantId = Date.now() + 1;
+
+      // Add placeholder message
+      setMessages(prev => [...prev, { id: assistantId, project_id: projectId, role: "assistant", content: "", created_at: new Date().toISOString() }]);
+
+      if (reader) {
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "text") {
+                assistantText += data.content;
+                setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: assistantText } : m));
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { id: Date.now() + 2, project_id: projectId, role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Chat failed"}`, created_at: new Date().toISOString() }]);
+    } finally {
+      setChatStreaming(false);
+    }
+  };
+
+  // Deploy: send a message and trigger a full deploy (costs a deploy)
+  const handleDeploy = () => {
+    const text = input.trim();
+    if (!text || deploying || chatStreaming) return;
     setInput("");
 
     activityRef.current = [];
@@ -186,7 +253,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     onDeploy(text);
   };
 
-  const isActive = !!deploying;
+  const isActive = !!deploying || chatStreaming;
   const statusLabel = deployStatus === "generating" ? "Claude is working..."
     : deployStatus === "deploying" ? "Starting your app..."
     : deploying ? "Working..." : "";
@@ -239,18 +306,27 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleSend();
+              handleChat();
             }
           }}
-          placeholder={isActive ? statusLabel : "Tell Claude what to build or change..."}
+          placeholder={isActive ? statusLabel : "Ask about your project or describe changes..."}
           disabled={isActive}
         />
         <button
-          style={{ ...s.sendBtn, opacity: (isActive || !input.trim()) ? 0.5 : 1 }}
-          onClick={handleSend}
+          style={{ ...s.chatBtn, opacity: (isActive || !input.trim()) ? 0.5 : 1 }}
+          onClick={handleChat}
           disabled={isActive || !input.trim()}
+          title="Chat with Claude (free)"
         >
-          Send
+          Chat
+        </button>
+        <button
+          style={{ ...s.deployBtn, opacity: (isActive || !input.trim()) ? 0.5 : 1 }}
+          onClick={handleDeploy}
+          disabled={isActive || !input.trim()}
+          title="Apply changes and deploy"
+        >
+          Deploy
         </button>
       </div>
     </div>
@@ -264,7 +340,8 @@ const s = {
   assistantMsg: { alignSelf: "flex-start" as const, background: "#1a1a2e", color: "#e0e0e0", padding: "0.5rem 0.75rem", borderRadius: "0.75rem 0.75rem 0.75rem 0.25rem", maxWidth: "90%", fontSize: "0.85rem", whiteSpace: "pre-wrap" as const, animation: "slideInLeft 0.2s ease" },
   inputArea: { display: "flex", gap: "0.5rem", padding: "0.5rem 0.75rem", borderTop: "1px solid #1e1e30", background: "#0d0d14" },
   input: { flex: 1, padding: "0.5rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.5rem", color: "#e0e0e0", fontSize: "0.85rem", outline: "none", fontFamily: "inherit" },
-  sendBtn: { padding: "0.5rem 1rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 },
+  chatBtn: { padding: "0.5rem 0.75rem", background: "#1a1a2e", color: "#a78bfa", border: "1px solid #2e2e4a", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" as const, fontFamily: "inherit" },
+  deployBtn: { padding: "0.5rem 0.75rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" as const, fontFamily: "inherit" },
   empty: { color: "#555", textAlign: "center" as const, padding: "2rem 1rem", fontSize: "0.85rem" },
   emptyState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flex: 1, gap: "0.75rem", padding: "2rem 1rem", animation: "fadeInUp 0.4s ease" },
   emptyIcon: { opacity: 0.6, marginBottom: "0.25rem" },
