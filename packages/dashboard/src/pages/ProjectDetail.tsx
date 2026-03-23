@@ -231,24 +231,7 @@ export default function ProjectDetail() {
     }, 10000);
   }, []);
 
-  // When a genuinely NEW deployment starts running (not on page load),
-  // retry loading the preview since npm install may take 5-15s
-  useEffect(() => {
-    const runningId = runningDep?.id || null;
-    if (runningId && runningId !== lastRunningIdRef.current) {
-      const isInitialLoad = initialLoadRef.current;
-      lastRunningIdRef.current = runningId;
-      // Skip retry refreshes on initial page load — app is already running
-      if (isInitialLoad) {
-        initialLoadRef.current = false;
-        return;
-      }
-      const t1 = setTimeout(reloadPreview, 8000);
-      const t2 = setTimeout(reloadPreview, 15000);
-      const t3 = setTimeout(reloadPreview, 25000);
-      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-    }
-  }, [runningDep?.id, reloadPreview]);
+  // (new-deploy retry effect moved below previewUrl declaration)
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -348,6 +331,30 @@ export default function ProjectDetail() {
   useEffect(() => {
     iframeSrcSet.current = false;
   }, [project?.slug]);
+
+  // When a genuinely NEW deployment starts running, retry loading the preview
+  useEffect(() => {
+    const runningId = runningDep?.id || null;
+    if (runningId && runningId !== lastRunningIdRef.current) {
+      const isInitialLoad = initialLoadRef.current;
+      lastRunningIdRef.current = runningId;
+      if (isInitialLoad) {
+        initialLoadRef.current = false;
+        return;
+      }
+      // Reset iframe and retry at increasing intervals
+      iframeSrcSet.current = false;
+      if (iframeRef.current) iframeRef.current.removeAttribute("src");
+
+      const retries = [3000, 8000, 15000, 25000];
+      const timeouts = retries.map(delay => setTimeout(() => {
+        if (iframeRef.current) {
+          iframeRef.current.src = previewUrl;
+        }
+      }, delay));
+      return () => timeouts.forEach(clearTimeout);
+    }
+  }, [runningDep?.id, previewUrl]);
 
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
