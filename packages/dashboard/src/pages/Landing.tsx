@@ -91,7 +91,7 @@ function LivePreview() {
         </div>
         <div style={t.urlChip}>rentals.justvibe.dev</div>
       </div>
-      <iframe src={demoUrl} style={t.iframe} title="Live demo" loading="eager" />
+      <iframe src={demoUrl} style={t.iframe} title="Live demo" loading="eager" scrolling="no" />
     </div>
   );
 }
@@ -107,7 +107,7 @@ const t = {
   browser: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", height: "100%" },
   browserBar: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.75rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
   urlChip: { flex: 1, padding: "0.2rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.3rem", fontSize: "0.72rem", color: "#60a5fa", fontFamily: "'JetBrains Mono', monospace" },
-  iframe: { width: "100%", height: "calc(100% - 34px + 20px)", border: "none", display: "block", background: "#fff", clipPath: "inset(0 0 20px 0)" },
+  iframe: { width: "100%", height: "calc(100% - 34px)", border: "none", display: "block", background: "#fff", pointerEvents: "none" as const },
 };
 
 const responsiveCSS = `
