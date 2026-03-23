@@ -113,6 +113,7 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
   return (
     <div style={styles.app}>
       <style>{`
+        html, body, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; }
         button:hover:not(:disabled) { opacity: 0.85; }
         button:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
         input:focus { border-color: #7c3aed !important; }
