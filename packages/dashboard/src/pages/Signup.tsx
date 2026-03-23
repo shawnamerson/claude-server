@@ -17,7 +17,6 @@ const s = {
 };
 
 export default function Signup({ onSignup }: { onSignup: (email: string, password: string, name: string) => Promise<void> }) {
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -34,7 +33,7 @@ export default function Signup({ onSignup }: { onSignup: (email: string, passwor
 
     setLoading(true);
     try {
-      await onSignup(email, password, name);
+      await onSignup(email, password, "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
@@ -49,12 +48,8 @@ export default function Signup({ onSignup }: { onSignup: (email: string, passwor
         <div style={s.subtitle}>Start building for free <span style={s.badge}>3 free deploys</span></div>
         <form onSubmit={handleSubmit} style={s.form}>
           <div>
-            <label style={s.label}>Name</label>
-            <input style={s.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="What should we call you?" autoFocus />
-          </div>
-          <div>
             <label style={s.label}>Email</label>
-            <input style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required />
+            <input style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required autoFocus />
           </div>
           <div>
             <label style={s.label}>Password</label>
