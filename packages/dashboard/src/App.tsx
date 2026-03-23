@@ -114,6 +114,11 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
     <div style={styles.app}>
       <style>{`
         html, body, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        *::-webkit-scrollbar { width: 6px; height: 6px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background: #1e1e30; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: #2e2e4a; }
+        * { scrollbar-width: thin; scrollbar-color: #1e1e30 transparent; }
         button:hover:not(:disabled) { opacity: 0.85; }
         button:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
         input:focus { border-color: #7c3aed !important; }
