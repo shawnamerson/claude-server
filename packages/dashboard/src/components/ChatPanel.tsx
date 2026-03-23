@@ -238,11 +238,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     }
   };
 
-  // Deploy: send a message and trigger a full deploy (costs a deploy)
-  const handleDeploy = () => {
-    const text = input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
+  // Deploy: trigger a full deploy (costs a deploy). Can be called from inline button.
+  const handleDeploy = (prompt?: string) => {
+    const text = prompt || input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
     if (!text || deploying || chatStreaming) return;
-    setInput("");
+    if (!prompt) setInput("");
     setHasSuggestion(false);
 
     activityRef.current = [];
@@ -275,13 +275,13 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
               </svg>
             </div>
             <div style={s.emptyTitle}>What do you want to build?</div>
-            <div style={s.emptySubtitle}>Describe your idea and Claude will generate a working app.</div>
+            <div style={s.emptySubtitle}>Describe your idea and click to deploy, or ask a question first.</div>
             <div style={s.suggestions}>
               {["A landing page for my startup", "A todo app with dark mode", "A real-time chat widget"].map((suggestion) => (
                 <button
                   key={suggestion}
                   style={s.suggestionBtn}
-                  onClick={() => { setInput(suggestion); }}
+                  onClick={() => handleDeploy(suggestion)}
                 >
                   {suggestion}
                 </button>
@@ -289,11 +289,23 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
             </div>
           </div>
         )}
-        {messages.map((msg) => (
-          <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
-            {msg.content}
-          </div>
-        ))}
+        {messages.map((msg, idx) => {
+          const isLast = idx === messages.length - 1;
+          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !isActive;
+          return (
+            <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
+              {msg.content}
+              {showDeployBtn && (
+                <button
+                  style={s.inlineDeployBtn}
+                  onClick={() => handleDeploy("Apply the changes you suggested in our conversation")}
+                >
+                  Apply & Deploy
+                </button>
+              )}
+            </div>
+          );
+        })}
         {isActive && (
           <div style={s.assistantMsg}>
             {activity.length > 0 ? (
@@ -305,38 +317,24 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         )}
       </div>
       <div style={s.inputArea}>
-        <div style={s.inputRow}>
-          <input
-            style={s.input}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleChat();
-              }
-            }}
-            placeholder={isActive ? statusLabel : "Ask a question... (Enter to send)"}
-            disabled={isActive}
-          />
-          <button
-            style={{ ...s.sendIcon, opacity: (isActive || !input.trim()) ? 0.3 : 1 }}
-            onClick={handleChat}
-            disabled={isActive || !input.trim()}
-            title="Send message (Enter)"
-          >&#8593;</button>
-        </div>
-        <button
-          style={{
-            ...s.deployBtn,
-            opacity: (isActive || (!input.trim() && !hasSuggestion)) ? 0.5 : 1,
-            ...(hasSuggestion && !isActive ? { background: "#16a34a", boxShadow: "0 0 12px rgba(22,163,74,0.4)" } : {}),
+        <input
+          style={s.input}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleChat();
+            }
           }}
-          onClick={handleDeploy}
-          disabled={isActive || (!input.trim() && !hasSuggestion)}
-        >
-          {hasSuggestion ? "Apply & Deploy" : "Deploy changes"}
-        </button>
+          placeholder={isActive ? statusLabel : "Ask about your project or describe changes..."}
+          disabled={isActive}
+        />
+        <button
+          style={{ ...s.sendBtn, opacity: (isActive || !input.trim()) ? 0.3 : 1 }}
+          onClick={handleChat}
+          disabled={isActive || !input.trim()}
+        >&#8593;</button>
       </div>
     </div>
   );
@@ -347,11 +345,10 @@ const s = {
   messages: { flex: 1, minHeight: 0, overflow: "auto", padding: "0.75rem", display: "flex", flexDirection: "column" as const, gap: "0.5rem" },
   userMsg: { alignSelf: "flex-end" as const, background: "#7c3aed", color: "#fff", padding: "0.5rem 0.75rem", borderRadius: "0.75rem 0.75rem 0.25rem 0.75rem", maxWidth: "85%", fontSize: "0.85rem", whiteSpace: "pre-wrap" as const, animation: "slideInRight 0.2s ease" },
   assistantMsg: { alignSelf: "flex-start" as const, background: "#1a1a2e", color: "#e0e0e0", padding: "0.5rem 0.75rem", borderRadius: "0.75rem 0.75rem 0.75rem 0.25rem", maxWidth: "90%", fontSize: "0.85rem", whiteSpace: "pre-wrap" as const, animation: "slideInLeft 0.2s ease" },
-  inputArea: { display: "flex", flexDirection: "column" as const, gap: "0.4rem", padding: "0.5rem 0.75rem", borderTop: "1px solid #1e1e30", background: "#0d0d14" },
-  inputRow: { display: "flex", gap: "0.35rem", alignItems: "center" },
+  inputArea: { display: "flex", gap: "0.5rem", padding: "0.5rem 0.75rem", borderTop: "1px solid #1e1e30", background: "#0d0d14", alignItems: "center" },
   input: { flex: 1, padding: "0.5rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.5rem", color: "#e0e0e0", fontSize: "0.85rem", outline: "none", fontFamily: "inherit" },
-  sendIcon: { width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1a2e", color: "#a78bfa", border: "1px solid #2e2e4a", borderRadius: "0.4rem", cursor: "pointer", fontSize: "1rem", fontWeight: 700, flexShrink: 0, fontFamily: "inherit", lineHeight: 1 },
-  deployBtn: { padding: "0.45rem 0.75rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" as const, fontFamily: "inherit", width: "100%" },
+  sendBtn: { width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "1rem", fontWeight: 700, flexShrink: 0, lineHeight: 1 },
+  inlineDeployBtn: { display: "block", marginTop: "0.6rem", padding: "0.5rem 1rem", background: "#16a34a", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, fontFamily: "inherit", boxShadow: "0 0 12px rgba(22,163,74,0.3)", width: "100%" },
   empty: { color: "#555", textAlign: "center" as const, padding: "2rem 1rem", fontSize: "0.85rem" },
   emptyState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flex: 1, gap: "0.75rem", padding: "2rem 1rem", animation: "fadeInUp 0.4s ease" },
   emptyIcon: { opacity: 0.6, marginBottom: "0.25rem" },
