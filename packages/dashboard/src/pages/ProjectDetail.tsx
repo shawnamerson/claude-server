@@ -189,46 +189,14 @@ export default function ProjectDetail() {
   const [selectedDeployment, setSelectedDeployment] = useState<string | null>(searchParams.get("dep"));
   const [sideTab, setSideTab] = useState<SideTab>((searchParams.get("tab") as SideTab) || "chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const lastRunningIdRef = useRef<string | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const iframeSrcSet = useRef(false);
-  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const lastRunningIdRef = useRef<string | null>(null);
   const runningDep = deployments.find((d) => d.status === "running");
 
-  // Double-buffer reload: load in a hidden iframe, swap when ready
   const reloadPreview = useCallback(() => {
-    const container = previewContainerRef.current;
-    if (!container) return;
-    const currentIframe = container.querySelector("iframe");
-    if (!currentIframe) return;
-
-    const url = currentIframe.src;
-    const hidden = document.createElement("iframe");
-    hidden.src = url;
-    hidden.title = "App Preview";
-    Object.assign(hidden.style, {
-      width: "100%", height: "100%", border: "none",
-      position: "absolute", top: "0", left: "0",
-      opacity: "0",
-    });
-
-    container.appendChild(hidden);
-    hidden.addEventListener("load", () => {
-      hidden.style.opacity = "1";
-      if (currentIframe !== hidden) {
-        currentIframe.remove();
-      }
-    });
-    // If load takes too long, swap anyway after 10s
-    setTimeout(() => {
-      if (hidden.style.opacity === "0") {
-        hidden.style.opacity = "1";
-        if (currentIframe !== hidden && currentIframe.parentNode) {
-          currentIframe.remove();
-        }
-      }
-    }, 10000);
+    setPreviewKey(k => k + 1);
   }, []);
 
   // (new-deploy retry effect moved below previewUrl declaration)
@@ -332,78 +300,50 @@ export default function ProjectDetail() {
   );
   const hasRunningDep = !!runningDep;
 
-  // Set iframe src once when preview URL is ready — never re-set on re-renders
-  useEffect(() => {
-    if (iframeRef.current && previewUrl && !iframeSrcSet.current) {
-      iframeRef.current.src = previewUrl;
-      iframeSrcSet.current = true;
-    }
-  }, [previewUrl, hasRunningDep]);
-
-  // Reset when deployment changes (e.g. navigating to different project)
-  useEffect(() => {
-    iframeSrcSet.current = false;
-  }, [project?.slug]);
-
-  // When a new deployment starts running, reset iframe and retry loading
+  // When a new deployment starts running, poll health then show preview
   useEffect(() => {
     const runningId = runningDep?.id || null;
-    if (runningId && runningId !== lastRunningIdRef.current) {
-      const isFirstDetection = lastRunningIdRef.current === null;
+    if (!runningId) return;
+
+    if (runningId !== lastRunningIdRef.current) {
+      const isPageLoad = lastRunningIdRef.current === null;
       lastRunningIdRef.current = runningId;
 
-      // If page loaded with an already-running deployment, just set src once
-      if (isFirstDetection && !isDeploying) {
-        iframeSrcSet.current = false; // Let the src-setting effect handle it
+      if (isPageLoad) {
+        // Page loaded with existing running app — show immediately
+        setPreviewReady(true);
         return;
       }
 
-      // Fresh deploy finished — reset and keep spinner until app loads
-      iframeSrcSet.current = false;
-      setIframeLoaded(false);
-      if (iframeRef.current) iframeRef.current.removeAttribute("src");
-
-      // Poll the server-side health check until the app is responding
+      // New deploy — poll health until app is ready
+      setPreviewReady(false);
       let cancelled = false;
-      const pollHealth = async () => {
-        const delays = [3000, 6000, 10000, 15000, 22000, 30000];
-        for (const delay of delays) {
-          await new Promise(r => setTimeout(r, delay));
+
+      const poll = async () => {
+        const authToken = (window as any).__authToken;
+        for (let i = 0; i < 10; i++) {
+          await new Promise(r => setTimeout(r, 3000));
           if (cancelled) return;
           try {
-            const authToken = (window as any).__authToken;
             const res = await fetch(`/api/app-health/${project?.slug}`, {
               headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
             });
             const data = await res.json();
             if (data.ok) {
-              if (iframeRef.current && previewUrl) {
-                iframeSrcSet.current = true;
-                iframeRef.current.src = previewUrl;
-              } else {
-                // Iframe not mounted yet — let the src-setting effect handle it
-                iframeSrcSet.current = false;
-              }
-              setIframeLoaded(true);
+              setPreviewReady(true);
+              setPreviewKey(k => k + 1);
               return;
             }
           } catch {}
         }
-        // Last resort — load anyway after all retries
-        if (!cancelled) {
-          if (iframeRef.current && previewUrl) {
-            iframeSrcSet.current = true;
-            iframeRef.current.src = previewUrl;
-          } else {
-            iframeSrcSet.current = false;
-          }
-          setIframeLoaded(true);
-        }
+        // Give up after 30s — show it anyway
+        setPreviewReady(true);
+        setPreviewKey(k => k + 1);
       };
-      pollHealth();
+      poll();
       return () => { cancelled = true; };
     }
-  }, [runningDep?.id, previewUrl, isDeploying]);
+  }, [runningDep?.id, project?.slug]);
 
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
@@ -483,23 +423,19 @@ export default function ProjectDetail() {
             <div style={styles.previewSpinner}>Building your app...</div>
             <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Chat tab for progress</div>
           </div>
-        ) : hasRunningDep ? (
+        ) : hasRunningDep && previewReady ? (
           <div ref={previewContainerRef} style={previewContainerStyle}>
             <iframe
-              ref={iframeRef}
-              style={{ ...previewIframeStyle, opacity: iframeLoaded ? 1 : 0 }}
+              key={previewKey}
+              src={previewUrl}
+              style={previewIframeStyle}
               title="App Preview"
-              onLoad={() => {
-                // Only mark as loaded if we actually set a src (not initial empty state)
-                if (iframeSrcSet.current) setIframeLoaded(true);
-              }}
             />
-            {!iframeLoaded && (
-              <div style={{ ...styles.previewEmpty, position: "absolute", inset: 0, zIndex: 1 }}>
-                <div style={spinnerStyle} />
-                <div style={styles.previewSpinner}>Starting your app...</div>
-              </div>
-            )}
+          </div>
+        ) : hasRunningDep && !previewReady ? (
+          <div style={styles.previewEmpty}>
+            <div style={spinnerStyle} />
+            <div style={styles.previewSpinner}>Starting your app...</div>
           </div>
         ) : (
           <div style={styles.previewEmpty}>
