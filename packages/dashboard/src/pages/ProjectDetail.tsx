@@ -416,7 +416,7 @@ export default function ProjectDetail() {
           <div style={{ display: sideTab === "logs" ? "flex" : "none", flex: 1, minHeight: 0, flexDirection: "column" }}>
             <LogViewer deploymentId={selectedDeployment} />
           </div>
-          {sideTab === "files" && <FileViewer projectId={project.id} />}
+          {/* Files tab renders in main area instead */}
           {sideTab === "env" && <EnvVarsPanel projectId={project.id} />}
           {sideTab === "database" && <DatabasePanel projectId={project.id} />}
           {sideTab === "domains" && <DomainsPanel projectId={project.id} projectSlug={project.slug} />}
@@ -424,8 +424,12 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* Main area — Preview */}
+      {/* Main area — Preview or File Editor */}
       <div style={styles.main}>
+        {sideTab === "files" ? (
+          <FileViewer projectId={project.id} />
+        ) : (
+        <>
         {/* URL bar */}
         <div style={styles.previewBar}>
           {hasRunningDep ? (
@@ -465,6 +469,8 @@ export default function ProjectDetail() {
             <div>No app running</div>
             <div style={{ fontSize: "0.8rem", color: "#444" }}>Use the Chat tab to describe what you want to build</div>
           </div>
+        )}
+        </>
         )}
       </div>
 
