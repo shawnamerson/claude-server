@@ -24,6 +24,9 @@ import fs from "fs";
 
 const app = express();
 
+// Trust proxy — we're behind Caddy reverse proxy
+app.set("trust proxy", 1);
+
 // CORS — restrict to configured domain in production
 const domain = process.env.DOMAIN || "localhost";
 const corsOrigins = domain === "localhost"
