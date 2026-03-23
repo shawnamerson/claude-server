@@ -69,6 +69,9 @@ export function generateCaddyfile(): string {
     caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${port}\n`;
     caddyfile += `    header -X-Frame-Options\n`;
     caddyfile += `    header -Content-Security-Policy\n`;
+    caddyfile += `    header -Cross-Origin-Opener-Policy\n`;
+    caddyfile += `    header -Cross-Origin-Resource-Policy\n`;
+    caddyfile += `    header -Cross-Origin-Embedder-Policy\n`;
     caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
     caddyfile += `}\n\n`;
   }
@@ -105,6 +108,9 @@ export function generateCaddyfile(): string {
       caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${mapping.port}\n`;
       caddyfile += `    header -X-Frame-Options\n`;
       caddyfile += `    header -Content-Security-Policy\n`;
+      caddyfile += `    header -Cross-Origin-Opener-Policy\n`;
+      caddyfile += `    header -Cross-Origin-Resource-Policy\n`;
+      caddyfile += `    header -Cross-Origin-Embedder-Policy\n`;
       caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
       caddyfile += `}\n\n`;
     }
