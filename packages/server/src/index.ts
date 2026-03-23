@@ -36,9 +36,9 @@ app.use("/api", billingRoutes);
 app.use("/api/projects", projectRoutes); // list/create don't need ownership; individual routes do
 app.use("/api/projects/:id", requireProjectOwner); // All sub-routes of /projects/:id
 app.use("/api/projects/:projectId", requireProjectOwner); // All sub-routes of /projects/:projectId
+app.use("/api", logRoutes); // Log streaming before auth check — uses unguessable deployment IDs
 app.use("/api/deployments/:id", requireDeploymentOwner); // Deployment-specific routes
 app.use("/api", deploymentRoutes);
-app.use("/api", logRoutes);
 app.use("/api", chatRoutes);
 app.use("/api", fileRoutes);
 app.use("/api", envRoutes);
