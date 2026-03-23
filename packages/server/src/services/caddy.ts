@@ -53,6 +53,11 @@ export function generateCaddyfile(): string {
   caddyfile += `    }\n`;
   caddyfile += `}\n\n`;
 
+  // Redirect www to root domain
+  caddyfile += `www.${domain} {\n`;
+  caddyfile += `    redir https://${domain}{uri} permanent\n`;
+  caddyfile += `}\n\n`;
+
   // Subdomain routing: slug.domain -> container port via host
   // Strip framing restrictions so apps render in the dashboard preview iframe
   for (const [_projectId, { port, slug }] of projectPorts) {
