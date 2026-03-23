@@ -324,7 +324,7 @@ export default function ProjectDetail() {
 
   // Set iframe src only once on mount — prevents re-renders from reloading it
   const iframeInitRef = useCallback((iframe: HTMLIFrameElement | null) => {
-    if (iframe && !iframe.src) {
+    if (iframe && !iframe.getAttribute("src")) {
       iframe.src = previewUrl;
     }
   }, [previewUrl]);
