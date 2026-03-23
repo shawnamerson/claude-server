@@ -312,13 +312,11 @@ export default function ProjectDetail() {
     </div>
   );
 
-  if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
-
   const isDeploying = deployments.some((d) => ["pending", "generating", "building", "deploying"].includes(d.status));
   const currentDep = deployments.find(d => d.status === "running") || deployments[0];
   const previewUrl = useMemo(
-    () => `${window.location.protocol}//${project.slug}.${window.location.hostname}`,
-    [project.slug]
+    () => project ? `${window.location.protocol}//${project.slug}.${window.location.hostname}` : "",
+    [project?.slug]
   );
   const hasRunningDep = !!runningDep;
 
@@ -328,6 +326,8 @@ export default function ProjectDetail() {
       iframe.src = previewUrl;
     }
   }, [previewUrl]);
+
+  if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
   return (
     <div style={styles.page}>
