@@ -4,7 +4,11 @@ import { useEffect, useState, useRef } from "react";
 function AnimatedTerminal() {
   const [lines, setLines] = useState<Array<{ text: string; style: Record<string, string>; typed?: boolean }>>([]);
   const [cursorVisible, setCursorVisible] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Use the actual deployed vacation rental app as the demo
+  const demoAppUrl = `${window.location.protocol}//vacation-rental.${window.location.hostname}`;
 
   useEffect(() => {
     const cursor = setInterval(() => setCursorVisible(v => !v), 530);
@@ -13,9 +17,9 @@ function AnimatedTerminal() {
 
   useEffect(() => {
     const script: Array<{ delay: number; line: { text: string; style: Record<string, string>; typed?: boolean } }> = [
-      { delay: 500, line: { text: "", style: {}, typed: true } }, // Start typing
+      { delay: 500, line: { text: "", style: {}, typed: true } },
       { delay: 0, line: { text: "You: Build me a vacation rental site like Airbnb", style: { color: "#e0e0e0" }, typed: true } },
-      { delay: 2000, line: { text: "", style: {} } }, // pause
+      { delay: 2000, line: { text: "", style: {} } },
       { delay: 800, line: { text: "Claude: I'll create a rental platform with property listings, search, booking calendar, and reviews...", style: { color: "#a78bfa" } } },
       { delay: 1200, line: { text: "Writing 6 files...", style: { color: "#888", fontSize: "0.78rem" } } },
       { delay: 400, line: { text: "  + package.json (245 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
@@ -28,8 +32,10 @@ function AnimatedTerminal() {
       { delay: 600, line: { text: "Syntax OK", style: { color: "#888", fontSize: "0.78rem" } } },
       { delay: 500, line: { text: "Starting app...", style: { color: "#888", fontSize: "0.78rem" } } },
       { delay: 1500, line: { text: "Deployed! Live at rentals.justvibe.dev", style: { color: "#34d399", fontWeight: "600", fontSize: "0.9rem" } } },
-      { delay: 3000, line: { text: "", style: {} } }, // pause before repeat
     ];
+
+    // Total time for the script to play out
+    const scriptDuration = script.reduce((sum, s) => sum + s.delay, 0);
 
     let timeouts: ReturnType<typeof setTimeout>[] = [];
     let cancelled = false;
@@ -37,9 +43,10 @@ function AnimatedTerminal() {
     function runScript() {
       if (cancelled) return;
       setLines([]);
+      setShowPreview(false);
       let cumDelay = 0;
 
-      script.forEach((item, i) => {
+      script.forEach((item) => {
         if (!item.line.text) {
           cumDelay += item.delay;
           return;
@@ -48,7 +55,6 @@ function AnimatedTerminal() {
         const t = setTimeout(() => {
           if (cancelled) return;
           setLines(prev => [...prev, item.line]);
-          // Auto-scroll
           if (containerRef.current) {
             containerRef.current.scrollTop = containerRef.current.scrollHeight;
           }
@@ -56,11 +62,16 @@ function AnimatedTerminal() {
         timeouts.push(t);
       });
 
-      // Loop
-      const total = script.reduce((sum, s) => sum + s.delay, 0);
+      // Show preview after deploy line
+      const previewT = setTimeout(() => {
+        if (!cancelled) setShowPreview(true);
+      }, scriptDuration + 500);
+      timeouts.push(previewT);
+
+      // Loop after showing preview for a while
       const restart = setTimeout(() => {
         if (!cancelled) runScript();
-      }, total + 1000);
+      }, scriptDuration + 8000);
       timeouts.push(restart);
     }
 
@@ -72,29 +83,70 @@ function AnimatedTerminal() {
   }, []);
 
   return (
-    <div style={termStyles.terminal}>
-      <div style={termStyles.bar}>
-        <div style={termStyles.dots}>
-          <span style={{ ...termStyles.dot, background: "#f87171" }} />
-          <span style={{ ...termStyles.dot, background: "#f59e0b" }} />
-          <span style={{ ...termStyles.dot, background: "#34d399" }} />
+    <div style={{ maxWidth: "600px", margin: "0 auto" }}>
+      {/* Terminal */}
+      <div style={{ ...termStyles.terminal, borderRadius: showPreview ? "0.75rem 0.75rem 0 0" : "0.75rem", transition: "border-radius 0.3s" }}>
+        <div style={termStyles.bar}>
+          <div style={termStyles.dots}>
+            <span style={{ ...termStyles.dot, background: "#f87171" }} />
+            <span style={{ ...termStyles.dot, background: "#f59e0b" }} />
+            <span style={{ ...termStyles.dot, background: "#34d399" }} />
+          </div>
+          <span style={termStyles.title}>JustVibe</span>
         </div>
-        <span style={termStyles.title}>JustVibe</span>
+        <div ref={containerRef} style={termStyles.body}>
+          {lines.map((line, i) => (
+            <div key={i} style={{ ...termStyles.line, ...line.style }}>
+              {line.text}
+              {i === 0 && line.typed && (
+                <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed", transition: "opacity 0.1s" }}>|</span>
+              )}
+            </div>
+          ))}
+          {lines.length === 0 && (
+            <div style={termStyles.line}>
+              <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed" }}>|</span>
+            </div>
+          )}
+        </div>
       </div>
-      <div ref={containerRef} style={termStyles.body}>
-        {lines.map((line, i) => (
-          <div key={i} style={{ ...termStyles.line, ...line.style }}>
-            {line.text}
-            {i === 0 && line.typed && (
-              <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed", transition: "opacity 0.1s" }}>|</span>
-            )}
+
+      {/* Live app preview — slides in after deploy */}
+      <div style={{
+        maxHeight: showPreview ? "350px" : "0",
+        opacity: showPreview ? 1 : 0,
+        overflow: "hidden",
+        transition: "max-height 0.6s ease, opacity 0.4s ease",
+        background: "#fff",
+        borderRadius: "0 0 0.75rem 0.75rem",
+        border: showPreview ? "1px solid #1e1e30" : "none",
+        borderTop: "none",
+      }}>
+        {/* Mini browser chrome */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: "0.5rem",
+          padding: "0.4rem 0.75rem", background: "#0d0d14",
+          borderTop: "1px solid #1e1e30",
+        }}>
+          <div style={termStyles.dots}>
+            <span style={{ ...termStyles.dot, width: "8px", height: "8px", background: "#f87171" }} />
+            <span style={{ ...termStyles.dot, width: "8px", height: "8px", background: "#f59e0b" }} />
+            <span style={{ ...termStyles.dot, width: "8px", height: "8px", background: "#34d399" }} />
           </div>
-        ))}
-        {lines.length === 0 && (
-          <div style={termStyles.line}>
-            <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed" }}>|</span>
+          <div style={{
+            flex: 1, padding: "0.2rem 0.5rem", background: "#12121a",
+            borderRadius: "0.25rem", fontSize: "0.7rem", color: "#60a5fa",
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            rentals.justvibe.dev
           </div>
-        )}
+        </div>
+        <iframe
+          src={showPreview ? demoAppUrl : "about:blank"}
+          style={{ width: "100%", height: "310px", border: "none", display: "block" }}
+          title="Demo app preview"
+          loading="lazy"
+        />
       </div>
     </div>
   );
