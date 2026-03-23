@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { api, Project, Deployment } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
@@ -180,28 +180,19 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
-  const [showPreview, setShowPreview] = useState(false);
-  const [prevHadRunning, setPrevHadRunning] = useState(false);
+  const lastRunningIdRef = useRef<string | null>(null);
+  const runningDep = deployments.find((d) => d.status === "running");
 
-  // When a deployment becomes running, wait for container startup then show preview
-  const hasRunning = deployments.some(d => d.status === "running");
+  // When a NEW running deployment appears, refresh preview after delay
   useEffect(() => {
-    if (hasRunning && !prevHadRunning) {
-      // New deploy just went live — wait for npm install + server start
-      setShowPreview(false);
-      const timer = setTimeout(() => {
-        setShowPreview(true);
-        setPreviewKey(k => k + 1);
-      }, 5000);
-      // Then refresh again at 10s in case first load cached an error
-      const retry = setTimeout(() => setPreviewKey(k => k + 1), 10000);
-      return () => { clearTimeout(timer); clearTimeout(retry); };
-    } else if (hasRunning) {
-      // Already running on page load
-      setShowPreview(true);
+    const runningId = runningDep?.id || null;
+    if (runningId && runningId !== lastRunningIdRef.current) {
+      lastRunningIdRef.current = runningId;
+      // Delay to let npm install + server start finish
+      const timer = setTimeout(() => setPreviewKey(k => k + 1), 5000);
+      return () => clearTimeout(timer);
     }
-    setPrevHadRunning(hasRunning);
-  }, [hasRunning, prevHadRunning]);
+  }, [runningDep?.id]);
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -283,7 +274,6 @@ export default function ProjectDetail() {
 
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
-  const runningDep = deployments.find((d) => d.status === "running");
   const isDeploying = deployments.some((d) => ["pending", "generating", "building", "deploying"].includes(d.status));
   const currentDep = deployments.find(d => d.status === "running") || deployments[0];
   const previewUrl = `${window.location.protocol}//${project.slug}.${window.location.hostname}`;
@@ -361,7 +351,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Preview iframe or placeholder */}
-        {runningDep && showPreview ? (
+        {runningDep ? (
           <div style={styles.preview}>
             <iframe
               key={previewKey}
@@ -372,12 +362,7 @@ export default function ProjectDetail() {
           </div>
         ) : (
           <div style={styles.previewEmpty}>
-            {runningDep && !showPreview ? (
-              <>
-                <div style={styles.previewSpinner}>Starting up...</div>
-                <div style={{ fontSize: "0.8rem", color: "#444" }}>Installing dependencies and starting server</div>
-              </>
-            ) : isDeploying ? (
+            {isDeploying ? (
               <>
                 <div style={styles.previewSpinner}>Building your app...</div>
                 <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Logs tab for progress</div>
