@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
-import { sendVerificationEmail } from "../services/email.js";
+import { sendVerificationEmail, sendWelcomeEmail } from "../services/email.js";
 import "../types.js";
 
 const router = Router();
@@ -84,6 +84,7 @@ router.post("/auth/verify", (req: Request, res: Response) => {
   }
 
   db.prepare("UPDATE users SET email_verified = 1, verification_code = NULL WHERE id = ?").run(user.id);
+  sendWelcomeEmail(user.email);
   res.json({ ok: true });
 });
 

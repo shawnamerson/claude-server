@@ -38,3 +38,52 @@ export async function sendVerificationEmail(to: string, code: string): Promise<b
     return false;
   }
 }
+
+export async function sendWelcomeEmail(to: string): Promise<boolean> {
+  if (!resend) return false;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: "Welcome to VibeStack — let's build something",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 28px; font-weight: 700; color: #7c3aed; margin: 0;">Welcome to VibeStack</h1>
+          </div>
+          <p style="font-size: 16px; color: #333; line-height: 1.6; margin-bottom: 16px;">
+            You're verified and ready to go. Here's how to get started:
+          </p>
+          <div style="background: #f9fafb; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+            <p style="font-size: 15px; color: #333; margin: 0 0 12px; line-height: 1.5;">
+              <strong>1. Create a project</strong> — Give it a name and describe what you want to build.
+            </p>
+            <p style="font-size: 15px; color: #333; margin: 0 0 12px; line-height: 1.5;">
+              <strong>2. Chat with Claude</strong> — Ask questions, get suggestions, iterate on your idea.
+            </p>
+            <p style="font-size: 15px; color: #333; margin: 0; line-height: 1.5;">
+              <strong>3. Deploy</strong> — Click Apply & Deploy and your app is live with a real URL, database, and HTTPS.
+            </p>
+          </div>
+          <div style="text-align: center; margin-bottom: 24px;">
+            <a href="https://vibestack.build/projects" style="display: inline-block; padding: 12px 32px; background: #7c3aed; color: #fff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">Start building</a>
+          </div>
+          <p style="font-size: 14px; color: #888; line-height: 1.5; margin-bottom: 8px;">
+            Your free plan includes 1 project, 20 deploys, and 1,000 chats per month. Need more? <a href="https://vibestack.build/billing" style="color: #7c3aed; text-decoration: none;">Upgrade anytime</a>.
+          </p>
+          <p style="font-size: 14px; color: #888; line-height: 1.5;">
+            Questions? Just reply to this email or reach us at <a href="mailto:hello@vibestack.build" style="color: #7c3aed; text-decoration: none;">hello@vibestack.build</a>.
+          </p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+          <p style="font-size: 12px; color: #aaa; text-align: center;">VibeStack — Describe it. Ship it.</p>
+        </div>
+      `,
+    });
+    console.log(`Welcome email sent to ${to}`);
+    return true;
+  } catch (err) {
+    console.error("Failed to send welcome email:", err instanceof Error ? err.message : String(err));
+    return false;
+  }
+}
