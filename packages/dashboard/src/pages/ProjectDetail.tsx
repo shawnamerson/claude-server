@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { api, Project, Deployment } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
@@ -170,6 +170,9 @@ const styles = {
   },
 };
 
+const previewContainerStyle = { ...styles.preview, position: "relative" as const };
+const previewIframeStyle = { ...styles.previewIframe, position: "absolute" as const, top: 0, left: 0 };
+
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -313,7 +316,18 @@ export default function ProjectDetail() {
 
   const isDeploying = deployments.some((d) => ["pending", "generating", "building", "deploying"].includes(d.status));
   const currentDep = deployments.find(d => d.status === "running") || deployments[0];
-  const previewUrl = `${window.location.protocol}//${project.slug}.${window.location.hostname}`;
+  const previewUrl = useMemo(
+    () => `${window.location.protocol}//${project.slug}.${window.location.hostname}`,
+    [project.slug]
+  );
+  const hasRunningDep = !!runningDep;
+
+  // Set iframe src only once on mount — prevents re-renders from reloading it
+  const iframeInitRef = useCallback((iframe: HTMLIFrameElement | null) => {
+    if (iframe && !iframe.src) {
+      iframe.src = previewUrl;
+    }
+  }, [previewUrl]);
 
   return (
     <div style={styles.page}>
@@ -374,11 +388,11 @@ export default function ProjectDetail() {
           <div style={styles.urlBar}>
             <input
               style={styles.urlInput}
-              value={runningDep ? previewUrl : ""}
+              value={hasRunningDep ? previewUrl : ""}
               placeholder="Deploy to see preview"
               readOnly
             />
-            {runningDep && (
+            {hasRunningDep && (
               <>
                 <button style={styles.refreshBtn} onClick={reloadPreview}>Refresh</button>
                 <a href={previewUrl} target="_blank" rel="noreferrer" style={styles.openBtn}>Open</a>
@@ -388,11 +402,11 @@ export default function ProjectDetail() {
         </div>
 
         {/* Preview iframe or placeholder */}
-        {runningDep ? (
-          <div ref={previewContainerRef} style={{ ...styles.preview, position: "relative" }}>
+        {hasRunningDep ? (
+          <div ref={previewContainerRef} style={previewContainerStyle}>
             <iframe
-              src={previewUrl}
-              style={{ ...styles.previewIframe, position: "absolute", top: 0, left: 0 }}
+              ref={iframeInitRef}
+              style={previewIframeStyle}
               title="App Preview"
             />
           </div>
