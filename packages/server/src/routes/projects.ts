@@ -30,8 +30,14 @@ router.get("/", (req: Request, res: Response) => {
   const projects = db
     .prepare(
       `SELECT p.*,
-        (SELECT d.status FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1) as latest_status,
-        (SELECT d.port FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1) as latest_port,
+        COALESCE(
+          (SELECT d.status FROM deployments d WHERE d.project_id = p.id AND d.status = 'running' LIMIT 1),
+          (SELECT d.status FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1)
+        ) as latest_status,
+        COALESCE(
+          (SELECT d.port FROM deployments d WHERE d.project_id = p.id AND d.status = 'running' LIMIT 1),
+          (SELECT d.port FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1)
+        ) as latest_port,
         (SELECT COUNT(*) FROM deployments d WHERE d.project_id = p.id) as deploy_count,
         (SELECT COALESCE(SUM(d.cost_cents), 0) FROM deployments d WHERE d.project_id = p.id) as total_cost_cents
        FROM projects p ${whereClause} ORDER BY p.updated_at DESC`
