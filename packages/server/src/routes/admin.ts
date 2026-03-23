@@ -52,16 +52,28 @@ router.use("/stats", isAdmin);
 router.use("/users", isAdmin);
 router.use("/deployments", isAdmin);
 
+// Admin emails to exclude from user counts
+function getAdminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+}
+
 // GET /stats — dashboard overview
 router.get("/stats", async (_req: Request, res: Response) => {
   try {
     const db = getDb();
+    const adminEmails = getAdminEmails();
+    const excludeAdmins = adminEmails.length > 0
+      ? `WHERE email NOT IN (${adminEmails.map(() => "?").join(",")})`
+      : "";
+    const andExcludeAdmins = adminEmails.length > 0
+      ? `AND u.email NOT IN (${adminEmails.map(() => "?").join(",")})`
+      : "";
 
-    // User stats
-    const totalUsers = (db.prepare("SELECT COUNT(*) as cnt FROM users").get() as { cnt: number }).cnt;
+    // User stats (excluding admins)
+    const totalUsers = (db.prepare(`SELECT COUNT(*) as cnt FROM users ${excludeAdmins}`).get(...adminEmails) as { cnt: number }).cnt;
     const usersByPlan = db.prepare(
-      "SELECT COALESCE(plan, 'free') as plan, COUNT(*) as cnt FROM users GROUP BY COALESCE(plan, 'free')"
-    ).all() as Array<{ plan: string; cnt: number }>;
+      `SELECT COALESCE(plan, 'free') as plan, COUNT(*) as cnt FROM users ${excludeAdmins} GROUP BY COALESCE(plan, 'free')`
+    ).all(...adminEmails) as Array<{ plan: string; cnt: number }>;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -71,13 +83,13 @@ router.get("/stats", async (_req: Request, res: Response) => {
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weekStr = weekAgo.toISOString();
 
-    const signupsToday = (db.prepare("SELECT COUNT(*) as cnt FROM users WHERE created_at >= ?").get(todayStr) as { cnt: number }).cnt;
-    const signupsThisWeek = (db.prepare("SELECT COUNT(*) as cnt FROM users WHERE created_at >= ?").get(weekStr) as { cnt: number }).cnt;
+    const signupsToday = (db.prepare(`SELECT COUNT(*) as cnt FROM users WHERE created_at >= ? ${adminEmails.length ? `AND email NOT IN (${adminEmails.map(() => "?").join(",")})` : ""}`).get(todayStr, ...adminEmails) as { cnt: number }).cnt;
+    const signupsThisWeek = (db.prepare(`SELECT COUNT(*) as cnt FROM users WHERE created_at >= ? ${adminEmails.length ? `AND email NOT IN (${adminEmails.map(() => "?").join(",")})` : ""}`).get(weekStr, ...adminEmails) as { cnt: number }).cnt;
 
-    // Project stats
-    const totalProjects = (db.prepare("SELECT COUNT(*) as cnt FROM projects").get() as { cnt: number }).cnt;
-    const activeProjects = (db.prepare("SELECT COUNT(DISTINCT project_id) as cnt FROM deployments WHERE status = 'running'").get() as { cnt: number }).cnt;
-    const sleepingProjects = (db.prepare("SELECT COUNT(DISTINCT project_id) as cnt FROM deployments WHERE status = 'sleeping'").get() as { cnt: number }).cnt;
+    // Project stats (excluding admin projects)
+    const totalProjects = (db.prepare(`SELECT COUNT(*) as cnt FROM projects p JOIN users u ON u.id = p.user_id WHERE 1=1 ${andExcludeAdmins}`).get(...adminEmails) as { cnt: number }).cnt;
+    const activeProjects = (db.prepare(`SELECT COUNT(DISTINCT d.project_id) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id JOIN users u ON u.id = p.user_id WHERE d.status = 'running' ${andExcludeAdmins}`).get(...adminEmails) as { cnt: number }).cnt;
+    const sleepingProjects = (db.prepare(`SELECT COUNT(DISTINCT d.project_id) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id JOIN users u ON u.id = p.user_id WHERE d.status = 'sleeping' ${andExcludeAdmins}`).get(...adminEmails) as { cnt: number }).cnt;
 
     // Deployment stats
     const totalDeployments = (db.prepare("SELECT COUNT(*) as cnt FROM deployments").get() as { cnt: number }).cnt;
@@ -150,14 +162,20 @@ router.get("/users", (_req: Request, res: Response) => {
     monthStart.setHours(0, 0, 0, 0);
     const monthStr = monthStart.toISOString();
 
+    const adminEmails = getAdminEmails();
+    const adminFilter = adminEmails.length > 0
+      ? `WHERE u.email NOT IN (${adminEmails.map(() => "?").join(",")})`
+      : "";
+
     const users = db.prepare(`
       SELECT
         u.id, u.email, u.plan, u.email_verified, u.created_at,
         (SELECT COUNT(*) FROM projects WHERE user_id = u.id) as project_count,
         (SELECT COUNT(*) FROM deployments d JOIN projects p ON p.id = d.project_id WHERE p.user_id = u.id AND d.created_at >= ?) as deploys_this_month
       FROM users u
+      ${adminFilter}
       ORDER BY u.created_at DESC
-    `).all(monthStr) as Array<{
+    `).all(monthStr, ...adminEmails) as Array<{
       id: string;
       email: string;
       plan: string;
