@@ -115,6 +115,37 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
 
     addLog(deploymentId, "system", `Project ready — ${result.files.length} files`);
 
+    // Pre-deploy: auto-fix known crash patterns in generated code
+    try {
+      const fs = await import("fs");
+      const serverPath = `${project.source_path}/server.js`;
+      if (fs.existsSync(serverPath)) {
+        let code = fs.readFileSync(serverPath, "utf-8");
+        let fixed = false;
+
+        // Fix: app.get('*', ...) → app.use catch-all (Express 5 / path-to-regexp v8 crash)
+        if (code.match(/\.(get|use)\s*\(\s*['"`]\*['"`]/)) {
+          code = code.replace(/\.(get|use)\s*\(\s*['"`]\*['"`]\s*,/g, ".use(");
+          fixed = true;
+          addLog(deploymentId, "system", "Auto-fix: replaced wildcard route '*' with catch-all middleware");
+        }
+
+        // Fix: unhandled database connection — wrap pool creation in try/catch
+        if (code.includes("new Pool(") && !code.includes("try") && code.includes("DATABASE_URL")) {
+          code = code.replace(
+            /(const pool\s*=\s*new Pool\([^)]*\))/,
+            "let pool;\ntry {\n  $1;\n} catch(e) { console.log('Database not available, running without persistence'); pool = null; }"
+          );
+          fixed = true;
+          addLog(deploymentId, "system", "Auto-fix: added try/catch around database connection");
+        }
+
+        if (fixed) {
+          fs.writeFileSync(serverPath, code);
+        }
+      }
+    } catch {}
+
     // Pre-deploy checks: npm install + syntax check
     try {
       const { DevContainer } = await import("../services/generator.js");
@@ -129,7 +160,7 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
         addLog(deploymentId, "system", "Dependencies installed");
       }
 
-      // Syntax check
+      // Syntax check + quick start test
       addLog(deploymentId, "system", "Checking syntax...");
       const syntaxOutput = await devC.exec("node -c server.js 2>&1", (msg: string) => addLog(deploymentId, "system", msg));
       if (syntaxOutput.includes("SyntaxError") || syntaxOutput.includes("Error")) {
@@ -292,7 +323,7 @@ async function autoFixAndRedeploy(
     const fixResult = await modifyProject(
       project.source_path,
       [],
-      `The application crashed. Fix it quickly.\n\nError:\n\`\`\`\n${errorText.slice(-1500)}\n\`\`\`\n\nBe fast: read ONLY the file that caused the error, fix it, and call done. Do NOT read every file in the project. Common fixes:\n- Missing require/import: add it\n- ESM/CJS mismatch: use require() not import\n- SQL error: fix the query\n- Missing dependency: add to package.json\n- Port conflict: use process.env.PORT`,
+      `The application crashed. Fix it quickly.\n\nError:\n\`\`\`\n${errorText.slice(-1500)}\n\`\`\`\n\nBe fast: read ONLY the file that caused the error, fix it, and call done. Do NOT read every file.\n\nCommon fixes:\n- "Missing parameter name" / PathError: NEVER use app.get('*', ...) — use app.use((req, res) => ...) for catch-all\n- Database connection error: wrap db init in try/catch, don't crash if DATABASE_URL is missing\n- ESM/CJS mismatch: use require() not import\n- Missing dependency: add to package.json with version "*"\n- Use crypto.randomUUID() instead of uuid package`,
       log
     );
 
