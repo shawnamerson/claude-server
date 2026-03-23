@@ -85,6 +85,30 @@ router.get("/sitemap.xml", (_req: Request, res: Response) => {
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://${domain}/about</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://${domain}/blog</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://${domain}/faq</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://${domain}/privacy</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://${domain}/login</loc>
     <lastmod>${now}</lastmod>
     <changefreq>monthly</changefreq>
@@ -114,7 +138,8 @@ const BOT_UA = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebo
 export function prerenderMiddleware(req: Request, res: Response, next: () => void) {
   const ua = req.headers["user-agent"] || "";
   if (!BOT_UA.test(ua)) return next();
-  if (req.path !== "/" && req.path !== "/signup" && req.path !== "/login") return next();
+  const prerenderedPaths = ["/", "/signup", "/login", "/about", "/blog", "/faq", "/privacy"];
+  if (!prerenderedPaths.includes(req.path)) return next();
 
   const domain = config.domain;
   const ogImage = `https://${domain}/og-image.png`;

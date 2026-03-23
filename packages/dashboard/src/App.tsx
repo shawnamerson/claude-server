@@ -8,6 +8,10 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Billing from "./pages/Billing";
+import About from "./pages/About";
+import Blog from "./pages/Blog";
+import FAQ from "./pages/FAQ";
+import Privacy from "./pages/Privacy";
 import { useAuth } from "./hooks/useAuth";
 
 const styles = {
@@ -170,8 +174,20 @@ export default function App() {
 
   const isLanding = location.pathname === "/";
   const isAuth = location.pathname === "/login" || location.pathname === "/signup";
+  const isPublicPage = ["/about", "/blog", "/faq", "/privacy"].includes(location.pathname);
 
   if (isLanding) return <Landing />;
+
+  if (isPublicPage) {
+    return (
+      <Routes>
+        <Route path="/about" element={<About />} />
+        <Route path="/blog" element={<Blog />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/privacy" element={<Privacy />} />
+      </Routes>
+    );
+  }
 
   if (isAuth) {
     return (

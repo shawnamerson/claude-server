@@ -253,7 +253,15 @@ export default function Landing() {
         <Link to="/signup" style={s.cta}>Start building free</Link>
       </div>
 
-      <div style={s.footer}>VibeStack — Describe it. Ship it.</div>
+      <div style={s.footer}>
+        <div style={{ display: "flex", justifyContent: "center", gap: "1.5rem", marginBottom: "0.75rem" }}>
+          <Link to="/about" style={s.footerLink}>About</Link>
+          <Link to="/blog" style={s.footerLink}>Blog</Link>
+          <Link to="/faq" style={s.footerLink}>FAQ</Link>
+          <Link to="/privacy" style={s.footerLink}>Privacy & Terms</Link>
+        </div>
+        <div>VibeStack — Describe it. Ship it.</div>
+      </div>
     </div>
   );
 }
@@ -301,4 +309,5 @@ const s = {
   finalTitle: { fontSize: "2rem", fontWeight: 700, marginBottom: "0.75rem" },
   finalSub: { fontSize: "1.05rem", color: "#888", marginBottom: "2rem" },
   footer: { textAlign: "center" as const, padding: "2rem", borderTop: "1px solid #1e1e30", color: "#444", fontSize: "0.85rem" },
+  footerLink: { color: "#666", textDecoration: "none", fontSize: "0.82rem" },
 };
