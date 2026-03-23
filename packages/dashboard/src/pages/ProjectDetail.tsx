@@ -188,28 +188,14 @@ export default function ProjectDetail() {
     const currentStatus = deployments[0]?.status;
     if (prevStatus && prevStatus !== "running" && currentStatus === "running") {
       setPreviewReady(false);
-      let attempts = 0;
-      const checkHealth = setInterval(async () => {
-        attempts++;
-        try {
-          const url = `${window.location.protocol}//${project?.slug}.${window.location.hostname}/health`;
-          const res = await fetch(url, { mode: "no-cors" });
-          // no-cors returns opaque response, but if it doesn't throw, the server is up
-          clearInterval(checkHealth);
-          setPreviewReady(true);
-          setPreviewKey(k => k + 1);
-        } catch {
-          if (attempts > 15) {
-            // Give up after 15 attempts, show anyway
-            clearInterval(checkHealth);
-            setPreviewReady(true);
-            setPreviewKey(k => k + 1);
-          }
-        }
-      }, 1000);
-      return () => clearInterval(checkHealth);
-    } else if (currentStatus === "running" && !previewReady) {
-      // Already running on page load
+      // Give the container 3 seconds to start serving, then show preview
+      const timer = setTimeout(() => {
+        setPreviewReady(true);
+        setPreviewKey(k => k + 1);
+      }, 3000);
+      return () => clearTimeout(timer);
+    } else if (currentStatus === "running") {
+      // Already running on page load — show immediately
       setPreviewReady(true);
     }
     setPrevStatus(currentStatus || null);
