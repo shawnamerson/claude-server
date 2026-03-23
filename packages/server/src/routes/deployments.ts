@@ -374,15 +374,27 @@ async function monitorContainer(project: Project, deploymentId: string, containe
   let checkCount = 0;
 
   while (autoFixCount < MAX_AUTO_FIXES) {
-    // Give containers more time on first few checks (startup grace period)
-    const delay = checkCount < 2 ? 8000 : 15000;
+    // First check is quick to catch immediate crashes, then longer for startup
+    const delay = checkCount === 0 ? 3000 : checkCount < 3 ? 8000 : 15000;
     await new Promise((r) => setTimeout(r, delay));
     checkCount++;
 
     // Check if deployment is still supposed to be running
     const dep = db.prepare("SELECT status, container_id, port FROM deployments WHERE id = ?").get(deploymentId) as { status: string; container_id: string; port: number | null } | undefined;
     if (!dep) return;
-    if (dep.status === "stopped" || dep.status === "failed") return;
+    if (dep.status === "stopped") return;
+    // If already marked failed, try to auto-fix it
+    if (dep.status === "failed" && autoFixCount < MAX_AUTO_FIXES) {
+      autoFixCount++;
+      addLog(deploymentId, "system", `Auto-fix attempt ${autoFixCount}/${MAX_AUTO_FIXES} (crashed on startup)`);
+      const newId = await autoFixAndRedeploy(project, deploymentId, "App crashed on startup");
+      if (!newId) return;
+      currentContainerId = newId;
+      checkCount = 0;
+      continue;
+    } else if (dep.status === "failed") {
+      return;
+    }
     if (dep.status !== "running") continue; // Still building/deploying
 
     currentContainerId = dep.container_id || currentContainerId;
