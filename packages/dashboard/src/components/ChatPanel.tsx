@@ -159,9 +159,12 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setLastFinishedDepId(deploymentId);
       activityRef.current = [];
       setActivity([]);
-      api.getChatHistory(projectId).then(setMessages);
+      // Don't overwrite messages if chat is actively streaming
+      if (!chatStreaming) {
+        api.getChatHistory(projectId).then(setMessages);
+      }
     }
-  }, [deploying]);
+  }, [deploying, chatStreaming, deploymentId, projectId]);
 
   useEffect(() => {
     if (messagesRef.current) {
@@ -239,6 +242,8 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       // Detect if Claude suggested code changes
       const suggestsChanges = /```|change|modify|update|add|fix|replace|edit|would look like|here's how/i.test(assistantText);
       setHasSuggestion(suggestsChanges);
+      // Sync with DB to get proper message IDs
+      api.getChatHistory(projectId).then(setMessages);
     }
   };
 
