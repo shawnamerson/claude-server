@@ -5,6 +5,7 @@ import NewProject from "./pages/NewProject";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Billing from "./pages/Billing";
 import { useAuth } from "./hooks/useAuth";
 
 const styles = {
@@ -77,7 +78,7 @@ function AppShell({ children, user, onLogout }: { children: React.ReactNode; use
         <div style={styles.navRight}>
           {user && (
             <>
-              <span style={styles.credits}>{user.credits} credits</span>
+              <Link to="/billing" style={{ fontSize: "0.8rem", color: "#a78bfa", textDecoration: "none" }}>Billing</Link>
               <span style={{ fontSize: "0.8rem", color: "#888" }}>{user.email}</span>
               <button style={styles.logoutBtn} onClick={onLogout}>Logout</button>
             </>
@@ -147,6 +148,7 @@ export default function App() {
         <Route path="/projects" element={<ProjectList />} />
         <Route path="/new" element={<NewProject />} />
         <Route path="/project/:id" element={<ProjectDetail />} />
+        <Route path="/billing" element={<Billing />} />
       </Routes>
     </AppShell>
   );

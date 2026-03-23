@@ -214,6 +214,12 @@ export const api = {
       body: JSON.stringify({ sql }),
     }),
 
+  // Billing
+  getBillingStatus: () => request<{ plan: string; deploysThisMonth: number; deployLimit: number; projectCount: number; projectLimit: number; hasSubscription: boolean }>("/billing/status"),
+  getBillingPlans: () => request<Array<{ id: string; name: string; price: number; deploys: number; projects: number; features: string[] }>>("/billing/plans"),
+  subscribe: (planId: string) => request<{ url: string }>("/billing/subscribe", { method: "POST", body: JSON.stringify({ planId }) }),
+  cancelSubscription: () => request<{ ok: boolean }>("/billing/cancel", { method: "POST" }),
+
   // Domains
   getDomains: (projectId: string) => request<CustomDomain[]>(`/projects/${projectId}/domains`),
   addDomain: (projectId: string, domain: string) =>

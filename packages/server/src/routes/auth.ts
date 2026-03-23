@@ -195,18 +195,66 @@ export function requireDeploymentOwner(req: Request, res: Response, next: NextFu
   next();
 }
 
-// Deduct credits for a deploy
-export function deductCredit(userId: string, description: string): boolean {
-  const db = getDb();
-  const user = db.prepare("SELECT credits FROM users WHERE id = ?").get(userId) as { credits: number } | undefined;
-  if (!user || user.credits <= 0) return false;
+// Plan limits
+const PLAN_LIMITS: Record<string, { deploys: number; projects: number }> = {
+  free: { deploys: 10, projects: 3 },
+  pro: { deploys: 100, projects: -1 }, // -1 = unlimited
+  team: { deploys: 500, projects: -1 },
+};
 
-  db.prepare("UPDATE users SET credits = credits - 1 WHERE id = ?").run(userId);
-  db.prepare("INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, -1, 'deploy', ?)").run(userId, description);
-  return true;
+export function getPlanLimits(plan: string) {
+  return PLAN_LIMITS[plan] || PLAN_LIMITS.free;
 }
 
-// Add credits
+// Check if user can deploy (plan-based)
+export function canDeploy(userId: string): { allowed: boolean; reason?: string } {
+  const db = getDb();
+  const user = db.prepare("SELECT plan FROM users WHERE id = ?").get(userId) as { plan: string } | undefined;
+  if (!user) return { allowed: false, reason: "User not found" };
+
+  const limits = getPlanLimits(user.plan);
+
+  // Count deploys this month
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const deploysThisMonth = db.prepare(
+    "SELECT COUNT(*) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id WHERE p.user_id = ? AND d.created_at >= ?"
+  ).get(userId, monthStart.toISOString()) as { cnt: number };
+
+  if (deploysThisMonth.cnt >= limits.deploys) {
+    return { allowed: false, reason: `Monthly deploy limit reached (${limits.deploys}). Upgrade your plan for more.` };
+  }
+
+  return { allowed: true };
+}
+
+// Check if user can create a project (plan-based)
+export function canCreateProject(userId: string): { allowed: boolean; reason?: string } {
+  const db = getDb();
+  const user = db.prepare("SELECT plan FROM users WHERE id = ?").get(userId) as { plan: string } | undefined;
+  if (!user) return { allowed: false, reason: "User not found" };
+
+  const limits = getPlanLimits(user.plan);
+  if (limits.projects === -1) return { allowed: true };
+
+  const projectCount = db.prepare(
+    "SELECT COUNT(*) as cnt FROM projects WHERE user_id = ?"
+  ).get(userId) as { cnt: number };
+
+  if (projectCount.cnt >= limits.projects) {
+    return { allowed: false, reason: `Project limit reached (${limits.projects}). Upgrade your plan for more.` };
+  }
+
+  return { allowed: true };
+}
+
+// Legacy — keep for backward compat
+export function deductCredit(userId: string, _description: string): boolean {
+  const result = canDeploy(userId);
+  return result.allowed;
+}
+
 export function addCredits(userId: string, amount: number, type: string, description: string) {
   const db = getDb();
   db.prepare("UPDATE users SET credits = credits + ? WHERE id = ?").run(amount, userId);

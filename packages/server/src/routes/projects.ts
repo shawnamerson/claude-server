@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { Project } from "../types.js";
 import { readProjectFiles } from "../services/generator.js";
 import { stopContainer, releasePort } from "../services/deployer.js";
+import { canCreateProject } from "./auth.js";
 import fs from "fs";
 
 const router = Router();
@@ -65,6 +66,16 @@ router.post("/", (req: Request, res: Response) => {
   if (!name) {
     res.status(400).json({ error: "Name is required" });
     return;
+  }
+
+  // Check project limit
+  const user = (req as any).user;
+  if (user) {
+    const check = canCreateProject(user.id);
+    if (!check.allowed) {
+      res.status(402).json({ error: check.reason });
+      return;
+    }
   }
 
   const db = getDb();

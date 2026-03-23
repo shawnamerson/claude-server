@@ -1,14 +1,14 @@
 import { Router, Request, Response } from "express";
 import Stripe from "stripe";
 import { getDb } from "../db/client.js";
-import { requireAuth, addCredits } from "./auth.js";
+import { requireAuth, getPlanLimits } from "./auth.js";
 
 const router = Router();
 
-const CREDIT_PLANS = [
-  { id: "10_credits", credits: 10, price: 500, label: "$5 — 10 credits" },
-  { id: "30_credits", credits: 30, price: 1200, label: "$12 — 30 credits" },
-  { id: "100_credits", credits: 100, price: 3000, label: "$30 — 100 credits" },
+const PLANS = [
+  { id: "free", name: "Free", price: 0, deploys: 10, projects: 3, features: ["3 projects", "10 deploys/month", "Community support"] },
+  { id: "pro", name: "Pro", price: 1900, deploys: 100, projects: -1, features: ["Unlimited projects", "100 deploys/month", "Custom domains", "Priority builds"] },
+  { id: "team", name: "Team", price: 4900, deploys: 500, projects: -1, features: ["Everything in Pro", "500 deploys/month", "Database backups", "Team sharing"] },
 ];
 
 function getStripe(): Stripe | null {
@@ -17,23 +17,43 @@ function getStripe(): Stripe | null {
   return new Stripe(key);
 }
 
-// Get available credit plans
+// Get plans
 router.get("/billing/plans", (_req: Request, res: Response) => {
-  res.json(CREDIT_PLANS);
+  res.json(PLANS);
 });
 
-// Get credit history
-router.get("/billing/history", requireAuth, (req: Request, res: Response) => {
+// Get current user billing info
+router.get("/billing/status", requireAuth, (req: Request, res: Response) => {
   const db = getDb();
   const user = (req as any).user;
-  const transactions = db
-    .prepare("SELECT * FROM credit_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50")
-    .all(user.id);
-  res.json(transactions);
+
+  const userData = db.prepare("SELECT plan, stripe_subscription_id, plan_expires_at, credits FROM users WHERE id = ?").get(user.id) as any;
+
+  // Count deploys this month
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const deploysThisMonth = db.prepare(
+    "SELECT COUNT(*) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id WHERE p.user_id = ? AND d.created_at >= ?"
+  ).get(user.id, monthStart.toISOString()) as { cnt: number };
+
+  const projectCount = db.prepare("SELECT COUNT(*) as cnt FROM projects WHERE user_id = ?").get(user.id) as { cnt: number };
+
+  const plan = userData?.plan || "free";
+  const limits = getPlanLimits(plan);
+
+  res.json({
+    plan,
+    deploysThisMonth: deploysThisMonth.cnt,
+    deployLimit: limits.deploys,
+    projectCount: projectCount.cnt,
+    projectLimit: limits.projects,
+    hasSubscription: !!userData?.stripe_subscription_id,
+  });
 });
 
-// Create Stripe checkout session
-router.post("/billing/checkout", requireAuth, async (req: Request, res: Response) => {
+// Create Stripe checkout for subscription
+router.post("/billing/subscribe", requireAuth, async (req: Request, res: Response) => {
   const stripe = getStripe();
   if (!stripe) {
     res.status(500).json({ error: "Stripe is not configured" });
@@ -41,8 +61,8 @@ router.post("/billing/checkout", requireAuth, async (req: Request, res: Response
   }
 
   const { planId } = req.body;
-  const plan = CREDIT_PLANS.find((p) => p.id === planId);
-  if (!plan) {
+  const plan = PLANS.find(p => p.id === planId);
+  if (!plan || plan.price === 0) {
     res.status(400).json({ error: "Invalid plan" });
     return;
   }
@@ -67,39 +87,47 @@ router.post("/billing/checkout", requireAuth, async (req: Request, res: Response
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
-    mode: "payment",
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: `${plan.credits} Build Credits`,
-            description: `${plan.credits} credits for deploying projects`,
-          },
-          unit_amount: plan.price,
-        },
-        quantity: 1,
+    mode: "subscription",
+    line_items: [{
+      price_data: {
+        currency: "usd",
+        product_data: { name: `JustVibe ${plan.name}` },
+        unit_amount: plan.price,
+        recurring: { interval: "month" },
       },
-    ],
-    metadata: {
-      userId: user.id,
-      credits: String(plan.credits),
-      planId: plan.id,
-    },
-    success_url: `${protocol}://${domain}/projects?purchased=true`,
+      quantity: 1,
+    }],
+    metadata: { userId: user.id, planId: plan.id },
+    success_url: `${protocol}://${domain}/projects?subscribed=${plan.id}`,
     cancel_url: `${protocol}://${domain}/projects`,
   });
 
   res.json({ url: session.url });
 });
 
-// Stripe webhook — credits are added when payment succeeds
-router.post("/billing/webhook", async (req: Request, res: Response) => {
+// Cancel subscription
+router.post("/billing/cancel", requireAuth, async (req: Request, res: Response) => {
   const stripe = getStripe();
-  if (!stripe) {
-    res.status(500).json({ error: "Stripe not configured" });
+  if (!stripe) { res.status(500).json({ error: "Stripe not configured" }); return; }
+
+  const db = getDb();
+  const user = (req as any).user;
+  const userData = db.prepare("SELECT stripe_subscription_id FROM users WHERE id = ?").get(user.id) as any;
+
+  if (!userData?.stripe_subscription_id) {
+    res.status(400).json({ error: "No active subscription" });
     return;
   }
+
+  await stripe.subscriptions.cancel(userData.stripe_subscription_id);
+  db.prepare("UPDATE users SET plan = 'free', stripe_subscription_id = NULL, plan_expires_at = NULL WHERE id = ?").run(user.id);
+  res.json({ ok: true });
+});
+
+// Stripe webhook
+router.post("/billing/webhook", async (req: Request, res: Response) => {
+  const stripe = getStripe();
+  if (!stripe) { res.status(500).json({ error: "Stripe not configured" }); return; }
 
   const sig = req.headers["stripe-signature"] as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -107,27 +135,36 @@ router.post("/billing/webhook", async (req: Request, res: Response) => {
   let event: Stripe.Event;
   try {
     if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(
-        JSON.stringify(req.body),
-        sig,
-        webhookSecret
-      );
+      event = stripe.webhooks.constructEvent(JSON.stringify(req.body), sig, webhookSecret);
     } else {
       event = req.body as Stripe.Event;
     }
-  } catch (err) {
+  } catch {
     res.status(400).json({ error: "Webhook verification failed" });
     return;
   }
 
+  const db = getDb();
+
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.metadata?.userId;
-    const credits = parseInt(session.metadata?.credits || "0");
+    const planId = session.metadata?.planId;
 
-    if (userId && credits > 0) {
-      addCredits(userId, credits, "purchase", `Purchased ${credits} credits`);
-      console.log(`Added ${credits} credits to user ${userId}`);
+    if (userId && planId && session.subscription) {
+      db.prepare("UPDATE users SET plan = ?, stripe_subscription_id = ? WHERE id = ?")
+        .run(planId, session.subscription, userId);
+      console.log(`User ${userId} subscribed to ${planId}`);
+    }
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const sub = event.data.object as Stripe.Subscription;
+    // Find user by subscription ID
+    const user = db.prepare("SELECT id FROM users WHERE stripe_subscription_id = ?").get(sub.id) as any;
+    if (user) {
+      db.prepare("UPDATE users SET plan = 'free', stripe_subscription_id = NULL WHERE id = ?").run(user.id);
+      console.log(`User ${user.id} subscription cancelled`);
     }
   }
 

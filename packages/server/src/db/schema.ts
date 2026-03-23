@@ -129,4 +129,12 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec("ALTER TABLE deployments ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0");
     db.exec("ALTER TABLE deployments ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0");
   }
+
+  // Plan-based billing migration
+  const userCols = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  if (!userCols.find(c => c.name === "plan")) {
+    db.exec("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
+    db.exec("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT");
+    db.exec("ALTER TABLE users ADD COLUMN plan_expires_at TEXT");
+  }
 }

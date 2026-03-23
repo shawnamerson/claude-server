@@ -7,7 +7,7 @@ import { deployContainer, deployFromVolume, stopContainer, releasePort, logEmitt
 import { getEnvVarsForDeploy } from "./envvars.js";
 import { config } from "../config.js";
 import { reloadCaddyConfig } from "../services/caddy.js";
-import { deductCredit } from "./auth.js";
+import { canDeploy } from "./auth.js";
 import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
 import { createDatabase, getDatabaseInfo } from "../services/database.js";
 // validator still available for future use but agent handles creation directly
@@ -59,11 +59,12 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
 
   const { prompt } = req.body;
 
-  // Check credits if user is authenticated
+  // Check plan limits
   const user = (req as any).user;
   if (user) {
-    if (!deductCredit(user.id, `Deploy: ${project.name}`)) {
-      res.status(402).json({ error: "No credits remaining. Purchase more to continue deploying." });
+    const deployCheck = canDeploy(user.id);
+    if (!deployCheck.allowed) {
+      res.status(402).json({ error: deployCheck.reason });
       return;
     }
   }
