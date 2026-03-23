@@ -9,30 +9,39 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string; labe
   none:       { bg: "#1a1a2e", text: "#555",    dot: "#555",    label: "None" },
 };
 
+const pulsingStatuses = new Set(["generating", "building", "deploying"]);
+
 export default function StatusBadge({ status }: { status: string }) {
   const config = statusConfig[status] || statusConfig.none;
+  const shouldPulse = pulsingStatuses.has(status);
   return (
-    <span
-      style={{
-        padding: "0.2rem 0.6rem",
-        borderRadius: "9999px",
-        fontSize: "0.75rem",
-        fontWeight: 500,
-        background: config.bg,
-        color: config.text,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "0.35rem",
-      }}
-    >
-      <span style={{
-        width: "6px",
-        height: "6px",
-        borderRadius: "50%",
-        background: config.dot,
-        display: "inline-block",
-      }} />
-      {config.label}
-    </span>
+    <>
+      {shouldPulse && (
+        <style>{`@keyframes statusPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+      )}
+      <span
+        style={{
+          padding: "0.2rem 0.6rem",
+          borderRadius: "9999px",
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          background: config.bg,
+          color: config.text,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.35rem",
+          animation: shouldPulse ? "statusPulse 2s ease-in-out infinite" : undefined,
+        }}
+      >
+        <span style={{
+          width: "6px",
+          height: "6px",
+          borderRadius: "50%",
+          background: config.dot,
+          display: "inline-block",
+        }} />
+        {config.label}
+      </span>
+    </>
   );
 }

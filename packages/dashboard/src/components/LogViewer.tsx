@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { useSSE } from "../hooks/useSSE";
 
 interface LogLine {
@@ -54,17 +54,21 @@ export default function LogViewer({ deploymentId }: { deploymentId: string | nul
     return rawLogs.findIndex((l) => l.timestamp === log.timestamp && l.message === log.message) === index;
   });
 
-  // Reverse so newest is on top
-  const reversed = [...logs].reverse();
+  // Auto-scroll to bottom on new logs
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [logs.length]);
 
   return (
     <div ref={containerRef} style={styles.container}>
       {!deploymentId ? (
         <div style={styles.empty}>No deployment selected</div>
-      ) : reversed.length === 0 ? (
+      ) : logs.length === 0 ? (
         <div style={styles.empty}>Waiting for logs...</div>
       ) : (
-        reversed.map((log, i) => (
+        logs.map((log, i) => (
           <div key={i} style={{ ...styles.line, color: streamColors[log.stream] || "#e0e0e0" }}>
             <span style={{ color: "#555" }}>[{log.stream}] </span>
             {log.message}

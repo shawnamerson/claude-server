@@ -112,6 +112,13 @@ function VerifyBanner({ onVerified }: { onVerified: () => void }) {
 function AppShell({ children, user, onLogout, onRefresh }: { children: React.ReactNode; user: any; onLogout: () => void; onRefresh: () => void }) {
   return (
     <div style={styles.app}>
+      <style>{`
+        button:hover:not(:disabled) { opacity: 0.85; }
+        button:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
+        input:focus { border-color: #7c3aed !important; }
+        a:hover { opacity: 0.8; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
       <nav style={styles.nav}>
         <Link to="/" style={styles.logo}>JustVibe</Link>
         <Link to="/projects" style={styles.navLink}>Projects</Link>

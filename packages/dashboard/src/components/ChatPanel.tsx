@@ -195,7 +195,26 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     <div style={s.container}>
       <div ref={messagesRef} style={s.messages}>
         {messages.length === 0 && !isActive && (
-          <div style={s.empty}>Describe what you want to build.</div>
+          <div style={s.emptyState}>
+            <div style={s.emptyIcon}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
+            <div style={s.emptyTitle}>What do you want to build?</div>
+            <div style={s.emptySubtitle}>Describe your idea and Claude will generate a working app.</div>
+            <div style={s.suggestions}>
+              {["A landing page for my startup", "A todo app with dark mode", "A real-time chat widget"].map((suggestion) => (
+                <button
+                  key={suggestion}
+                  style={s.suggestionBtn}
+                  onClick={() => { setInput(suggestion); }}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {messages.map((msg) => (
           <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
@@ -247,6 +266,12 @@ const s = {
   input: { flex: 1, padding: "0.5rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.5rem", color: "#e0e0e0", fontSize: "0.85rem", outline: "none", fontFamily: "inherit" },
   sendBtn: { padding: "0.5rem 1rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 },
   empty: { color: "#555", textAlign: "center" as const, padding: "2rem 1rem", fontSize: "0.85rem" },
+  emptyState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flex: 1, gap: "0.75rem", padding: "2rem 1rem" },
+  emptyIcon: { opacity: 0.6, marginBottom: "0.25rem" },
+  emptyTitle: { fontSize: "1.1rem", fontWeight: 600, color: "#e0e0e0" },
+  emptySubtitle: { fontSize: "0.85rem", color: "#888", maxWidth: "320px", lineHeight: "1.4" },
+  suggestions: { display: "flex", flexDirection: "column" as const, gap: "0.4rem", marginTop: "0.5rem", width: "100%", maxWidth: "320px" },
+  suggestionBtn: { padding: "0.5rem 0.75rem", background: "#1a1a2e", border: "1px solid #1e1e30", borderRadius: "0.5rem", color: "#a78bfa", fontSize: "0.8rem", cursor: "pointer", textAlign: "left" as const, transition: "border-color 0.2s", fontFamily: "inherit" },
   activityContainer: { display: "flex", flexDirection: "column" as const, gap: "0.35rem" },
   thinkingLine: { color: "#c4b5fd", fontSize: "0.85rem", lineHeight: "1.4" },
   fileBlock: { background: "#0f0f1a", borderRadius: "0.35rem", overflow: "hidden" },
