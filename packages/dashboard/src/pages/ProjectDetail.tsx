@@ -414,20 +414,14 @@ export default function ProjectDetail() {
       <div style={styles.main}>
         {/* URL bar */}
         <div style={styles.previewBar}>
-          <div style={styles.urlBar}>
-            <input
-              style={styles.urlInput}
-              value={hasRunningDep ? previewUrl : ""}
-              placeholder="Deploy to see preview"
-              readOnly
-            />
-            {hasRunningDep && (
-              <>
-                <button style={styles.refreshBtn} onClick={reloadPreview}>Refresh</button>
-                <a href={previewUrl} target="_blank" rel="noreferrer" style={styles.openBtn}>Open</a>
-              </>
-            )}
-          </div>
+          {hasRunningDep ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: 1 }}>
+              <a href={previewUrl} target="_blank" rel="noreferrer" style={{ color: "#60a5fa", fontSize: "0.8rem", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{previewUrl.replace(/^https?:\/\//, "")}</a>
+              <button onClick={reloadPreview} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: "0.85rem", padding: "0.15rem", lineHeight: 1, flexShrink: 0 }} title="Refresh preview">&#x21bb;</button>
+            </div>
+          ) : (
+            <span style={{ color: "#444", fontSize: "0.8rem" }}>Deploy to see preview</span>
+          )}
         </div>
 
         {/* Preview iframe or placeholder */}
