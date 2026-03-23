@@ -193,6 +193,7 @@ export default function ProjectDetail() {
   const [previewReady, setPreviewReady] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const lastRunningIdRef = useRef<string | null>(null);
+  const wasDeployingRef = useRef(false);
   const runningDep = deployments.find((d) => d.status === "running");
 
   const reloadPreview = useCallback(() => {
@@ -300,20 +301,25 @@ export default function ProjectDetail() {
   );
   const hasRunningDep = !!runningDep;
 
+  // Track if we saw a deploy in progress
+  useEffect(() => {
+    if (isDeploying) wasDeployingRef.current = true;
+  }, [isDeploying]);
+
   // When a new deployment starts running, poll health then show preview
   useEffect(() => {
     const runningId = runningDep?.id || null;
     if (!runningId) return;
 
     if (runningId !== lastRunningIdRef.current) {
-      const isPageLoad = lastRunningIdRef.current === null;
       lastRunningIdRef.current = runningId;
 
-      if (isPageLoad) {
-        // Page loaded with existing running app — show immediately
+      // If we never saw a deploy in progress, this is an existing app — show immediately
+      if (!wasDeployingRef.current) {
         setPreviewReady(true);
         return;
       }
+      wasDeployingRef.current = false;
 
       // New deploy — poll health until app is ready
       setPreviewReady(false);
