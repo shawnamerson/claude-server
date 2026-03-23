@@ -300,10 +300,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         )}
         {messages.map((msg, idx) => {
           const isLast = idx === messages.length - 1;
-          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !isActive;
+          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !isActive && !!msg.content;
+          const isEmpty = !msg.content && msg.role === "assistant";
           return (
             <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
-              {msg.content}
+              {isEmpty ? <span style={s.statusLine}>Claude is thinking...</span> : msg.content}
               {showDeployBtn && (
                 <button
                   style={s.inlineDeployBtn}
