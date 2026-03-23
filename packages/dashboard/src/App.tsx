@@ -78,10 +78,11 @@ function VerifyBanner({ onVerified }: { onVerified: () => void }) {
     setLoading(true);
     try {
       await api.verifyEmail(code);
-      onVerified();
+      await onVerified();
+      // Force re-render if state didn't update
+      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
-    } finally {
       setLoading(false);
     }
   };
