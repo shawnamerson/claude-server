@@ -36,6 +36,8 @@ const corsOrigins = domain === "localhost"
   ? true // Allow all origins in development
   : [`https://${domain}`, `http://${domain}`, new RegExp(`https://.*\\.${domain.replace(/\./g, "\\.")}$`)];
 app.use(cors({ origin: corsOrigins, credentials: true }));
+// Stripe webhook needs raw body for signature verification
+app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 
 // Rate limiting

@@ -143,11 +143,15 @@ router.post("/billing/webhook", async (req: Request, res: Response) => {
   let event: Stripe.Event;
   try {
     if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(JSON.stringify(req.body), sig, webhookSecret);
+      // req.body is a raw Buffer when express.raw() is used
+      const body = Buffer.isBuffer(req.body) ? req.body.toString() : JSON.stringify(req.body);
+      event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
     } else {
-      event = req.body as Stripe.Event;
+      const parsed = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
+      event = parsed as Stripe.Event;
     }
-  } catch {
+  } catch (err) {
+    console.error("Webhook verification failed:", err instanceof Error ? err.message : String(err));
     res.status(400).json({ error: "Webhook verification failed" });
     return;
   }
