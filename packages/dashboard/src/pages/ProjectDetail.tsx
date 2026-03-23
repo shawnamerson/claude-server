@@ -184,6 +184,8 @@ export default function ProjectDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const lastRunningIdRef = useRef<string | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeSrcSet = useRef(false);
   const runningDep = deployments.find((d) => d.status === "running");
 
   // Double-buffer reload: load in a hidden iframe, swap when ready
@@ -320,12 +322,18 @@ export default function ProjectDetail() {
   );
   const hasRunningDep = !!runningDep;
 
-  // Set iframe src only once on mount — prevents re-renders from reloading it
-  const iframeInitRef = useCallback((iframe: HTMLIFrameElement | null) => {
-    if (iframe && !iframe.getAttribute("src")) {
-      iframe.src = previewUrl;
+  // Set iframe src once when preview URL is ready — never re-set on re-renders
+  useEffect(() => {
+    if (iframeRef.current && previewUrl && !iframeSrcSet.current) {
+      iframeRef.current.src = previewUrl;
+      iframeSrcSet.current = true;
     }
-  }, [previewUrl]);
+  }, [previewUrl, hasRunningDep]);
+
+  // Reset when deployment changes (e.g. navigating to different project)
+  useEffect(() => {
+    iframeSrcSet.current = false;
+  }, [project?.slug]);
 
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
@@ -405,7 +413,7 @@ export default function ProjectDetail() {
         {hasRunningDep ? (
           <div ref={previewContainerRef} style={previewContainerStyle}>
             <iframe
-              ref={iframeInitRef}
+              ref={iframeRef}
               style={previewIframeStyle}
               title="App Preview"
             />
