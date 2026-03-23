@@ -180,27 +180,18 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
-  const [previewReady, setPreviewReady] = useState(false);
-  const [prevStatus, setPrevStatus] = useState<string | null>(null);
+  const [prevHadRunning, setPrevHadRunning] = useState(false);
 
-  // When deployment goes to "running", wait then show preview
+  // Auto-refresh preview when a deployment becomes running
+  const hasRunning = deployments.some(d => d.status === "running");
   useEffect(() => {
-    const activeDep = deployments.find(d => d.status === "running") || deployments[0];
-    const currentStatus = activeDep?.status;
-    if (prevStatus && prevStatus !== "running" && currentStatus === "running") {
-      setPreviewReady(false);
-      // Give the container 3 seconds to start serving, then show preview
-      const timer = setTimeout(() => {
-        setPreviewReady(true);
-        setPreviewKey(k => k + 1);
-      }, 3000);
+    if (hasRunning && !prevHadRunning) {
+      // Just transitioned to running — delay 3s for container startup
+      const timer = setTimeout(() => setPreviewKey(k => k + 1), 3000);
       return () => clearTimeout(timer);
-    } else if (currentStatus === "running") {
-      // Already running on page load — show immediately
-      setPreviewReady(true);
     }
-    setPrevStatus(currentStatus || null);
-  }, [deployments, prevStatus]);
+    setPrevHadRunning(hasRunning);
+  }, [hasRunning, prevHadRunning]);
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -358,7 +349,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Preview iframe or placeholder */}
-        {runningDep && previewReady ? (
+        {runningDep ? (
           <div style={styles.preview}>
             <iframe
               key={previewKey}
@@ -370,12 +361,7 @@ export default function ProjectDetail() {
           </div>
         ) : (
           <div style={styles.previewEmpty}>
-            {runningDep && !previewReady ? (
-              <>
-                <div style={styles.previewSpinner}>Starting up...</div>
-                <div style={{ fontSize: "0.8rem", color: "#444" }}>Waiting for app to respond</div>
-              </>
-            ) : isDeploying ? (
+            {isDeploying ? (
               <>
                 <div style={styles.previewSpinner}>Building your app...</div>
                 <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Logs tab for progress</div>
