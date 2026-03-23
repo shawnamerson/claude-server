@@ -47,7 +47,7 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
 
   let logsContext = "";
   if (latestDeployment) {
-    const logs = getRecentLogs(latestDeployment.id, 100);
+    const logs = getRecentLogs(latestDeployment.id, 200);
     logsContext = logs
       .reverse()
       .map((l) => `[${l.stream}] ${l.message}`)
@@ -109,7 +109,9 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
     ? `Connected to ${githubRepo.repo_url} (branch: ${githubRepo.branch})`
     : "(No GitHub repo connected)";
 
-  const systemPrompt = `You are a helpful AI assistant integrated into a cloud deployment platform. You have full context about the user's project, including their database schema and data.
+  const systemPrompt = `You are a helpful AI assistant integrated into a cloud deployment platform. You have full context about the user's project.
+
+IMPORTANT: You CAN see the project files, recent server/container logs, environment variables, database schema, and deployment history below. When the user asks about logs or errors, look at the "Recent Logs" section — it contains the actual stdout/stderr output from their running container.
 
 Project: ${project.name}
 Description: ${project.description}
