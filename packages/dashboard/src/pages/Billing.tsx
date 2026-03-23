@@ -85,6 +85,12 @@ export default function Billing() {
       <div style={s.grid}>
         {plans.map(plan => {
           const isCurrent = status?.plan === plan.id;
+          const planRank: Record<string, number> = { free: 0, pro: 1, team: 2 };
+          const currentRank = planRank[status?.plan] ?? 0;
+          const thisRank = planRank[plan.id] ?? 0;
+          const isUpgrade = thisRank > currentRank;
+          const isDowngrade = thisRank < currentRank;
+
           return (
             <div key={plan.id} style={s.card(isCurrent)}>
               {isCurrent && <div style={s.currentBadge}>Current</div>}
@@ -102,10 +108,12 @@ export default function Billing() {
                 ) : (
                   <button style={s.btn(false)} disabled>Current plan</button>
                 )
-              ) : plan.price > 0 ? (
+              ) : isUpgrade ? (
                 <button style={s.btn(true)} onClick={() => handleSubscribe(plan.id)}>
                   Upgrade to {plan.name}
                 </button>
+              ) : isDowngrade ? (
+                <button style={s.btn(false)} disabled>Included in your plan</button>
               ) : (
                 <button style={s.btn(false)} disabled>Free tier</button>
               )}
