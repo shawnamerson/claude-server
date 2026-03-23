@@ -110,6 +110,22 @@ async function start() {
     console.log(`Recovered ${stuck.length} stuck deployment(s)`);
   }
 
+  // Check "running" deployments whose containers are gone
+  const running = db.prepare(
+    "SELECT id, container_id FROM deployments WHERE status = 'running' AND container_id IS NOT NULL"
+  ).all() as Array<{ id: string; container_id: string }>;
+  for (const dep of running) {
+    try {
+      const Dockerode = (await import("dockerode")).default;
+      const docker = new Dockerode();
+      const info = await docker.getContainer(dep.container_id).inspect();
+      if (!info.State.Running) throw new Error("not running");
+    } catch {
+      db.prepare("UPDATE deployments SET status = 'stopped', stopped_at = datetime('now') WHERE id = ?").run(dep.id);
+      console.log(`Marked orphaned deployment ${dep.id} as stopped`);
+    }
+  }
+
   // Generate initial Caddy config
   reloadCaddyConfig().catch(() => console.log("Caddy not available yet — config will update on first deploy"));
 
