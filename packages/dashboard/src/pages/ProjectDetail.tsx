@@ -147,7 +147,7 @@ const styles = {
   preview: {
     flex: 1,
     overflow: "hidden",
-    background: "#fff",
+    background: "#0a0a0f",
   },
   previewIframe: {
     width: "100%",
