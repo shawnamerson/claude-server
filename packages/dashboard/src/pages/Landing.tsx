@@ -1,12 +1,28 @@
 import { Link } from "react-router-dom";
 
+const responsiveCSS = `
+  .jv-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+  .jv-steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .jv-comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .jv-nav-links { display: flex; gap: 1.5rem; align-items: center; }
+  .jv-title { font-size: 3.2rem; }
+  @media (max-width: 768px) {
+    .jv-feature-grid { grid-template-columns: 1fr; }
+    .jv-steps-grid { grid-template-columns: 1fr; }
+    .jv-comp-grid { grid-template-columns: 1fr; }
+    .jv-nav-links a:not(:last-child) { display: none; }
+    .jv-title { font-size: 2rem; }
+  }
+`;
+
 export default function Landing() {
   return (
     <div style={s.page}>
+      <style>{responsiveCSS}</style>
       {/* Nav */}
       <nav style={s.nav}>
         <div style={s.logo}>JustVibe</div>
-        <div style={s.navLinks}>
+        <div className="jv-nav-links">
           <a href="#features" style={s.navLink}>Features</a>
           <a href="#how" style={s.navLink}>How it works</a>
           <Link to="/login" style={s.navLink}>Log in</Link>
@@ -17,7 +33,7 @@ export default function Landing() {
       {/* Hero */}
       <div style={s.hero}>
         <div style={s.badge}>Vibe coding, perfected</div>
-        <h1 style={s.title}>Describe your app.<br />Watch it build.</h1>
+        <h1 className="jv-title" style={s.title}>Describe your app.<br />Watch it build.</h1>
         <p style={s.subtitle}>
           Tell AI what you want. Watch it write code, test it, and deploy — all in real-time.
           Your app is live in under a minute.
@@ -52,7 +68,7 @@ export default function Landing() {
       {/* Features */}
       <div id="features" style={s.features}>
         <h2 style={s.sectionTitle}>Everything you need to ship</h2>
-        <div style={s.featureGrid}>
+        <div className="jv-feature-grid">
           {features.map((f, i) => (
             <div key={i} style={s.featureCard}>
               <div style={s.featureEmoji}>{f.emoji}</div>
@@ -66,7 +82,7 @@ export default function Landing() {
       {/* How it works */}
       <div id="how" style={s.how}>
         <h2 style={s.sectionTitle}>Three steps. That's it.</h2>
-        <div style={s.stepsGrid}>
+        <div className="jv-steps-grid">
           <div style={s.stepCard}>
             <div style={s.stepNum}>1</div>
             <div style={s.stepTitle}>Describe</div>
@@ -88,7 +104,7 @@ export default function Landing() {
       {/* vs Bolt comparison */}
       <div style={s.comparison}>
         <h2 style={s.sectionTitle}>Why JustVibe?</h2>
-        <div style={s.compGrid}>
+        <div className="jv-comp-grid">
           <div style={s.compCard}>
             <div style={s.compTitle}>Other tools</div>
             <div style={s.compList}>

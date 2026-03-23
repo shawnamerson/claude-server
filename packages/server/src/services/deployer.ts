@@ -62,7 +62,10 @@ export async function deployFromVolume(
   const relativeToData = sourcePath.replace(/^\/app\/data\//, "");
   const workDir = `/data/${relativeToData}`;
 
-  return _createAndStartContainer(deploymentId, appPort, extraEnv, projectSlug, {
+  return _createAndStartContainer(deploymentId, appPort, [
+    ...extraEnv,
+    "NODE_PATH=/app/node_modules",
+  ], projectSlug, {
     Image: "claude-server/base:latest",
     WorkingDir: workDir,
     Cmd: ["sh", "-c", startCommand],

@@ -260,7 +260,7 @@ export async function cleanupOrphanedDevContainers(): Promise<void> {
   } catch {}
 }
 
-class DevContainer {
+export class DevContainer {
   private container: Dockerode.Container | null = null;
   private workDir: string;
   private sourcePath: string;
@@ -286,8 +286,9 @@ class DevContainer {
     this.container = await docker.createContainer({
       Image: "claude-server/base:latest",
       name: containerName,
-      Cmd: ["sleep", "600"], // Keep alive for 10 minutes
+      Cmd: ["sleep", "600"],
       WorkingDir: this.workDir,
+      Env: ["NODE_PATH=/app/node_modules"],
       HostConfig: {
         Binds: [`claude-server_app-data:/data:rw`],
         Memory: 256 * 1024 * 1024,

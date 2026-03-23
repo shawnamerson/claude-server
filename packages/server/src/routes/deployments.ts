@@ -114,6 +114,20 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
 
     addLog(deploymentId, "system", `Project ready — ${result.files.length} files`);
 
+    // Quick npm install to catch missing deps before deploy
+    try {
+      const { DevContainer } = await import("../services/generator.js");
+      const devC = new DevContainer(project.source_path);
+      addLog(deploymentId, "system", "Installing dependencies...");
+      const installOutput = await devC.exec("npm install --prefer-offline 2>&1 | tail -5", (msg: string) => addLog(deploymentId, "system", msg));
+      if (installOutput.includes("ERR")) {
+        addLog(deploymentId, "system", `npm install warning: ${installOutput.slice(0, 200)}`);
+      }
+      await devC.cleanup();
+    } catch (err) {
+      addLog(deploymentId, "system", `npm install skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     // Save chat messages
     if (prompt) {
       db.prepare(
@@ -251,7 +265,7 @@ async function autoFixAndRedeploy(
     const fixResult = await modifyProject(
       project.source_path,
       [],
-      `The application failed with this error. Fix ALL issues so it runs without crashing.\n\nError logs:\n\`\`\`\n${errorText}\n\`\`\`\n\nIMPORTANT:\n- Use require() not import for CommonJS modules\n- Use uuid v4 alternative if uuid causes ESM errors (use crypto.randomUUID() instead)\n- Fix any syntax errors in template literals\n- Make sure all dependencies in package.json actually exist`,
+      `The application crashed. Fix it quickly.\n\nError:\n\`\`\`\n${errorText.slice(-1500)}\n\`\`\`\n\nBe fast: read ONLY the file that caused the error, fix it, and call done. Do NOT read every file in the project. Common fixes:\n- Missing require/import: add it\n- ESM/CJS mismatch: use require() not import\n- SQL error: fix the query\n- Missing dependency: add to package.json\n- Port conflict: use process.env.PORT`,
       log
     );
 
