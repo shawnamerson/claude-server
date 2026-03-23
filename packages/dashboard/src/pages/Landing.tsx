@@ -121,10 +121,10 @@ const t = {
   barTitle: { fontSize: "0.7rem", color: "#555" },
   body: { padding: "0.75rem", fontFamily: "'JetBrains Mono', monospace", fontSize: "0.78rem", lineHeight: 1.7, overflow: "hidden", maxHeight: "320px" },
   line: { color: "#e0e0e0", whiteSpace: "pre-wrap" as const },
-  browser: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", height: "100%", position: "relative" as const },
+  browser: { background: "#0a0a0f", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", height: "100%", position: "relative" as const },
   browserBar: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.75rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
   urlChip: { flex: 1, padding: "0.2rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.3rem", fontSize: "0.72rem", color: "#60a5fa", fontFamily: "'JetBrains Mono', monospace" },
-  iframeWrap: { width: "200%", height: "calc((100% - 34px) * 2)", transform: "scale(0.5)", transformOrigin: "top left", border: "none", display: "block", background: "#fff", pointerEvents: "none" as const, position: "absolute" as const, top: "34px", left: "0" },
+  iframeWrap: { width: "100%", height: "calc(100% - 34px)", border: "none", display: "block", pointerEvents: "none" as const },
   buildingState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "0.75rem", height: "calc(100% - 34px)", background: "#08080c" },
   spinner: { width: "24px", height: "24px", border: "2px solid #1e1e30", borderTop: "2px solid #7c3aed", borderRadius: "50%", animation: "jv-spin 0.8s linear infinite" },
 };
