@@ -376,17 +376,28 @@ export default function ProjectDetail() {
               headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
             });
             const data = await res.json();
-            if (data.ok && iframeRef.current && previewUrl) {
-              iframeSrcSet.current = true;
-              iframeRef.current.src = previewUrl;
+            if (data.ok) {
+              if (iframeRef.current && previewUrl) {
+                iframeSrcSet.current = true;
+                iframeRef.current.src = previewUrl;
+              } else {
+                // Iframe not mounted yet — let the src-setting effect handle it
+                iframeSrcSet.current = false;
+              }
+              setIframeLoaded(true);
               return;
             }
           } catch {}
         }
         // Last resort — load anyway after all retries
-        if (!cancelled && iframeRef.current && previewUrl) {
-          iframeSrcSet.current = true;
-          iframeRef.current.src = previewUrl;
+        if (!cancelled) {
+          if (iframeRef.current && previewUrl) {
+            iframeSrcSet.current = true;
+            iframeRef.current.src = previewUrl;
+          } else {
+            iframeSrcSet.current = false;
+          }
+          setIframeLoaded(true);
         }
       };
       pollHealth();
