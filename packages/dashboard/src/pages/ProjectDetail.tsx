@@ -438,7 +438,7 @@ export default function ProjectDetail() {
               <>
                 <div style={spinnerStyle} />
                 <div style={styles.previewSpinner}>Building your app...</div>
-                <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Logs tab for progress</div>
+                <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Chat tab for progress</div>
               </>
             ) : (
               <>
