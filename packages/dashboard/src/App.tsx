@@ -111,6 +111,7 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
   return (
     <div style={styles.app}>
       <style>{`
+        *, *::before, *::after { box-sizing: border-box; }
         html, body, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; }
         *::-webkit-scrollbar { display: none; }
         * { scrollbar-width: none; }

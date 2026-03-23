@@ -16,9 +16,9 @@ const styles = {
   page: {
     display: "flex",
     flex: 1,
+    width: "100%",
     minHeight: 0,
     overflow: "hidden",
-    gap: "0",
   },
   // Left sidebar — chat + tabs
   sidebar: {
