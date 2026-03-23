@@ -183,6 +183,7 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const lastRunningIdRef = useRef<string | null>(null);
+  const initialLoadRef = useRef(true);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeSrcSet = useRef(false);
@@ -223,12 +224,18 @@ export default function ProjectDetail() {
     }, 10000);
   }, []);
 
-  // When a NEW running deployment appears, reload preview multiple times
-  // npm install can take 5-15s, so retry at 8s, 15s, and 25s
+  // When a genuinely NEW deployment starts running (not on page load),
+  // retry loading the preview since npm install may take 5-15s
   useEffect(() => {
     const runningId = runningDep?.id || null;
     if (runningId && runningId !== lastRunningIdRef.current) {
+      const isInitialLoad = initialLoadRef.current;
       lastRunningIdRef.current = runningId;
+      // Skip retry refreshes on initial page load — app is already running
+      if (isInitialLoad) {
+        initialLoadRef.current = false;
+        return;
+      }
       const t1 = setTimeout(reloadPreview, 8000);
       const t2 = setTimeout(reloadPreview, 15000);
       const t3 = setTimeout(reloadPreview, 25000);
