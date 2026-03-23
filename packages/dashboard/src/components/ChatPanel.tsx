@@ -100,6 +100,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [lastFinishedDepId, setLastFinishedDepId] = useState<string | null>(null);
   const [chatStreaming, setChatStreaming] = useState(false);
+  const [hasSuggestion, setHasSuggestion] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const activityRef = useRef<ActivityItem[]>([]);
 
@@ -182,8 +183,10 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       created_at: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMsg]);
+    setHasSuggestion(false);
     setChatStreaming(true);
 
+    let assistantText = "";
     try {
       const authToken = (window as any).__authToken;
       const res = await fetch(`/api/projects/${projectId}/chat`, {
@@ -200,7 +203,6 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       // Read SSE stream
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-      let assistantText = "";
       const assistantId = Date.now() + 1;
 
       // Add placeholder message
@@ -230,14 +232,18 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setMessages(prev => [...prev, { id: Date.now() + 2, project_id: projectId, role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Chat failed"}`, created_at: new Date().toISOString() }]);
     } finally {
       setChatStreaming(false);
+      // Detect if Claude suggested code changes
+      const suggestsChanges = /```|change|modify|update|add|fix|replace|edit|would look like|here's how/i.test(assistantText);
+      setHasSuggestion(suggestsChanges);
     }
   };
 
   // Deploy: send a message and trigger a full deploy (costs a deploy)
   const handleDeploy = () => {
-    const text = input.trim();
+    const text = input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
     if (!text || deploying || chatStreaming) return;
     setInput("");
+    setHasSuggestion(false);
 
     activityRef.current = [];
     setActivity([]);
@@ -321,12 +327,16 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
           Chat
         </button>
         <button
-          style={{ ...s.deployBtn, opacity: (isActive || !input.trim()) ? 0.5 : 1 }}
+          style={{
+            ...s.deployBtn,
+            opacity: (isActive || (!input.trim() && !hasSuggestion)) ? 0.5 : 1,
+            ...(hasSuggestion && !isActive ? { background: "#16a34a", boxShadow: "0 0 12px rgba(22,163,74,0.4)" } : {}),
+          }}
           onClick={handleDeploy}
-          disabled={isActive || !input.trim()}
+          disabled={isActive || (!input.trim() && !hasSuggestion)}
           title="Apply changes and deploy"
         >
-          Deploy
+          {hasSuggestion ? "Apply & Deploy" : "Deploy"}
         </button>
       </div>
     </div>
