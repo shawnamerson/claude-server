@@ -1,3 +1,8 @@
+const statusTooltips: Record<string, string> = {
+  sleeping: "Idle for 30 min — auto-stopped to save resources. Wakes up automatically when visited.",
+  failed: "The app crashed. Check logs or chat with Claude to fix it.",
+};
+
 const statusConfig: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   running:    { bg: "#064e3b", text: "#34d399", dot: "#34d399", label: "Live" },
   building:   { bg: "#1e3a5f", text: "#60a5fa", dot: "#60a5fa", label: "Building" },
@@ -15,12 +20,14 @@ const pulsingStatuses = new Set(["generating", "building", "deploying"]);
 export default function StatusBadge({ status }: { status: string }) {
   const config = statusConfig[status] || statusConfig.none;
   const shouldPulse = pulsingStatuses.has(status);
+  const tooltip = statusTooltips[status];
   return (
     <>
       {shouldPulse && (
         <style>{`@keyframes statusPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
       )}
       <span
+        title={tooltip}
         style={{
           padding: "0.2rem 0.6rem",
           borderRadius: "9999px",

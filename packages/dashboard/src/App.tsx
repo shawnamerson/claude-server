@@ -140,7 +140,6 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
         <div style={styles.navRight}>
           {user && (
             <>
-              <Link to="/billing" style={{ fontSize: "0.8rem", color: "#a78bfa", textDecoration: "none" }}>Billing</Link>
               <span style={{ fontSize: "0.8rem", color: "#888" }}>{user.email}</span>
               <button style={styles.logoutBtn} onClick={onLogout}>Logout</button>
             </>
