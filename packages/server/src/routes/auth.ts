@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
+import { sendVerificationEmail } from "../services/email.js";
 import "../types.js";
 
 const router = Router();
@@ -51,11 +52,8 @@ router.post("/auth/signup", async (req: Request, res: Response) => {
 
   db.prepare("INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, 3, 'signup', 'Welcome bonus')").run(id);
 
-  // TODO: Send verification email via a real email service.
-  // In development, the code is logged to console for testing.
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`Verification code for ${email}: ${verificationCode}`);
-  }
+  // Send verification email (falls back to console.log if RESEND_API_KEY not set)
+  sendVerificationEmail(email.toLowerCase().trim(), verificationCode);
 
   res.json({
     token: sessionId,
@@ -87,6 +85,30 @@ router.post("/auth/verify", (req: Request, res: Response) => {
 
   db.prepare("UPDATE users SET email_verified = 1, verification_code = NULL WHERE id = ?").run(user.id);
   res.json({ ok: true });
+});
+
+// Resend verification code
+router.post("/auth/resend-code", (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const db = getDb();
+  const userData = db.prepare("SELECT email, email_verified, verification_code FROM users WHERE id = ?").get(user.id) as { email: string; email_verified: number; verification_code: string | null } | undefined;
+
+  if (userData?.email_verified) {
+    res.json({ ok: true, message: "Already verified" });
+    return;
+  }
+
+  // Generate a new code
+  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+  db.prepare("UPDATE users SET verification_code = ? WHERE id = ?").run(newCode, user.id);
+  sendVerificationEmail(userData!.email, newCode);
+
+  res.json({ ok: true, message: "Verification code sent" });
 });
 
 // Login

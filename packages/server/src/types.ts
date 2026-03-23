@@ -47,6 +47,7 @@ export type DeploymentStatus =
   | "building"
   | "deploying"
   | "running"
+  | "sleeping"
   | "failed"
   | "stopped";
 
