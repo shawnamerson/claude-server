@@ -180,15 +180,25 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [showPreview, setShowPreview] = useState(false);
   const [prevHadRunning, setPrevHadRunning] = useState(false);
 
-  // Auto-refresh preview when a deployment becomes running
+  // When a deployment becomes running, wait for container startup then show preview
   const hasRunning = deployments.some(d => d.status === "running");
   useEffect(() => {
     if (hasRunning && !prevHadRunning) {
-      // Just transitioned to running — delay 3s for container startup
-      const timer = setTimeout(() => setPreviewKey(k => k + 1), 3000);
-      return () => clearTimeout(timer);
+      // New deploy just went live — wait for npm install + server start
+      setShowPreview(false);
+      const timer = setTimeout(() => {
+        setShowPreview(true);
+        setPreviewKey(k => k + 1);
+      }, 5000);
+      // Then refresh again at 10s in case first load cached an error
+      const retry = setTimeout(() => setPreviewKey(k => k + 1), 10000);
+      return () => { clearTimeout(timer); clearTimeout(retry); };
+    } else if (hasRunning) {
+      // Already running on page load
+      setShowPreview(true);
     }
     setPrevHadRunning(hasRunning);
   }, [hasRunning, prevHadRunning]);
@@ -351,7 +361,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Preview iframe or placeholder */}
-        {runningDep ? (
+        {runningDep && showPreview ? (
           <div style={styles.preview}>
             <iframe
               key={previewKey}
@@ -362,7 +372,12 @@ export default function ProjectDetail() {
           </div>
         ) : (
           <div style={styles.previewEmpty}>
-            {isDeploying ? (
+            {runningDep && !showPreview ? (
+              <>
+                <div style={styles.previewSpinner}>Starting up...</div>
+                <div style={{ fontSize: "0.8rem", color: "#444" }}>Installing dependencies and starting server</div>
+              </>
+            ) : isDeploying ? (
               <>
                 <div style={styles.previewSpinner}>Building your app...</div>
                 <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Logs tab for progress</div>
