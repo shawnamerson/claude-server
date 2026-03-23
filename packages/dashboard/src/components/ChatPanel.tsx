@@ -239,9 +239,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setMessages(prev => [...prev, { id: Date.now() + 2, project_id: projectId, role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Chat failed"}`, created_at: new Date().toISOString() }]);
     } finally {
       setChatStreaming(false);
-      // Detect if Claude suggested code changes
-      const suggestsChanges = /```|change|modify|update|add|fix|replace|edit|would look like|here's how/i.test(assistantText);
-      setHasSuggestion(suggestsChanges);
+      // Always show Apply & Deploy after a chat response — the user can
+      // decide whether the response warrants a deploy
+      if (assistantText.trim()) {
+        setHasSuggestion(true);
+      }
       // Sync with DB to get proper message IDs
       api.getChatHistory(projectId).then(setMessages);
     }
@@ -300,7 +302,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         )}
         {messages.map((msg, idx) => {
           const isLast = idx === messages.length - 1;
-          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !isActive && !!msg.content;
+          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !deploying && !chatStreaming && !!msg.content;
           const isEmpty = !msg.content && msg.role === "assistant";
           return (
             <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
