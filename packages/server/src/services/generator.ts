@@ -294,8 +294,11 @@ class DevContainer {
   async exec(command: string, onLog: (msg: string) => void): Promise<string> {
     await this.ensureRunning();
 
+    // Wrap command with timeout to ensure it exits
+    const wrappedCmd = `timeout 12 sh -c ${JSON.stringify(command)} 2>&1; echo "::EXIT_CODE::$?"`;
+
     const exec = await this.container!.exec({
-      Cmd: ["sh", "-c", command],
+      Cmd: ["sh", "-c", wrappedCmd],
       AttachStdout: true,
       AttachStderr: true,
       WorkingDir: this.workDir,
@@ -303,18 +306,26 @@ class DevContainer {
 
     const stream = await exec.start({});
 
-    // Collect output with timeout
-    const output = await Promise.race([
-      streamToString(stream),
-      new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error("Command timed out (15s)")), 15000)
-      ),
-    ]);
+    let output = "";
+    try {
+      output = await Promise.race([
+        streamToString(stream),
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve("(command timed out)"), 15000)
+        ),
+      ]);
+    } catch {
+      output = "(command failed)";
+    }
 
-    // Check exit code
-    const inspectResult = await exec.inspect();
-    if (inspectResult.ExitCode !== 0) {
-      onLog(`  Exit code: ${inspectResult.ExitCode}`);
+    // Extract exit code from output
+    const exitMatch = output.match(/::EXIT_CODE::(\d+)\s*$/);
+    if (exitMatch) {
+      const code = parseInt(exitMatch[1]);
+      output = output.replace(/::EXIT_CODE::\d+\s*$/, "").trim();
+      if (code !== 0) {
+        onLog(`  Exit code: ${code}`);
+      }
     }
 
     const truncated = output.length > 3000 ? output.slice(-3000) + "\n...(truncated)" : output;
