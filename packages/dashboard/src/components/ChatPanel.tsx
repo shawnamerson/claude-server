@@ -295,8 +295,10 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     const text = prompt || input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
     if (!text || deployingLocal || chatStreaming) return;
     setDeployingLocal(true);
-    if (!prompt) setInput("");
-    setHasSuggestion(false);
+    if (!prompt) {
+      setInput("");
+      setHasSuggestion(false);
+    }
 
     activityRef.current = [];
     setActivity([]);
