@@ -190,7 +190,7 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>((searchParams.get("tab") as SideTab) || "chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const lastRunningIdRef = useRef<string | null>(null);
-  const initialLoadRef = useRef(true);
+  const hadRunningOnMount = useRef<boolean | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeSrcSet = useRef(false);
@@ -350,12 +350,15 @@ export default function ProjectDetail() {
   useEffect(() => {
     const runningId = runningDep?.id || null;
     if (runningId && runningId !== lastRunningIdRef.current) {
-      const isInitialLoad = initialLoadRef.current;
-      lastRunningIdRef.current = runningId;
-      if (isInitialLoad) {
-        initialLoadRef.current = false;
-        return;
+      // Track if there was a running deployment when the page first loaded
+      if (hadRunningOnMount.current === null) {
+        hadRunningOnMount.current = true; // First running dep detected — was it already running?
+        lastRunningIdRef.current = runningId;
+        // If the iframe already has a src (page loaded with running dep), skip retries
+        if (iframeSrcSet.current) return;
+        // Otherwise this is a fresh deploy — fall through to retry logic
       }
+      lastRunningIdRef.current = runningId;
       // Reset iframe and retry at increasing intervals
       iframeSrcSet.current = false;
       setIframeLoaded(false);
