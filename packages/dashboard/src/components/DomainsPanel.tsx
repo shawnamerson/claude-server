@@ -178,19 +178,14 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
 
   const checkDnsOnce = async (domain: string): Promise<boolean> => {
     try {
-      const controller = new AbortController();
-      setTimeout(() => controller.abort(), 6000);
-      await fetch(`https://${domain}/`, { mode: "no-cors", signal: controller.signal });
-      return true;
+      const authToken = (window as any).__authToken;
+      const res = await fetch(`/api/check-dns/${encodeURIComponent(domain)}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
+      const data = await res.json();
+      return data.verified;
     } catch {
-      try {
-        const controller2 = new AbortController();
-        setTimeout(() => controller2.abort(), 5000);
-        await fetch(`http://${domain}/`, { mode: "no-cors", signal: controller2.signal });
-        return true;
-      } catch {
-        return false;
-      }
+      return false;
     }
   };
 

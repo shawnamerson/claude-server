@@ -109,6 +109,26 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// DNS verification — check if a domain points to this server
+app.get("/api/check-dns/:domain", async (req, res) => {
+  const domain = req.params.domain as string;
+  if (!/^[a-z0-9.-]+$/.test(domain)) {
+    res.json({ verified: false });
+    return;
+  }
+  try {
+    const { execFile } = await import("child_process");
+    const { promisify } = await import("util");
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync("dig", ["+short", domain], { timeout: 5000 });
+    const ips = stdout.trim().split("\n").map(s => s.trim());
+    const serverIp = cachedServerIp || (await fetch("https://api.ipify.org?format=json").then(r => r.json()) as { ip: string }).ip;
+    res.json({ verified: ips.includes(serverIp), resolvedTo: ips, expected: serverIp });
+  } catch {
+    res.json({ verified: false });
+  }
+});
+
 // Server IP for DNS setup instructions
 let cachedServerIp: string | null = null;
 app.get("/api/server-ip", async (_req, res) => {
