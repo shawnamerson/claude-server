@@ -90,7 +90,7 @@ interface Props {
   projectId: string;
   deploying?: boolean;
   deployStatus?: string;
-  onDeploy: (prompt: string) => void;
+  onDeploy: (prompt: string) => Promise<void>;
   deploymentId?: string | null;
 }
 
@@ -250,7 +250,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
   };
 
   // Deploy: trigger a full deploy (costs a deploy). Can be called from inline button.
-  const handleDeploy = (prompt?: string) => {
+  const handleDeploy = async (prompt?: string) => {
     const text = prompt || input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
     if (!text || deploying || chatStreaming) return;
     if (!prompt) setInput("");
@@ -267,7 +267,20 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       created_at: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMsg]);
-    onDeploy(text);
+
+    try {
+      await onDeploy(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Deploy failed";
+      const isLimitError = msg.includes("limit") || msg.includes("Upgrade") || msg.includes("verify");
+      setMessages(prev => [...prev, {
+        id: Date.now() + 3,
+        project_id: projectId,
+        role: "assistant",
+        content: isLimitError ? `__UPGRADE__${msg}` : msg,
+        created_at: new Date().toISOString(),
+      }]);
+    }
   };
 
   const isActive = !!deploying || chatStreaming;
@@ -302,8 +315,21 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         )}
         {messages.map((msg, idx) => {
           const isLast = idx === messages.length - 1;
-          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !deploying && !chatStreaming && !!msg.content;
+          const showDeployBtn = msg.role === "assistant" && isLast && hasSuggestion && !deploying && !chatStreaming && !!msg.content && !msg.content.startsWith("__UPGRADE__");
           const isEmpty = !msg.content && msg.role === "assistant";
+          const isUpgrade = msg.content?.startsWith("__UPGRADE__");
+
+          if (isUpgrade) {
+            const reason = msg.content.replace("__UPGRADE__", "");
+            return (
+              <div key={msg.id} style={s.upgradeBox}>
+                <div style={s.upgradeTitle}>Deploy limit reached</div>
+                <div style={s.upgradeReason}>{reason}</div>
+                <a href="/billing" style={s.upgradeBtn}>Upgrade plan</a>
+              </div>
+            );
+          }
+
           return (
             <div key={msg.id} style={msg.role === "user" ? s.userMsg : s.assistantMsg}>
               {isEmpty ? <span style={s.statusLine}>Claude is thinking...</span> : msg.content}
@@ -361,6 +387,10 @@ const s = {
   input: { flex: 1, padding: "0.5rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.5rem", color: "#e0e0e0", fontSize: "0.85rem", outline: "none", fontFamily: "inherit" },
   sendBtn: { width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "1rem", fontWeight: 700, flexShrink: 0, lineHeight: 1 },
   inlineDeployBtn: { display: "block", marginTop: "0.6rem", padding: "0.5rem 1rem", background: "#16a34a", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, fontFamily: "inherit", boxShadow: "0 0 12px rgba(22,163,74,0.3)", width: "100%" },
+  upgradeBox: { background: "#1a1020", border: "1px solid #7c3aed44", borderRadius: "0.75rem", padding: "1rem", textAlign: "center" as const },
+  upgradeTitle: { fontSize: "0.95rem", fontWeight: 600, color: "#e0e0e0", marginBottom: "0.35rem" },
+  upgradeReason: { fontSize: "0.82rem", color: "#888", marginBottom: "0.75rem", lineHeight: 1.4 },
+  upgradeBtn: { display: "inline-block", padding: "0.5rem 1.5rem", background: "#7c3aed", color: "#fff", borderRadius: "0.5rem", textDecoration: "none", fontSize: "0.85rem", fontWeight: 600 },
   empty: { color: "#555", textAlign: "center" as const, padding: "2rem 1rem", fontSize: "0.85rem" },
   emptyState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flex: 1, gap: "0.75rem", padding: "2rem 1rem", animation: "fadeInUp 0.4s ease" },
   emptyIcon: { opacity: 0.6, marginBottom: "0.25rem" },

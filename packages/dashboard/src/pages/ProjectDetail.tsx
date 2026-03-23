@@ -393,14 +393,11 @@ export default function ProjectDetail() {
         {/* Tab content */}
         <div style={styles.sidebarContent}>
           {sideTab === "chat" && (
-            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} deploymentId={selectedDeployment} onDeploy={(prompt) => {
+            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} deploymentId={selectedDeployment} onDeploy={async (prompt) => {
               if (!id) return;
-              api.deploy(id, prompt).then((dep) => {
-                setSelectedDeployment(dep.id);
-                refresh();
-              }).catch((err) => {
-                alert(err instanceof Error ? err.message : "Deploy failed");
-              });
+              const dep = await api.deploy(id, prompt);
+              setSelectedDeployment(dep.id);
+              refresh();
             }} />
           )}
           <div style={{ display: sideTab === "logs" ? "flex" : "none", flex: 1, minHeight: 0, flexDirection: "column" }}>

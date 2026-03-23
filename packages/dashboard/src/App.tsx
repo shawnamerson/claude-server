@@ -136,6 +136,7 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
         <Link to="/" style={styles.logo}>VibeStack</Link>
         <Link to="/projects" style={styles.navLink}>Projects</Link>
         <Link to="/new" style={styles.navLink}>New Project</Link>
+        <Link to="/billing" style={styles.navLink}>Billing</Link>
         <div style={styles.navRight}>
           {user && (
             <>
