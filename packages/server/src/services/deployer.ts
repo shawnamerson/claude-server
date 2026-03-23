@@ -213,6 +213,32 @@ export async function getContainerStatus(containerId: string): Promise<string> {
   }
 }
 
+// Clean up stopped project containers and dangling images
+export async function cleanupStoppedContainers() {
+  try {
+    const containers = await docker.listContainers({
+      all: true,
+      filters: { label: ["claude-server=true"], status: ["exited", "dead"] },
+    });
+    let removed = 0;
+    for (const c of containers) {
+      try {
+        await docker.getContainer(c.Id).remove({ force: true });
+        removed++;
+        if (c.Ports) {
+          for (const port of c.Ports) {
+            if (port.PublicPort) usedPorts.delete(port.PublicPort);
+          }
+        }
+      } catch {}
+    }
+    if (removed > 0) console.log(`Cleaned up ${removed} stopped containers`);
+
+    // Prune dangling images
+    await docker.pruneImages({ filters: { dangling: { "true": true } } }).catch(() => {});
+  } catch {}
+}
+
 // Initialize: scan for existing containers and mark their ports as used
 export async function initializePortTracking() {
   try {

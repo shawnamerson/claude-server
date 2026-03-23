@@ -114,18 +114,32 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
 
     addLog(deploymentId, "system", `Project ready — ${result.files.length} files`);
 
-    // Quick npm install to catch missing deps before deploy
+    // Pre-deploy checks: npm install + syntax check
     try {
       const { DevContainer } = await import("../services/generator.js");
       const devC = new DevContainer(project.source_path);
+
+      // npm install
       addLog(deploymentId, "system", "Installing dependencies...");
-      const installOutput = await devC.exec("npm install --prefer-offline 2>&1 | tail -5", (msg: string) => addLog(deploymentId, "system", msg));
-      if (installOutput.includes("ERR")) {
-        addLog(deploymentId, "system", `npm install warning: ${installOutput.slice(0, 200)}`);
+      const installOutput = await devC.exec("npm install --prefer-offline 2>&1 | tail -10", (msg: string) => addLog(deploymentId, "system", msg));
+      if (installOutput.includes("ERR") || installOutput.includes("error")) {
+        addLog(deploymentId, "system", `npm install issue: ${installOutput.slice(0, 300)}`);
+      } else {
+        addLog(deploymentId, "system", "Dependencies installed");
       }
+
+      // Syntax check
+      addLog(deploymentId, "system", "Checking syntax...");
+      const syntaxOutput = await devC.exec("node -c server.js 2>&1", (msg: string) => addLog(deploymentId, "system", msg));
+      if (syntaxOutput.includes("SyntaxError") || syntaxOutput.includes("Error")) {
+        addLog(deploymentId, "system", `Syntax error: ${syntaxOutput.slice(0, 300)}`);
+      } else {
+        addLog(deploymentId, "system", "Syntax OK");
+      }
+
       await devC.cleanup();
     } catch (err) {
-      addLog(deploymentId, "system", `npm install skipped: ${err instanceof Error ? err.message : String(err)}`);
+      addLog(deploymentId, "system", `Pre-deploy checks skipped: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // Save chat messages

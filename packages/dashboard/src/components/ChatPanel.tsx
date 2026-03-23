@@ -8,7 +8,7 @@ interface LogLine {
 }
 
 interface ActivityItem {
-  type: "thinking" | "files" | "command" | "command_output" | "status" | "error";
+  type: "thinking" | "files" | "command" | "command_output" | "status" | "error" | "success";
   content: string;
   files?: string[];
 }
@@ -24,6 +24,8 @@ function parseLogToActivity(msg: string): ActivityItem | null {
   if (msg.startsWith("  Exit code:") || msg.startsWith("  Command error:")) return { type: "error", content: msg.trim() };
   if (msg.includes("error") || msg.includes("Error") || msg.includes("failed") || msg.includes("Failed")) return { type: "error", content: msg };
   if (msg.startsWith("Notes:")) return { type: "thinking", content: msg.slice(6).trim() };
+  if (msg.startsWith("Deployed successfully") || msg.startsWith("Auto-fixed and redeployed")) return { type: "success", content: "Your app is live!" };
+  if (msg.startsWith("Live at:")) return { type: "success", content: msg };
   return { type: "status", content: msg };
 }
 
@@ -76,6 +78,7 @@ function ActivityBlock({ items }: { items: ActivityItem[] }) {
         if (item.type === "command") return <div key={i} style={s.cmdBlock}><span style={s.cmdPrompt}>$</span> {item.content}</div>;
         if (item.type === "command_output") return <div key={i} style={s.cmdOutput}>{item.content}</div>;
         if (item.type === "error") return <div key={i} style={s.errorLine}>{item.content}</div>;
+        if (item.type === "success") return <div key={i} style={s.successLine}>{item.content}</div>;
         if (item.type === "status") return <div key={i} style={s.statusLine}>{item.content}</div>;
         return null;
       })}
@@ -256,5 +259,6 @@ const s = {
   cmdPrompt: { color: "#555" },
   cmdOutput: { fontFamily: "'JetBrains Mono', monospace", fontSize: "0.75rem", color: "#888", padding: "0.15rem 0.5rem" },
   errorLine: { color: "#f87171", fontSize: "0.8rem", background: "#1a0a0a", padding: "0.3rem 0.5rem", borderRadius: "0.35rem" },
+  successLine: { color: "#34d399", fontSize: "0.9rem", fontWeight: 600, background: "#0a1a14", padding: "0.4rem 0.6rem", borderRadius: "0.35rem", border: "1px solid #064e3b" },
   statusLine: { color: "#888", fontSize: "0.8rem", fontStyle: "italic" as const },
 };

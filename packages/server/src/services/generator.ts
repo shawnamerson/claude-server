@@ -88,43 +88,17 @@ const FULL_TOOLS: Anthropic.Tool[] = [
   DONE_TOOL,
 ];
 
-const SYSTEM_PROMPT = `You are an expert full-stack developer. Build projects using the provided tools.
+const SYSTEM_PROMPT = `You are an expert full-stack developer. Write ALL files in ONE write_files call, then call done.
 
-IMPORTANT: Be fast. Write ALL files in as few turns as possible using write_files. Batch everything together.
+Structure: Express server (server.js) + static frontend (public/index.html, public/style.css, public/app.js). Use express.static('public'). Listen on process.env.PORT || 3000. Include GET /health endpoint.
 
-WORKFLOW:
-1. First turn: write package.json, server.js, and ALL frontend files (HTML, CSS, JS) together in ONE write_files call
-2. Second turn: write Dockerfile + .dockerignore, then call done immediately
+For data persistence: use PostgreSQL via process.env.DATABASE_URL with "pg" package. CREATE TABLE IF NOT EXISTS on startup.
 
-Do NOT run commands for new projects — just write the files correctly and call done. The platform will test and deploy automatically.
+NEVER put HTML in template literals. Keep HTML in .html files, CSS in .css files, JS in .js files.
 
-CHOOSE THE RIGHT ARCHITECTURE based on what the user describes:
-- For simple sites (landing pages, portfolios, blogs): Express serving static HTML/CSS/JS from public/ folder
-- For web apps with a backend (CRUD apps, marketplaces, dashboards): Express API + vanilla HTML/CSS/JS in public/
-- For complex interactive UIs (real-time apps, rich SPAs): Express API + React with Vite (src/App.jsx, build to dist/)
-Use your judgment — pick the simplest architecture that fits the requirements.
+Package.json: version "*" for all deps, include "start" script. Include a Dockerfile (FROM claude-server/base:latest, COPY . ., EXPOSE 3000, CMD node server.js) and .dockerignore.
 
-RULES:
-- NEVER put HTML inside JavaScript template literals — use separate .html files in public/ or React components.
-- The app MUST listen on process.env.PORT (default 3000).
-- Include a GET /health endpoint.
-- If the app needs data persistence, ALWAYS use PostgreSQL via process.env.DATABASE_URL with the "pg" npm package. Create tables on startup with CREATE TABLE IF NOT EXISTS. NEVER use SQLite, JSON files, or in-memory storage.
-- Make the app functional with real features, not a skeleton. Include sample data if appropriate.
-
-PACKAGE.JSON:
-- List all dependencies with version "*" (the platform resolves versions).
-- Include a "start" script.
-
-DOCKERFILE:
-- Use claude-server/base:latest as the base image (node:20-alpine with pre-installed packages: express, cors, pg, bcryptjs, jsonwebtoken, uuid, dotenv, multer, cookie-parser, compression, morgan, helmet, express-rate-limit, ws, socket.io, axios, node-fetch, dayjs, marked, sanitize-html, sharp).
-- WORKDIR is already /app with node_modules at /app/node_modules.
-- Only run "npm install" if you need packages NOT in the base image. If all deps are pre-installed, skip it.
-- COPY source files, set EXPOSE and CMD properly.
-
-.DOCKERIGNORE:
-- Exclude: node_modules, .git, *.md
-
-Call "done" with a brief note about what the app does when finished.`;
+Make it functional with real features and sample data. Call done with a 1-2 sentence description.`;
 
 const MODIFY_SYSTEM_PROMPT = `You are an expert full-stack developer. Modify an existing project using the provided tools.
 

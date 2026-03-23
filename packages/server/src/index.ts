@@ -3,7 +3,7 @@ import cors from "cors";
 import { config } from "./config.js";
 import { getDb, closeDb } from "./db/client.js";
 import { errorHandler } from "./middleware/error.js";
-import { initializePortTracking } from "./services/deployer.js";
+import { initializePortTracking, cleanupStoppedContainers } from "./services/deployer.js";
 import projectRoutes from "./routes/projects.js";
 import deploymentRoutes from "./routes/deployments.js";
 import logRoutes from "./routes/logs.js";
@@ -85,6 +85,19 @@ async function start() {
   await initializePortTracking();
   await initializeDbPortTracking();
   await cleanupOrphanedDevContainers();
+  await cleanupStoppedContainers();
+
+  // Recover stuck deployments from previous server run
+  const db = getDb();
+  const stuck = db.prepare(
+    "SELECT id FROM deployments WHERE status IN ('pending', 'generating', 'building', 'deploying')"
+  ).all() as Array<{ id: string }>;
+  if (stuck.length > 0) {
+    db.prepare(
+      "UPDATE deployments SET status = 'failed', error = 'Server restarted during deployment' WHERE status IN ('pending', 'generating', 'building', 'deploying')"
+    ).run();
+    console.log(`Recovered ${stuck.length} stuck deployment(s)`);
+  }
 
   // Generate initial Caddy config
   reloadCaddyConfig().catch(() => console.log("Caddy not available yet — config will update on first deploy"));
