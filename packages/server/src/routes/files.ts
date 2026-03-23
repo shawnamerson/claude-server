@@ -139,7 +139,9 @@ function walkTree(dir: string, prefix = ""): FileNode[] {
         nodes.push({ name: entry.name, path: relPath, type: "file" });
       }
     }
-  } catch { /* skip */ }
+  } catch {
+    // Directory may not exist yet — return empty tree
+  }
   return nodes;
 }
 

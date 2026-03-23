@@ -4,7 +4,6 @@ import crypto from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import path from "path";
 import { getDb } from "../db/client.js";
 import { Project } from "../types.js";
 
@@ -131,17 +130,24 @@ router.post("/github/webhook/:projectId", async (req: Request, res: Response) =>
     ], { timeout: 60000 });
   }
 
-  // Trigger a deploy via the deployments API internally
-  const { default: deployRouter } = await import("./deployments.js");
+  // Trigger a deploy directly via the pipeline function
+  const { runPipeline } = await import("./deployments.js");
 
-  // Create a fake request to trigger deploy
-  const deployRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/projects/${projectId}/deploy`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt: `Auto-deploy from GitHub push: ${payload.head_commit?.message || "new commit"}` }),
+  const deploymentId = nanoid(12);
+  const prompt = `Auto-deploy from GitHub push: ${payload.head_commit?.message || "new commit"}`;
+
+  db.prepare(
+    "INSERT INTO deployments (id, project_id, status) VALUES (?, ?, 'pending')"
+  ).run(deploymentId, project.id);
+
+  // Run pipeline in background — don't block the webhook response
+  runPipeline(project, deploymentId, prompt).catch((err) => {
+    console.error("GitHub deploy pipeline error:", err);
+    db.prepare("UPDATE deployments SET status = 'failed', error = ? WHERE id = ?")
+      .run(err instanceof Error ? err.message : String(err), deploymentId);
   });
 
-  res.json({ ok: true, message: "Deploy triggered from GitHub push" });
+  res.json({ ok: true, deploymentId, message: "Deploy triggered from GitHub push" });
 });
 
 export default router;

@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import Stripe from "stripe";
 import { getDb } from "../db/client.js";
 import { requireAuth, getPlanLimits } from "./auth.js";
+import "../types.js";
 
 const router = Router();
 
@@ -25,9 +26,9 @@ router.get("/billing/plans", (_req: Request, res: Response) => {
 // Get current user billing info
 router.get("/billing/status", requireAuth, (req: Request, res: Response) => {
   const db = getDb();
-  const user = (req as any).user;
+  const user = req.user!;
 
-  const userData = db.prepare("SELECT plan, stripe_subscription_id, plan_expires_at, credits FROM users WHERE id = ?").get(user.id) as any;
+  const userData = db.prepare("SELECT plan, stripe_subscription_id, plan_expires_at, credits FROM users WHERE id = ?").get(user.id) as { plan: string; stripe_subscription_id: string | null; plan_expires_at: string | null; credits: number } | undefined;
 
   // Count deploys this month
   const monthStart = new Date();
@@ -67,11 +68,11 @@ router.post("/billing/subscribe", requireAuth, async (req: Request, res: Respons
     return;
   }
 
-  const user = (req as any).user;
+  const user = req.user!;
   const db = getDb();
 
   // Get or create Stripe customer
-  let customerId = (db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(user.id) as any)?.stripe_customer_id;
+  let customerId = (db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(user.id) as { stripe_customer_id: string | null } | undefined)?.stripe_customer_id;
 
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -111,8 +112,8 @@ router.post("/billing/cancel", requireAuth, async (req: Request, res: Response) 
   if (!stripe) { res.status(500).json({ error: "Stripe not configured" }); return; }
 
   const db = getDb();
-  const user = (req as any).user;
-  const userData = db.prepare("SELECT stripe_subscription_id FROM users WHERE id = ?").get(user.id) as any;
+  const user = req.user!;
+  const userData = db.prepare("SELECT stripe_subscription_id FROM users WHERE id = ?").get(user.id) as { stripe_subscription_id: string | null } | undefined;
 
   if (!userData?.stripe_subscription_id) {
     res.status(400).json({ error: "No active subscription" });
@@ -161,7 +162,7 @@ router.post("/billing/webhook", async (req: Request, res: Response) => {
   if (event.type === "customer.subscription.deleted") {
     const sub = event.data.object as Stripe.Subscription;
     // Find user by subscription ID
-    const user = db.prepare("SELECT id FROM users WHERE stripe_subscription_id = ?").get(sub.id) as any;
+    const user = db.prepare("SELECT id FROM users WHERE stripe_subscription_id = ?").get(sub.id) as { id: string } | undefined;
     if (user) {
       db.prepare("UPDATE users SET plan = 'free', stripe_subscription_id = NULL WHERE id = ?").run(user.id);
       console.log(`User ${user.id} subscription cancelled`);

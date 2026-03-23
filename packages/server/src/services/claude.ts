@@ -31,7 +31,7 @@ const deployUsage = new Map<string, TokenUsage>();
 function trackUsage(deploymentId: string | null, message: Anthropic.Message) {
   const input = message.usage?.input_tokens || 0;
   const output = message.usage?.output_tokens || 0;
-  const cacheRead = (message.usage as any)?.cache_read_input_tokens || 0;
+  const cacheRead = (message.usage as unknown as Record<string, number>)?.cache_read_input_tokens || 0;
   const uncachedInput = input - cacheRead;
   const costCents = Math.round(
     (uncachedInput / 1_000_000 * INPUT_COST_PER_M + cacheRead / 1_000_000 * CACHE_READ_COST_PER_M + output / 1_000_000 * OUTPUT_COST_PER_M) * 100
@@ -54,7 +54,9 @@ function trackUsage(deploymentId: string | null, message: Anthropic.Message) {
         deploymentId,
         `Tokens: ${input.toLocaleString()} in + ${output.toLocaleString()} out = $${(costCents / 100).toFixed(3)}`
       );
-    } catch { /* ignore if deployment doesn't exist */ }
+    } catch {
+      // Deployment may not exist yet during early pipeline stages
+    }
   }
 
   return { inputTokens: input, outputTokens: output, costCents };

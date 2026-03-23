@@ -21,7 +21,7 @@ function slugify(name: string): string {
 // List projects for the current user
 router.get("/", (req: Request, res: Response) => {
   const db = getDb();
-  const user = (req as any).user;
+  const user = req.user;
 
   // If authenticated, show only user's projects. Otherwise show unowned projects.
   const whereClause = user ? "WHERE p.user_id = ?" : "WHERE p.user_id IS NULL";
@@ -75,7 +75,7 @@ router.post("/", (req: Request, res: Response) => {
   }
 
   // Check project limit
-  const user = (req as any).user;
+  const user = req.user;
   if (user) {
     const check = canCreateProject(user.id);
     if (!check.allowed) {
@@ -97,7 +97,7 @@ router.post("/", (req: Request, res: Response) => {
   const sourcePath = `${config.projectsDir}/${id}`;
   fs.mkdirSync(sourcePath, { recursive: true });
 
-  const userId = (req as any).user?.id || null;
+  const userId = req.user?.id || null;
   db.prepare(
     "INSERT INTO projects (id, user_id, name, slug, source_path, description) VALUES (?, ?, ?, ?, ?, ?)"
   ).run(id, userId, name, slug, sourcePath, description || "");

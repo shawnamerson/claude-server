@@ -236,9 +236,13 @@ export async function cleanupOrphanedDevContainers(): Promise<void> {
         await container.stop({ t: 1 }).catch(() => {});
         await container.remove({ force: true });
         console.log(`Cleaned up orphaned dev container: ${c.Names[0]}`);
-      } catch {}
+      } catch (err) {
+        console.warn(`Failed to clean dev container ${c.Id.slice(0, 12)}:`, err instanceof Error ? err.message : String(err));
+      }
     }
-  } catch {}
+  } catch (err) {
+    console.warn("Dev container cleanup failed:", err instanceof Error ? err.message : String(err));
+  }
 }
 
 export class DevContainer {

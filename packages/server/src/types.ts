@@ -1,3 +1,23 @@
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  name: string;
+  credits: number;
+  email_verified: number;
+}
+
+// Augment Express Request globally so req.user is typed everywhere
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthenticatedUser;
+    }
+  }
+}
+
+// Re-export for explicit typing in route handlers
+export type { Request as AuthenticatedRequest } from "express";
+
 export interface Project {
   id: string;
   name: string;

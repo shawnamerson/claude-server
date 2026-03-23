@@ -292,13 +292,27 @@ export async function executeQuery(projectId: string, sql: string): Promise<{
     return { columns: [], rows: [], rowCount: 0, error: "Database not running" };
   }
 
-  // Basic safety: block dangerous statements
+  // Block dangerous statements — only allow SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, ALTER TABLE
   const normalized = sql.trim().toUpperCase();
-  const blocked = ["DROP DATABASE", "DROP ROLE", "DROP USER", "CREATE DATABASE", "ALTER SYSTEM"];
+  const blocked = [
+    "DROP DATABASE", "DROP ROLE", "DROP USER", "DROP SCHEMA",
+    "CREATE DATABASE", "CREATE ROLE", "CREATE USER",
+    "ALTER SYSTEM", "ALTER ROLE", "ALTER USER",
+    "GRANT", "REVOKE", "COPY", "\\COPY",
+    "LOAD", "DO $$", "CREATE FUNCTION", "CREATE PROCEDURE",
+    "CREATE EXTENSION", "CREATE TRIGGER",
+  ];
   for (const b of blocked) {
     if (normalized.includes(b)) {
       return { columns: [], rows: [], rowCount: 0, error: `Blocked: ${b} is not allowed` };
     }
+  }
+
+  // Block multiple statements (semicolons outside of string literals)
+  const statementsOutsideStrings = sql.replace(/'[^']*'/g, "").replace(/"[^"]*"/g, "");
+  const statementCount = statementsOutsideStrings.split(";").filter(s => s.trim().length > 0).length;
+  if (statementCount > 1) {
+    return { columns: [], rows: [], rowCount: 0, error: "Only single statements are allowed" };
   }
 
   const container = docker.getContainer(info.container_name);

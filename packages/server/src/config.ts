@@ -26,6 +26,7 @@ export const config = {
   },
   domain: process.env.DOMAIN || "localhost",
   containerPortStart: 10000,
+  dockerHostIp: process.env.DOCKER_HOST_IP || "172.17.0.1",
   maxUploadSize: 100 * 1024 * 1024, // 100MB
   maxBuildRetries: 3,
 };

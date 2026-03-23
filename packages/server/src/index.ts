@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import { config } from "./config.js";
 import { getDb, closeDb } from "./db/client.js";
 import { errorHandler } from "./middleware/error.js";
-import { initializePortTracking, cleanupStoppedContainers } from "./services/deployer.js";
+import { initializePortTracking, cleanupStoppedContainers, reconcilePorts } from "./services/deployer.js";
 import projectRoutes from "./routes/projects.js";
 import deploymentRoutes from "./routes/deployments.js";
 import logRoutes from "./routes/logs.js";
@@ -24,7 +24,12 @@ import fs from "fs";
 
 const app = express();
 
-app.use(cors());
+// CORS — restrict to configured domain in production
+const domain = process.env.DOMAIN || "localhost";
+const corsOrigins = domain === "localhost"
+  ? true // Allow all origins in development
+  : [`https://${domain}`, `http://${domain}`, new RegExp(`https://.*\\.${domain.replace(/\./g, "\\.")}$`)];
+app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json());
 
 // Rate limiting
@@ -48,8 +53,8 @@ app.use("/api", billingRoutes);
 app.use("/api/projects", projectRoutes); // list/create don't need ownership; individual routes do
 app.use("/api/projects/:id", requireProjectOwner); // All sub-routes of /projects/:id
 app.use("/api/projects/:projectId", requireProjectOwner); // All sub-routes of /projects/:projectId
-app.use("/api", logRoutes); // Log streaming before auth check — uses unguessable deployment IDs
-app.use("/api/deployments/:id", requireDeploymentOwner); // Deployment-specific routes
+app.use("/api/deployments/:id", requireDeploymentOwner); // Deployment-specific routes (including log streaming)
+app.use("/api", logRoutes);
 app.use("/api", deploymentRoutes);
 app.use("/api", chatRoutes);
 app.use("/api", fileRoutes);
@@ -128,6 +133,11 @@ async function start() {
 
   // Generate initial Caddy config
   reloadCaddyConfig().catch(() => console.log("Caddy not available yet — config will update on first deploy"));
+
+  // Reconcile ports every 5 minutes to release stale allocations
+  setInterval(() => {
+    reconcilePorts().catch((err) => console.warn("Port reconciliation error:", err));
+  }, 5 * 60 * 1000);
 
   app.listen(config.port, () => {
     console.log(`Claude Server running on http://localhost:${config.port}`);

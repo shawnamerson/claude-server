@@ -31,6 +31,13 @@ router.post("/projects/:id/domains", async (req: Request, res: Response) => {
   // Normalize domain
   const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
 
+  // Validate domain format — must be a valid hostname
+  const domainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+  if (!domainRegex.test(cleanDomain) || cleanDomain.length > 253) {
+    res.status(400).json({ error: "Invalid domain format" });
+    return;
+  }
+
   const db = getDb();
 
   // Check if domain is already used

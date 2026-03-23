@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
+import "../types.js";
 
 const router = Router();
 
@@ -50,27 +51,29 @@ router.post("/auth/signup", async (req: Request, res: Response) => {
 
   db.prepare("INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, 3, 'signup', 'Welcome bonus')").run(id);
 
-  // TODO: Send verification email. For now, return the code in the response.
-  console.log(`Verification code for ${email}: ${verificationCode}`);
+  // TODO: Send verification email via a real email service.
+  // In development, the code is logged to console for testing.
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`Verification code for ${email}: ${verificationCode}`);
+  }
 
   res.json({
     token: sessionId,
     user: { id, email, name: name || "", credits: 3, email_verified: false },
-    verificationCode, // Remove this once email sending is implemented
   });
 });
 
 // Verify email
 router.post("/auth/verify", (req: Request, res: Response) => {
   const { code } = req.body;
-  const user = (req as any).user;
+  const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
 
   const db = getDb();
-  const userData = db.prepare("SELECT verification_code, email_verified FROM users WHERE id = ?").get(user.id) as any;
+  const userData = db.prepare("SELECT verification_code, email_verified FROM users WHERE id = ?").get(user.id) as { verification_code: string | null; email_verified: number } | undefined;
 
   if (userData?.email_verified) {
     res.json({ ok: true, message: "Already verified" });
@@ -119,7 +122,7 @@ router.post("/auth/login", async (req: Request, res: Response) => {
 
 // Get current user
 router.get("/auth/me", (req: Request, res: Response) => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Not logged in" });
     return;
@@ -153,14 +156,14 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     return;
   }
 
-  const user = db.prepare("SELECT id, email, name, credits, email_verified FROM users WHERE id = ?").get(session.user_id);
-  (req as any).user = user;
+  const user = db.prepare("SELECT id, email, name, credits, email_verified FROM users WHERE id = ?").get(session.user_id) as Request["user"];
+  req.user = user;
   next();
 }
 
 // Middleware: require authentication
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!(req as any).user) {
+  if (!req.user) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
@@ -169,7 +172,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 // Middleware: require auth + verify user owns the project referenced by :id or :projectId
 export function requireProjectOwner(req: Request, res: Response, next: NextFunction) {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -200,7 +203,7 @@ export function requireProjectOwner(req: Request, res: Response, next: NextFunct
 
 // Middleware: require auth + verify user owns the deployment referenced by :id (via its project)
 export function requireDeploymentOwner(req: Request, res: Response, next: NextFunction) {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Authentication required" });
     return;

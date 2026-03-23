@@ -17,19 +17,42 @@ services:
       - claude-server-network
     command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
 
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: always
+    environment:
+      # Allow container lifecycle operations needed by the app
+      CONTAINERS: 1
+      IMAGES: 1
+      NETWORKS: 1
+      VOLUMES: 1
+      EXEC: 1
+      # Block dangerous operations
+      AUTH: 0
+      SECRETS: 0
+      SWARM: 0
+      BUILD: 1
+      POST: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - claude-server-network
+
   claude-server:
     build: .
     restart: always
+    depends_on:
+      - docker-socket-proxy
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - PORT=3000
       - DATA_DIR=/app/data
       - DOMAIN=${DOMAIN}
       - CADDYFILE_PATH=/host-caddyfile/Caddyfile
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     volumes:
       - app-data:/app/data
       - ./:/host-caddyfile
-      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - claude-server-network
 

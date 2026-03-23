@@ -12,6 +12,11 @@ interface CustomDomainRow {
 const MAIN_SERVER = "claude-server:3000";
 const CONTAINER_HOST = "host.docker.internal";
 
+// Validate that a string is a safe hostname (no Caddyfile injection)
+function isSafeHostname(hostname: string): boolean {
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(hostname);
+}
+
 export function generateCaddyfile(): string {
   const db = getDb();
   const domain = config.domain;
@@ -51,6 +56,10 @@ export function generateCaddyfile(): string {
   // Subdomain routing: slug.domain -> container port via host
   // Strip framing restrictions so apps render in the dashboard preview iframe
   for (const [_projectId, { port, slug }] of projectPorts) {
+    if (!isSafeHostname(slug)) {
+      console.warn(`Skipping unsafe slug in Caddyfile: ${slug}`);
+      continue;
+    }
     caddyfile += `${slug}.${domain} {\n`;
     caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${port}\n`;
     caddyfile += `    header -X-Frame-Options\n`;
@@ -63,6 +72,10 @@ export function generateCaddyfile(): string {
   for (const cd of customDomains) {
     const mapping = projectPorts.get(cd.project_id);
     if (mapping) {
+      if (!isSafeHostname(cd.domain)) {
+        console.warn(`Skipping unsafe custom domain in Caddyfile: ${cd.domain}`);
+        continue;
+      }
       caddyfile += `${cd.domain} {\n`;
       caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${mapping.port}\n`;
       caddyfile += `    header -X-Frame-Options\n`;

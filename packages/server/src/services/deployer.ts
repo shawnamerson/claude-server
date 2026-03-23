@@ -230,13 +230,19 @@ export async function cleanupStoppedContainers() {
             if (port.PublicPort) usedPorts.delete(port.PublicPort);
           }
         }
-      } catch {}
+      } catch (err) {
+        console.warn(`Failed to remove container ${c.Id.slice(0, 12)}:`, err instanceof Error ? err.message : String(err));
+      }
     }
     if (removed > 0) console.log(`Cleaned up ${removed} stopped containers`);
 
     // Prune dangling images
-    await docker.pruneImages({ filters: { dangling: { "true": true } } }).catch(() => {});
-  } catch {}
+    await docker.pruneImages({ filters: { dangling: { "true": true } } }).catch((err) => {
+      console.warn("Image prune failed:", err instanceof Error ? err.message : String(err));
+    });
+  } catch (err) {
+    console.warn("Container cleanup failed:", err instanceof Error ? err.message : String(err));
+  }
 }
 
 // Initialize: scan for existing containers and mark their ports as used
@@ -258,5 +264,44 @@ export async function initializePortTracking() {
     }
   } catch {
     // Docker might not be available yet
+  }
+}
+
+// Periodically reconcile usedPorts with actual running containers
+export async function reconcilePorts() {
+  try {
+    const containers = await docker.listContainers({
+      all: true,
+      filters: { label: ["claude-server=true"] },
+    });
+
+    const activePorts = new Set<number>();
+    for (const container of containers) {
+      if (container.Ports) {
+        for (const port of container.Ports) {
+          if (port.PublicPort) activePorts.add(port.PublicPort);
+        }
+      }
+    }
+
+    // Release ports that no longer have a container
+    let released = 0;
+    for (const port of usedPorts) {
+      if (!activePorts.has(port)) {
+        usedPorts.delete(port);
+        released++;
+      }
+    }
+
+    // Add ports we didn't know about
+    for (const port of activePorts) {
+      usedPorts.add(port);
+    }
+
+    if (released > 0) {
+      console.log(`Port reconciliation: released ${released} stale port(s), tracking ${usedPorts.size} active`);
+    }
+  } catch (err) {
+    console.warn("Port reconciliation failed:", err instanceof Error ? err.message : String(err));
   }
 }

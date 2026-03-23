@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
 import { Project, Deployment } from "../types.js";
+import "../types.js";
 import { generateProject, modifyProject, readProjectFiles } from "../services/generator.js";
 import { deployContainer, deployFromVolume, stopContainer, releasePort, logEmitter } from "../services/deployer.js";
 import { getEnvVarsForDeploy } from "./envvars.js";
@@ -60,7 +61,7 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
   const { prompt } = req.body;
 
   // Check plan limits
-  const user = (req as any).user;
+  const user = req.user;
   if (user) {
     const deployCheck = canDeploy(user.id);
     if (!deployCheck.allowed) {
@@ -85,7 +86,7 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
   });
 });
 
-async function runPipeline(project: Project, deploymentId: string, prompt?: string) {
+export async function runPipeline(project: Project, deploymentId: string, prompt?: string) {
   const db = getDb();
   setCurrentDeployment(deploymentId);
 
@@ -144,7 +145,9 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
           fs.writeFileSync(serverPath, code);
         }
       }
-    } catch {}
+    } catch (err) {
+      console.warn("Auto-fix scan failed:", err instanceof Error ? err.message : String(err));
+    }
 
     // Skip npm install / syntax check for speed — auto-fix handles failures
     // The code pattern scanner above catches the most common issues
@@ -253,7 +256,9 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
           fs.rmSync(`${project.source_path}/${entry}`, { recursive: true, force: true });
         }
       }
-    } catch {}
+    } catch (err) {
+      console.warn("Failed to clean project files after failed deploy:", err instanceof Error ? err.message : String(err));
+    }
   }
 }
 
@@ -298,7 +303,9 @@ async function autoFixAndRedeploy(
     // Stop old container if running
     const oldDep = db.prepare("SELECT container_id, port FROM deployments WHERE id = ?").get(deploymentId) as { container_id: string | null; port: number | null } | undefined;
     if (oldDep?.container_id) {
-      try { await stopContainer(oldDep.container_id); } catch {}
+      try { await stopContainer(oldDep.container_id); } catch (err) {
+        console.warn("Failed to stop old container during auto-fix:", err instanceof Error ? err.message : String(err));
+      }
       if (oldDep.port) releasePort(oldDep.port);
     }
 
@@ -316,7 +323,7 @@ async function autoFixAndRedeploy(
     addLog(deploymentId, "system", `Auto-fixed and redeployed on port ${hostPort}`);
     addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
 
-    reloadCaddyConfig().catch(() => {});
+    reloadCaddyConfig().catch((err) => console.warn("Caddy reload failed after auto-fix:", err));
     return newId;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -330,7 +337,7 @@ async function autoFixAndRedeploy(
 async function monitorContainer(project: Project, deploymentId: string, containerId: string) {
   const db = getDb();
   const { getContainerStatus } = await import("../services/deployer.js");
-  const DOCKER_HOST = "172.17.0.1";
+  const DOCKER_HOST = config.dockerHostIp;
   const MAX_AUTO_FIXES = 3;
   let autoFixCount = 0;
 
@@ -445,7 +452,7 @@ router.post("/deployments/:id/stop", async (req: Request, res: Response) => {
   }
 
   db.prepare("UPDATE deployments SET status = 'stopped', stopped_at = datetime('now') WHERE id = ?").run(deployment.id);
-  reloadCaddyConfig().catch(() => {});
+  reloadCaddyConfig().catch((err) => console.warn("Caddy reload failed:", err));
   res.json({ ok: true });
 });
 
@@ -480,7 +487,7 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
       .run(containerId, hostPort, deployment.id);
 
     addLog(deployment.id, "system", `Restarted on port ${hostPort}`);
-    reloadCaddyConfig().catch(() => {});
+    reloadCaddyConfig().catch((err) => console.warn("Caddy reload failed:", err));
     res.json({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

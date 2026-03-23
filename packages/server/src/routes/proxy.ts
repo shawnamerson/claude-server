@@ -1,11 +1,10 @@
 import { Router, Request, Response } from "express";
 import http from "http";
+import { config } from "../config.js";
 
 const router = Router();
 
-// The Docker host IP — containers bind ports to the host, not to this container's localhost
-// "host.docker.internal" works on Docker Desktop; on Linux we use the gateway IP
-const DOCKER_HOST = process.env.DOCKER_HOST_IP || "172.17.0.1";
+const DOCKER_HOST = config.dockerHostIp;
 
 function proxyRequest(req: Request, res: Response, port: number, targetPath: string) {
   const options: http.RequestOptions = {
