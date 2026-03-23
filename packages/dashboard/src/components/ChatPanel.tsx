@@ -262,9 +262,10 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setChatStreaming(false);
       // Show Apply & Deploy only when Claude suggests actual code changes
       const hasCodeBlock = /```/.test(assistantText);
-      const suggestsAction = /\b(fix|change|modify|update|replace|add|remove|install|create|delete|rename|move|refactor|rewrite)\b.*\b(file|code|server|component|function|route|endpoint|config|package|import|module)\b/i.test(assistantText);
       const mentionsFiles = /\b(server\.js|index\.(js|ts|html)|package\.json|style\.css|app\.(js|ts)|\.env)\b/.test(assistantText);
-      setHasSuggestion(hasCodeBlock || (suggestsAction && mentionsFiles));
+      const suggestsAction = /\b(fix|change|modify|update|replace|add|remove|install|create|delete|rename|move|refactor|rewrite|apply|implement)\b/i.test(assistantText);
+      const asksToApply = /should I apply|want me to|shall I|I can (apply|make|implement|add|fix|update)/i.test(assistantText);
+      setHasSuggestion(hasCodeBlock || mentionsFiles || asksToApply || (suggestsAction && mentionsFiles));
       // Sync with DB to get proper message IDs
       api.getChatHistory(projectId).then(setMessages);
     }
