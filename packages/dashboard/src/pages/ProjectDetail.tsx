@@ -183,14 +183,16 @@ export default function ProjectDetail() {
   const lastRunningIdRef = useRef<string | null>(null);
   const runningDep = deployments.find((d) => d.status === "running");
 
-  // When a NEW running deployment appears, refresh preview after delay
+  // When a NEW running deployment appears, refresh preview multiple times
+  // npm install can take 5-15s, so retry at 8s, 15s, and 25s
   useEffect(() => {
     const runningId = runningDep?.id || null;
     if (runningId && runningId !== lastRunningIdRef.current) {
       lastRunningIdRef.current = runningId;
-      // Delay to let npm install + server start finish
-      const timer = setTimeout(() => setPreviewKey(k => k + 1), 5000);
-      return () => clearTimeout(timer);
+      const t1 = setTimeout(() => setPreviewKey(k => k + 1), 8000);
+      const t2 = setTimeout(() => setPreviewKey(k => k + 1), 15000);
+      const t3 = setTimeout(() => setPreviewKey(k => k + 1), 25000);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
   }, [runningDep?.id]);
 
