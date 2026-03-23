@@ -358,19 +358,39 @@ export default function ProjectDetail() {
         return;
       }
 
-      // Fresh deploy finished — reset and retry until app is ready
+      // Fresh deploy finished — reset and keep spinner until app loads
       iframeSrcSet.current = false;
       setIframeLoaded(false);
+      if (iframeRef.current) iframeRef.current.removeAttribute("src");
 
-      // Retry at increasing intervals — app needs time for npm install + startup
-      const retries = [1000, 3000, 8000, 15000, 25000];
-      const timeouts = retries.map(delay => setTimeout(() => {
-        if (iframeRef.current && previewUrl) {
-          iframeRef.current.src = previewUrl;
-          iframeSrcSet.current = true;
+      // Poll the server-side health check until the app is responding
+      let cancelled = false;
+      const pollHealth = async () => {
+        const delays = [3000, 6000, 10000, 15000, 22000, 30000];
+        for (const delay of delays) {
+          await new Promise(r => setTimeout(r, delay));
+          if (cancelled) return;
+          try {
+            const authToken = (window as any).__authToken;
+            const res = await fetch(`/api/app-health/${project?.slug}`, {
+              headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+            });
+            const data = await res.json();
+            if (data.ok && iframeRef.current && previewUrl) {
+              iframeSrcSet.current = true;
+              iframeRef.current.src = previewUrl;
+              return;
+            }
+          } catch {}
         }
-      }, delay));
-      return () => timeouts.forEach(clearTimeout);
+        // Last resort — load anyway after all retries
+        if (!cancelled && iframeRef.current && previewUrl) {
+          iframeSrcSet.current = true;
+          iframeRef.current.src = previewUrl;
+        }
+      };
+      pollHealth();
+      return () => { cancelled = true; };
     }
   }, [runningDep?.id, previewUrl, isDeploying]);
 
@@ -458,7 +478,10 @@ export default function ProjectDetail() {
               ref={iframeRef}
               style={{ ...previewIframeStyle, opacity: iframeLoaded ? 1 : 0 }}
               title="App Preview"
-              onLoad={() => setIframeLoaded(true)}
+              onLoad={() => {
+                // Only mark as loaded if we actually set a src (not initial empty state)
+                if (iframeSrcSet.current) setIframeLoaded(true);
+              }}
             />
             {!iframeLoaded && (
               <div style={{ ...styles.previewEmpty, position: "absolute", inset: 0, zIndex: 1 }}>

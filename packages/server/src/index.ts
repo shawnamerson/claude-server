@@ -115,6 +115,25 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Check if a deployed app is responding (for iframe preview)
+app.get("/api/app-health/:slug", async (req, res) => {
+  const db = getDb();
+  const dep = db.prepare(`
+    SELECT d.port FROM deployments d JOIN projects p ON p.id = d.project_id
+    WHERE p.slug = ? AND d.status = 'running' AND d.port IS NOT NULL
+    ORDER BY d.created_at DESC LIMIT 1
+  `).get(req.params.slug) as { port: number } | undefined;
+  if (!dep) { res.json({ ok: false }); return; }
+  try {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 3000);
+    await fetch(`http://${config.dockerHostIp}:${dep.port}/`, { signal: controller.signal });
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: false });
+  }
+});
+
 // DNS verification — check if a domain points to this server
 app.get("/api/check-dns/:domain", async (req, res) => {
   const domain = req.params.domain as string;
