@@ -295,7 +295,7 @@ export default function ProjectDetail() {
 
   const runningDep = deployments.find((d) => d.status === "running");
   const isDeploying = deployments.some((d) => ["pending", "generating", "building", "deploying"].includes(d.status));
-  const currentDep = deployments[0];
+  const currentDep = deployments.find(d => d.status === "running") || deployments[0];
   const previewUrl = `${window.location.protocol}//${project.slug}.${window.location.hostname}`;
 
   return (
