@@ -99,9 +99,7 @@ function HeroDemo() {
             <div style={t.urlChip}>{deployed ? "rentals.justvibe.dev" : ""}</div>
           </div>
           {deployed ? (
-            <div style={t.iframeContainer}>
-              <iframe src={demoUrl} style={t.iframeEl} title="Live demo" loading="eager" scrolling="no" />
-            </div>
+            <iframe src={demoUrl} style={t.iframeEl} title="Live demo" loading="eager" scrolling="no" />
           ) : (
             <div style={t.buildingState}>
               <div style={t.spinner} />
@@ -126,8 +124,7 @@ const t = {
   browser: { background: "#0a0a0f", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", height: "100%", position: "relative" as const },
   browserBar: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.75rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
   urlChip: { flex: 1, padding: "0.2rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.3rem", fontSize: "0.72rem", color: "#60a5fa", fontFamily: "'JetBrains Mono', monospace" },
-  iframeContainer: { overflow: "hidden", height: "calc(100% - 34px)", position: "relative" as const },
-  iframeEl: { width: "100%", height: "calc(100% + 80px)", border: "none", display: "block", pointerEvents: "none" as const, marginTop: "-80px" },
+  iframeEl: { width: "100%", height: "calc(100% - 34px)", border: "none", display: "block", pointerEvents: "none" as const },
   buildingState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: "0.75rem", height: "calc(100% - 34px)", background: "#08080c" },
   spinner: { width: "24px", height: "24px", border: "2px solid #1e1e30", borderTop: "2px solid #7c3aed", borderRadius: "50%", animation: "jv-spin 0.8s linear infinite" },
 };
