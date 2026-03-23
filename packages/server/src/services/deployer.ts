@@ -267,6 +267,75 @@ export async function initializePortTracking() {
   }
 }
 
+// Remove running containers that have no matching DB record (orphans)
+export async function cleanupOrphanedContainers() {
+  try {
+    const db = getDb();
+
+    // Get all claude-server containers (app deployments)
+    const containers = await docker.listContainers({
+      all: true,
+      filters: { label: ["claude-server=true", "claude-server.deployment"] },
+    });
+
+    let removed = 0;
+    for (const c of containers) {
+      const deploymentId = c.Labels["claude-server.deployment"];
+      if (!deploymentId) continue;
+
+      // Check if this deployment still exists in the DB as running
+      const dep = db.prepare(
+        "SELECT id, status FROM deployments WHERE id = ? AND status IN ('running', 'deploying')"
+      ).get(deploymentId) as { id: string; status: string } | undefined;
+
+      if (!dep) {
+        console.log(`Removing orphaned container: ${c.Names[0]} (deployment ${deploymentId} not in DB)`);
+        try {
+          const container = docker.getContainer(c.Id);
+          await container.stop({ t: 5 }).catch(() => {});
+          await container.remove({ force: true });
+          removed++;
+          if (c.Ports) {
+            for (const port of c.Ports) {
+              if (port.PublicPort) usedPorts.delete(port.PublicPort);
+            }
+          }
+        } catch (err) {
+          console.warn(`Failed to remove orphaned container ${c.Id.slice(0, 12)}:`, err instanceof Error ? err.message : String(err));
+        }
+      }
+    }
+
+    // Check for orphaned database containers
+    const dbContainers = await docker.listContainers({
+      all: true,
+      filters: { label: ["claude-server=true", "claude-server.database"] },
+    });
+
+    for (const c of dbContainers) {
+      const projectId = c.Labels["claude-server.database"];
+      if (!projectId) continue;
+
+      const project = db.prepare("SELECT id FROM projects WHERE id = ?").get(projectId);
+      if (!project) {
+        console.log(`Removing orphaned DB container: ${c.Names[0]} (project ${projectId} not in DB)`);
+        try {
+          const container = docker.getContainer(c.Id);
+          await container.stop({ t: 5 }).catch(() => {});
+          await container.remove({ force: true });
+          removed++;
+        } catch (err) {
+          console.warn(`Failed to remove orphaned DB container ${c.Id.slice(0, 12)}:`, err instanceof Error ? err.message : String(err));
+        }
+      }
+    }
+
+    if (removed > 0) console.log(`Cleaned up ${removed} orphaned container(s)`);
+  } catch (err) {
+    console.warn("Orphan cleanup failed:", err instanceof Error ? err.message : String(err));
+  }
+}
+
 // Periodically reconcile usedPorts with actual running containers
 export async function reconcilePorts() {
   try {

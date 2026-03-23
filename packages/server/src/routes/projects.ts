@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { Project } from "../types.js";
 import { readProjectFiles } from "../services/generator.js";
 import { stopContainer, releasePort } from "../services/deployer.js";
+import { deleteDatabase } from "../services/database.js";
 import { canCreateProject } from "./auth.js";
 import fs from "fs";
 
@@ -115,18 +116,25 @@ router.delete("/:id", async (req: Request, res: Response) => {
     return;
   }
 
-  // Stop all running containers
+  // Stop ALL containers for this project (not just 'running' — catch any state)
   const deployments = db
-    .prepare("SELECT * FROM deployments WHERE project_id = ? AND container_id IS NOT NULL AND status = 'running'")
+    .prepare("SELECT container_id, port FROM deployments WHERE project_id = ? AND container_id IS NOT NULL")
     .all(req.params.id) as Array<{ container_id: string; port: number }>;
 
   for (const dep of deployments) {
     try {
       await stopContainer(dep.container_id);
       if (dep.port) releasePort(dep.port);
-    } catch {
-      // Container may already be gone
+    } catch (err) {
+      console.warn(`Failed to stop container during project delete:`, err instanceof Error ? err.message : String(err));
     }
+  }
+
+  // Stop the project's database container
+  try {
+    await deleteDatabase(req.params.id as string);
+  } catch (err) {
+    console.warn(`Failed to delete database during project delete:`, err instanceof Error ? err.message : String(err));
   }
 
   // Delete from DB (cascades to deployments, logs, chat)

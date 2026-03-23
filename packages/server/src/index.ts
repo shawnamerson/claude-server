@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import { config } from "./config.js";
 import { getDb, closeDb } from "./db/client.js";
 import { errorHandler } from "./middleware/error.js";
-import { initializePortTracking, cleanupStoppedContainers, reconcilePorts } from "./services/deployer.js";
+import { initializePortTracking, cleanupStoppedContainers, cleanupOrphanedContainers, reconcilePorts } from "./services/deployer.js";
 import projectRoutes from "./routes/projects.js";
 import deploymentRoutes from "./routes/deployments.js";
 import logRoutes from "./routes/logs.js";
@@ -102,6 +102,7 @@ async function start() {
   await initializeDbPortTracking();
   await cleanupOrphanedDevContainers();
   await cleanupStoppedContainers();
+  await cleanupOrphanedContainers();
 
   // Recover stuck deployments from previous server run
   const db = getDb();
@@ -134,9 +135,10 @@ async function start() {
   // Generate initial Caddy config
   reloadCaddyConfig().catch(() => console.log("Caddy not available yet — config will update on first deploy"));
 
-  // Reconcile ports every 5 minutes to release stale allocations
+  // Every 5 minutes: reconcile ports and clean up orphaned containers
   setInterval(() => {
     reconcilePorts().catch((err) => console.warn("Port reconciliation error:", err));
+    cleanupOrphanedContainers().catch((err) => console.warn("Orphan cleanup error:", err));
   }, 5 * 60 * 1000);
 
   app.listen(config.port, () => {
