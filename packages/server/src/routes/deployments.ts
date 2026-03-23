@@ -230,6 +230,18 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
     console.error("Pipeline failed:", err);
     addLog(deploymentId, "system", `Deployment failed: ${message}`);
     updateStatus(deploymentId, "failed", { error: message });
+
+    // Clean up project files so next deploy starts fresh instead of modify path
+    try {
+      const fs = await import("fs");
+      if (fs.existsSync(project.source_path)) {
+        const entries = fs.readdirSync(project.source_path);
+        for (const entry of entries) {
+          if (entry === ".git") continue;
+          fs.rmSync(`${project.source_path}/${entry}`, { recursive: true, force: true });
+        }
+      }
+    } catch {}
   }
 }
 
