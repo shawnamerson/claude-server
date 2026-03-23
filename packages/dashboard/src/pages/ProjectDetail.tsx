@@ -170,6 +170,13 @@ const styles = {
   },
 };
 
+const spinnerKeyframes = document.createElement("style");
+spinnerKeyframes.textContent = `@keyframes pvSpin { to { transform: rotate(360deg); } }`;
+if (typeof document !== "undefined" && !document.getElementById("pv-spin-style")) {
+  spinnerKeyframes.id = "pv-spin-style";
+  document.head.appendChild(spinnerKeyframes);
+}
+const spinnerStyle: React.CSSProperties = { width: 28, height: 28, border: "3px solid #1e1e30", borderTop: "3px solid #7c3aed", borderRadius: "50%", animation: "pvSpin 0.8s linear infinite" };
 const previewContainerStyle = { ...styles.preview, position: "relative" as const };
 const previewIframeStyle = { ...styles.previewIframe, position: "absolute" as const, top: 0, left: 0 };
 
@@ -429,6 +436,7 @@ export default function ProjectDetail() {
           <div style={styles.previewEmpty}>
             {isDeploying ? (
               <>
+                <div style={spinnerStyle} />
                 <div style={styles.previewSpinner}>Building your app...</div>
                 <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Logs tab for progress</div>
               </>
