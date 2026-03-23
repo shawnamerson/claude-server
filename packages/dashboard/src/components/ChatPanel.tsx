@@ -19,7 +19,8 @@ function parseLogToActivity(msg: string): ActivityItem | null {
 
   if (msg.startsWith("Claude:")) return { type: "thinking", content: msg.slice(7).trim() };
   if (msg.startsWith("  + ")) return { type: "files", content: msg.trim() };
-  if (msg.startsWith("Running:") || msg.startsWith("$ ")) return { type: "command", content: msg.replace(/^(Running:|\$)\s*/, "") };
+  if (msg.startsWith("$ ")) return null; // Skip — already shown via "Running:" line
+  if (msg.startsWith("Running:")) return { type: "command", content: msg.replace(/^Running:\s*/, "") };
   if (msg.startsWith("  Exit code:") || msg.startsWith("  Command error:")) return { type: "error", content: msg.trim() };
   if (msg.includes("error") || msg.includes("Error") || msg.includes("failed") || msg.includes("Failed")) return { type: "error", content: msg };
   if (msg.startsWith("Notes:")) return { type: "thinking", content: msg.slice(6).trim() };
@@ -102,13 +103,26 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     api.getChatHistory(projectId).then(setMessages);
   }, [projectId]);
 
-  // Subscribe to SSE whenever we have a deployment ID
-  useEffect(() => {
-    if (!deploymentId || deploymentId === lastFinishedDepId) return;
+  // Subscribe to SSE — lock to first deployment ID to avoid reconnecting on re-renders
+  const sseDepId = useRef<string | null>(null);
+  const sseSource = useRef<EventSource | null>(null);
 
+  useEffect(() => {
+    if (!deploymentId) return;
+    if (deploymentId === lastFinishedDepId) return;
+    // Already subscribed to this deployment
+    if (sseDepId.current === deploymentId && sseSource.current) return;
+
+    // Close previous connection if any
+    if (sseSource.current) {
+      sseSource.current.close();
+    }
+
+    sseDepId.current = deploymentId;
     const authToken = (window as any).__authToken;
     const tokenParam = authToken ? `?token=${authToken}` : "";
     const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream${tokenParam}`);
+    sseSource.current = source;
 
     source.onmessage = (event) => {
       try {
@@ -123,8 +137,14 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       } catch {}
     };
 
+    source.onerror = () => {
+      // Don't reconnect — just let it die. New events will come when the connection is re-established.
+    };
+
     return () => {
       source.close();
+      sseSource.current = null;
+      sseDepId.current = null;
     };
   }, [deploymentId, lastFinishedDepId]);
 
