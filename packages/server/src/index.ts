@@ -22,6 +22,7 @@ import { reloadCaddyConfig } from "./services/caddy.js";
 import { cleanupOrphanedDevContainers } from "./services/generator.js";
 import { backupAllDatabases } from "./services/backups.js";
 import { sleepIdleContainers } from "./services/sleep.js";
+import seoRoutes, { prerenderMiddleware } from "./routes/seo.js";
 import fs from "fs";
 
 const app = express();
@@ -46,6 +47,9 @@ app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/signup", authLimiter);
 app.use("/api/projects/*/deploy", deployLimiter);
 app.use("/api", apiLimiter);
+
+// SEO routes — sitemap, robots.txt, OG image (before auth)
+app.use(seoRoutes);
 
 // Auth middleware — attaches user to request if token present
 app.use(authMiddleware);
@@ -111,6 +115,8 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dashboardDist = path.resolve(__dirname, "..", "..", "dashboard", "dist");
 if (fs.existsSync(dashboardDist)) {
+  // Serve prerendered HTML to search engine bots
+  app.use(prerenderMiddleware);
   app.use(express.static(dashboardDist));
   // SPA fallback — serve index.html for non-API routes
   app.get("*", (_req, res, next) => {
