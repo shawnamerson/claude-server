@@ -314,9 +314,22 @@ export default function ProjectDetail() {
 
   const isDeploying = deployments.some((d) => ["pending", "generating", "building", "deploying"].includes(d.status));
   const currentDep = deployments.find(d => d.status === "running") || deployments[0];
+  const [customDomain, setCustomDomain] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (project?.id) {
+      api.getDomains(project.id).then(domains => {
+        if (domains.length > 0) setCustomDomain(domains[0].domain);
+      });
+    }
+  }, [project?.id]);
+
   const previewUrl = useMemo(
-    () => project ? `${window.location.protocol}//${project.slug}.${window.location.hostname}` : "",
-    [project?.slug]
+    () => {
+      if (customDomain) return `https://${customDomain}`;
+      return project ? `${window.location.protocol}//${project.slug}.${window.location.hostname}` : "";
+    },
+    [project?.slug, customDomain]
   );
   const hasRunningDep = !!runningDep;
 
