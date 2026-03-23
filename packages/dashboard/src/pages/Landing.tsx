@@ -1,14 +1,11 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState, useRef } from "react";
 
-function AnimatedTerminal() {
-  const [lines, setLines] = useState<Array<{ text: string; style: Record<string, string>; typed?: boolean }>>([]);
+// Compact terminal that just shows the build process — no preview
+function BuildTerminal() {
+  const [lines, setLines] = useState<Array<{ text: string; style: Record<string, string> }>>([]);
   const [cursorVisible, setCursorVisible] = useState(true);
-  const [showPreview, setShowPreview] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Use the actual deployed vacation rental app as the demo
-  const demoAppUrl = `${window.location.protocol}//vacation-rental.${window.location.hostname}`;
 
   useEffect(() => {
     const cursor = setInterval(() => setCursorVisible(v => !v), 530);
@@ -16,150 +13,101 @@ function AnimatedTerminal() {
   }, []);
 
   useEffect(() => {
-    const script: Array<{ delay: number; line: { text: string; style: Record<string, string>; typed?: boolean } }> = [
-      { delay: 500, line: { text: "", style: {}, typed: true } },
-      { delay: 0, line: { text: "You: Build me a vacation rental site like Airbnb", style: { color: "#e0e0e0" }, typed: true } },
-      { delay: 2000, line: { text: "", style: {} } },
-      { delay: 800, line: { text: "Claude: I'll create a rental platform with property listings, search, booking calendar, and reviews...", style: { color: "#a78bfa" } } },
-      { delay: 1200, line: { text: "Writing 6 files...", style: { color: "#888", fontSize: "0.78rem" } } },
-      { delay: 400, line: { text: "  + package.json (245 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
-      { delay: 300, line: { text: "  + server.js (3,847 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
-      { delay: 250, line: { text: "  + public/index.html (2,156 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
-      { delay: 200, line: { text: "  + public/style.css (1,923 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
-      { delay: 200, line: { text: "  + public/app.js (4,102 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
-      { delay: 200, line: { text: "  + Dockerfile (89 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
-      { delay: 800, line: { text: "$ node -c server.js", style: { color: "#f59e0b", fontSize: "0.78rem" } } },
-      { delay: 600, line: { text: "Syntax OK", style: { color: "#888", fontSize: "0.78rem" } } },
-      { delay: 500, line: { text: "Starting app...", style: { color: "#888", fontSize: "0.78rem" } } },
-      { delay: 1500, line: { text: "Deployed! Live at rentals.justvibe.dev", style: { color: "#34d399", fontWeight: "600", fontSize: "0.9rem" } } },
+    const script: Array<{ delay: number; text: string; style: Record<string, string> }> = [
+      { delay: 800, text: "You: Build me a vacation rental site", style: { color: "#e0e0e0" } },
+      { delay: 2200, text: "Claude: Creating a rental platform with listings, search, booking...", style: { color: "#a78bfa" } },
+      { delay: 1200, text: "Writing 6 files...", style: { color: "#888", fontSize: "0.75rem" } },
+      { delay: 350, text: "  + server.js (3,847 bytes)", style: { color: "#34d399", fontSize: "0.75rem" } },
+      { delay: 250, text: "  + public/index.html (2,156 bytes)", style: { color: "#34d399", fontSize: "0.75rem" } },
+      { delay: 200, text: "  + public/style.css (1,923 bytes)", style: { color: "#34d399", fontSize: "0.75rem" } },
+      { delay: 200, text: "  + public/app.js (4,102 bytes)", style: { color: "#34d399", fontSize: "0.75rem" } },
+      { delay: 700, text: "$ node -c server.js", style: { color: "#f59e0b", fontSize: "0.75rem" } },
+      { delay: 500, text: "Syntax OK", style: { color: "#888", fontSize: "0.75rem" } },
+      { delay: 400, text: "Starting app...", style: { color: "#888", fontSize: "0.75rem" } },
+      { delay: 1200, text: "Deployed! Live at rentals.justvibe.dev", style: { color: "#34d399", fontWeight: "600" } },
     ];
 
-    // Total time for the script to play out
-    const scriptDuration = script.reduce((sum, s) => sum + s.delay, 0);
-
+    const totalDuration = script.reduce((sum, s) => sum + s.delay, 0);
     let timeouts: ReturnType<typeof setTimeout>[] = [];
     let cancelled = false;
 
     function runScript() {
       if (cancelled) return;
       setLines([]);
-      setShowPreview(false);
       let cumDelay = 0;
 
-      script.forEach((item) => {
-        if (!item.line.text) {
-          cumDelay += item.delay;
-          return;
-        }
+      for (const item of script) {
         cumDelay += item.delay;
-        const t = setTimeout(() => {
+        const d = cumDelay;
+        timeouts.push(setTimeout(() => {
           if (cancelled) return;
-          setLines(prev => [...prev, item.line]);
-          if (containerRef.current) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
-          }
-        }, cumDelay);
-        timeouts.push(t);
-      });
+          setLines(prev => [...prev, { text: item.text, style: item.style }]);
+          if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
+        }, d));
+      }
 
-      // Show preview after deploy line
-      const previewT = setTimeout(() => {
-        if (!cancelled) setShowPreview(true);
-      }, scriptDuration + 500);
-      timeouts.push(previewT);
-
-      // Loop after showing preview for a while
-      const restart = setTimeout(() => {
-        if (!cancelled) runScript();
-      }, scriptDuration + 8000);
-      timeouts.push(restart);
+      timeouts.push(setTimeout(() => { if (!cancelled) runScript(); }, totalDuration + 5000));
     }
 
     runScript();
-    return () => {
-      cancelled = true;
-      timeouts.forEach(clearTimeout);
-    };
+    return () => { cancelled = true; timeouts.forEach(clearTimeout); };
   }, []);
 
   return (
-    <div style={{ maxWidth: "600px", margin: "0 auto" }}>
-      {/* Terminal */}
-      <div style={{ ...termStyles.terminal, borderRadius: showPreview ? "0.75rem 0.75rem 0 0" : "0.75rem", transition: "border-radius 0.3s" }}>
-        <div style={termStyles.bar}>
-          <div style={termStyles.dots}>
-            <span style={{ ...termStyles.dot, background: "#f87171" }} />
-            <span style={{ ...termStyles.dot, background: "#f59e0b" }} />
-            <span style={{ ...termStyles.dot, background: "#34d399" }} />
-          </div>
-          <span style={termStyles.title}>JustVibe</span>
+    <div style={t.terminal}>
+      <div style={t.bar}>
+        <div style={t.dots}>
+          <span style={{ ...t.dot, background: "#f87171" }} />
+          <span style={{ ...t.dot, background: "#f59e0b" }} />
+          <span style={{ ...t.dot, background: "#34d399" }} />
         </div>
-        <div ref={containerRef} style={termStyles.body}>
-          {lines.map((line, i) => (
-            <div key={i} style={{ ...termStyles.line, ...line.style }}>
-              {line.text}
-              {i === 0 && line.typed && (
-                <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed", transition: "opacity 0.1s" }}>|</span>
-              )}
-            </div>
-          ))}
-          {lines.length === 0 && (
-            <div style={termStyles.line}>
-              <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed" }}>|</span>
-            </div>
-          )}
-        </div>
+        <span style={t.barTitle}>JustVibe</span>
       </div>
-
-      {/* Live app preview — slides in after deploy */}
-      <div style={{
-        maxHeight: showPreview ? "350px" : "0",
-        opacity: showPreview ? 1 : 0,
-        overflow: "hidden",
-        transition: "max-height 0.6s ease, opacity 0.4s ease",
-        background: "#fff",
-        borderRadius: "0 0 0.75rem 0.75rem",
-        border: showPreview ? "1px solid #1e1e30" : "none",
-        borderTop: "none",
-      }}>
-        {/* Mini browser chrome */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: "0.5rem",
-          padding: "0.4rem 0.75rem", background: "#0d0d14",
-          borderTop: "1px solid #1e1e30",
-        }}>
-          <div style={termStyles.dots}>
-            <span style={{ ...termStyles.dot, width: "8px", height: "8px", background: "#f87171" }} />
-            <span style={{ ...termStyles.dot, width: "8px", height: "8px", background: "#f59e0b" }} />
-            <span style={{ ...termStyles.dot, width: "8px", height: "8px", background: "#34d399" }} />
+      <div ref={containerRef} style={t.body}>
+        {lines.map((line, i) => (
+          <div key={i} style={{ ...t.line, ...line.style }}>{line.text}</div>
+        ))}
+        {lines.length === 0 && (
+          <div style={t.line}>
+            <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed" }}>|</span>
           </div>
-          <div style={{
-            flex: 1, padding: "0.2rem 0.5rem", background: "#12121a",
-            borderRadius: "0.25rem", fontSize: "0.7rem", color: "#60a5fa",
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>
-            rentals.justvibe.dev
-          </div>
-        </div>
-        <iframe
-          src={showPreview ? demoAppUrl : "about:blank"}
-          style={{ width: "100%", height: "310px", border: "none", display: "block" }}
-          title="Demo app preview"
-          loading="lazy"
-        />
+        )}
       </div>
     </div>
   );
 }
 
-const termStyles = {
-  terminal: { maxWidth: "600px", margin: "0 auto", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", textAlign: "left" as const },
-  bar: { display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 1rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
-  dots: { display: "flex", gap: "0.35rem" },
-  dot: { width: "10px", height: "10px", borderRadius: "50%", display: "inline-block" },
-  title: { fontSize: "0.75rem", color: "#555" },
-  body: { padding: "1rem", fontFamily: "'JetBrains Mono', monospace", fontSize: "0.8rem", lineHeight: 1.7, minHeight: "220px", maxHeight: "280px", overflow: "hidden" },
+// Mini browser showing a live deployed app
+function LivePreview() {
+  const demoUrl = `${window.location.protocol}//vacation-rental.${window.location.hostname}`;
+
+  return (
+    <div style={t.browser}>
+      <div style={t.browserBar}>
+        <div style={t.dots}>
+          <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f87171" }} />
+          <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f59e0b" }} />
+          <span style={{ ...t.dot, width: "8px", height: "8px", background: "#34d399" }} />
+        </div>
+        <div style={t.urlChip}>rentals.justvibe.dev</div>
+      </div>
+      <iframe src={demoUrl} style={t.iframe} title="Live demo" loading="eager" />
+    </div>
+  );
+}
+
+const t = {
+  terminal: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", textAlign: "left" as const, height: "100%" },
+  bar: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.5rem 0.75rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
+  dots: { display: "flex", gap: "0.3rem" },
+  dot: { width: "9px", height: "9px", borderRadius: "50%", display: "inline-block" },
+  barTitle: { fontSize: "0.7rem", color: "#555" },
+  body: { padding: "0.75rem", fontFamily: "'JetBrains Mono', monospace", fontSize: "0.78rem", lineHeight: 1.7, overflow: "hidden", maxHeight: "320px" },
   line: { color: "#e0e0e0", whiteSpace: "pre-wrap" as const },
+  browser: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", height: "100%" },
+  browserBar: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.75rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
+  urlChip: { flex: 1, padding: "0.2rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.3rem", fontSize: "0.72rem", color: "#60a5fa", fontFamily: "'JetBrains Mono', monospace" },
+  iframe: { width: "100%", height: "calc(100% - 34px)", border: "none", display: "block", background: "#fff" },
 };
 
 const responsiveCSS = `
@@ -168,6 +116,13 @@ const responsiveCSS = `
   .jv-comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
   .jv-nav-links { display: flex; gap: 1.5rem; align-items: center; }
   .jv-title { font-size: 3.2rem; }
+  .jv-hero-demo { display: grid; grid-template-columns: 1fr 1.2fr; gap: 1rem; height: 380px; }
+  .jv-hero-label { font-size: 0.75rem; color: #555; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; font-weight: 600; }
+  @media (max-width: 900px) {
+    .jv-hero-demo { grid-template-columns: 1fr; height: auto; }
+    .jv-hero-demo > div:first-child { height: 280px; }
+    .jv-hero-demo > div:last-child { height: 350px; }
+  }
   @media (max-width: 768px) {
     .jv-feature-grid { grid-template-columns: 1fr; }
     .jv-steps-grid { grid-template-columns: 1fr; }
@@ -203,8 +158,18 @@ export default function Landing() {
         <div style={s.ctaRow}>
           <Link to="/signup" style={s.cta}>Start building free</Link>
         </div>
-        {/* Animated terminal demo */}
-        <AnimatedTerminal />
+
+        {/* Side-by-side: terminal on left, live app on right */}
+        <div className="jv-hero-demo">
+          <div>
+            <div className="jv-hero-label">How it's built</div>
+            <BuildTerminal />
+          </div>
+          <div>
+            <div className="jv-hero-label">The result</div>
+            <LivePreview />
+          </div>
+        </div>
       </div>
 
       {/* Features */}
@@ -293,43 +258,26 @@ const s = {
   page: { minHeight: "100vh", background: "#0a0a0f", overflow: "auto", color: "#e0e0e0" },
   nav: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 2rem", maxWidth: "1100px", margin: "0 auto" },
   logo: { fontSize: "1.3rem", fontWeight: 800, color: "#a78bfa" },
-  navLinks: { display: "flex", gap: "1.5rem", alignItems: "center" },
   navLink: { color: "#888", textDecoration: "none", fontSize: "0.9rem" },
   ctaSmall: { padding: "0.4rem 1rem", background: "#7c3aed", color: "#fff", borderRadius: "0.5rem", textDecoration: "none", fontSize: "0.9rem", fontWeight: 600 },
-  hero: { maxWidth: "800px", margin: "0 auto", padding: "3rem 2rem 2rem", textAlign: "center" as const },
+  hero: { maxWidth: "960px", margin: "0 auto", padding: "3rem 2rem 2rem", textAlign: "center" as const },
   badge: { display: "inline-block", padding: "0.3rem 1rem", background: "#7c3aed15", border: "1px solid #7c3aed33", borderRadius: "9999px", fontSize: "0.85rem", color: "#a78bfa", marginBottom: "1.5rem" },
   title: { fontSize: "3.2rem", fontWeight: 800, lineHeight: 1.1, marginBottom: "1.5rem", background: "linear-gradient(135deg, #fff 0%, #a78bfa 60%, #7c3aed 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
   subtitle: { fontSize: "1.2rem", color: "#888", lineHeight: 1.6, maxWidth: "550px", margin: "0 auto 2rem" },
-  ctaRow: { display: "flex", gap: "1rem", justifyContent: "center", marginBottom: "3rem" },
+  ctaRow: { display: "flex", gap: "1rem", justifyContent: "center", marginBottom: "2.5rem" },
   cta: { display: "inline-block", padding: "0.85rem 2.5rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.6rem", fontSize: "1.05rem", fontWeight: 600, textDecoration: "none", cursor: "pointer" },
-  terminal: { maxWidth: "600px", margin: "0 auto", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", textAlign: "left" as const },
-  termBar: { display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 1rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
-  termDots: { display: "flex", gap: "0.35rem" },
-  termDot: { width: "10px", height: "10px", borderRadius: "50%", display: "inline-block" },
-  termTitle: { fontSize: "0.75rem", color: "#555" },
-  termBody: { padding: "1rem", fontFamily: "'JetBrains Mono', monospace", fontSize: "0.8rem", lineHeight: 1.6 },
-  termLine: { color: "#e0e0e0" },
-  termUser: { color: "#7c3aed", fontWeight: 600 },
-  termClaude: { color: "#a78bfa", fontWeight: 600 },
-  termFile: { color: "#34d399", fontSize: "0.78rem" },
-  termFileDetail: { color: "#555", fontSize: "0.72rem" },
-  termCmd: { color: "#f59e0b", fontSize: "0.78rem" },
-  termSuccess: { color: "#34d399", fontWeight: 600 },
   features: { maxWidth: "1000px", margin: "0 auto", padding: "4rem 2rem" },
   sectionTitle: { fontSize: "2rem", fontWeight: 700, textAlign: "center" as const, marginBottom: "2.5rem", color: "#e0e0e0" },
-  featureGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem" },
   featureCard: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "1.5rem" },
   featureEmoji: { fontSize: "1.3rem", marginBottom: "0.5rem", color: "#a78bfa", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" },
   featureTitle: { fontSize: "1rem", fontWeight: 600, marginBottom: "0.4rem" },
   featureDesc: { fontSize: "0.88rem", color: "#888", lineHeight: 1.5 },
   how: { maxWidth: "900px", margin: "0 auto", padding: "4rem 2rem" },
-  stepsGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" },
   stepCard: { textAlign: "center" as const, padding: "1.5rem" },
   stepNum: { width: "40px", height: "40px", borderRadius: "50%", background: "#7c3aed", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "1.1rem", marginBottom: "1rem" },
   stepTitle: { fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" },
   stepDesc: { fontSize: "0.9rem", color: "#888", lineHeight: 1.5 },
   comparison: { maxWidth: "700px", margin: "0 auto", padding: "4rem 2rem" },
-  compGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" },
   compCard: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "1.5rem" },
   compTitle: { fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem", color: "#888" },
   compList: { display: "flex", flexDirection: "column" as const, gap: "0.6rem" },
