@@ -88,7 +88,7 @@ const FULL_TOOLS: Anthropic.Tool[] = [
   DONE_TOOL,
 ];
 
-const SYSTEM_PROMPT = `You are an expert full-stack developer. Write ALL files in ONE write_files call, then call done.
+const SYSTEM_PROMPT = `You are an expert full-stack developer. Be FAST. Write ALL files in ONE write_files call, then call done immediately. Keep code concise — no excessive comments, no redundant CSS, no placeholder data unless essential.
 
 Structure: Express server (server.js) + static frontend (public/index.html, public/style.css, public/app.js). Use express.static('public'). Listen on process.env.PORT || 3000. Include GET /health endpoint.
 

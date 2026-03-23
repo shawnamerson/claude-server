@@ -146,33 +146,8 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
       }
     } catch {}
 
-    // Pre-deploy checks: npm install + syntax check
-    try {
-      const { DevContainer } = await import("../services/generator.js");
-      const devC = new DevContainer(project.source_path);
-
-      // npm install
-      addLog(deploymentId, "system", "Installing dependencies...");
-      const installOutput = await devC.exec("npm install --prefer-offline 2>&1 | tail -10", (msg: string) => addLog(deploymentId, "system", msg));
-      if (installOutput.includes("ERR") || installOutput.includes("error")) {
-        addLog(deploymentId, "system", `npm install issue: ${installOutput.slice(0, 300)}`);
-      } else {
-        addLog(deploymentId, "system", "Dependencies installed");
-      }
-
-      // Syntax check + quick start test
-      addLog(deploymentId, "system", "Checking syntax...");
-      const syntaxOutput = await devC.exec("node -c server.js 2>&1", (msg: string) => addLog(deploymentId, "system", msg));
-      if (syntaxOutput.includes("SyntaxError") || syntaxOutput.includes("Error")) {
-        addLog(deploymentId, "system", `Syntax error: ${syntaxOutput.slice(0, 300)}`);
-      } else {
-        addLog(deploymentId, "system", "Syntax OK");
-      }
-
-      await devC.cleanup();
-    } catch (err) {
-      addLog(deploymentId, "system", `Pre-deploy checks skipped: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    // Skip npm install / syntax check for speed — auto-fix handles failures
+    // The code pattern scanner above catches the most common issues
 
     // Save chat messages
     if (prompt) {
@@ -221,18 +196,9 @@ async function runPipeline(project: Project, deploymentId: string, prompt?: stri
 
     const appPort = 3000;
 
-    // Determine start command from package.json
-    let startCommand = "node server.js";
-    try {
-      const fs = await import("fs");
-      const pkgPath = `${project.source_path}/package.json`;
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-        if (pkg.scripts?.start) {
-          startCommand = `npm start`;
-        }
-      }
-    } catch {}
+    // Start command: install deps (fast with base image cache) then start server
+    // npm install runs inside the container at startup — no separate dev container needed
+    const startCommand = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null; node server.js";
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
@@ -339,16 +305,7 @@ async function autoFixAndRedeploy(
     // Redeploy from volume — no build needed
     updateStatus(deploymentId, "deploying");
     addLog(deploymentId, "system", "Starting fixed app...");
-
-    let startCommand = "node server.js";
-    try {
-      const fs = await import("fs");
-      const pkgPath = `${project.source_path}/package.json`;
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-        if (pkg.scripts?.start) startCommand = "npm start";
-      }
-    } catch {}
+    const startCommand = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null; node server.js";
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId: newId, hostPort } = await deployFromVolume(
@@ -513,16 +470,7 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
   }
 
   try {
-    let startCommand = "node server.js";
-    try {
-      const fs = await import("fs");
-      const pkgPath = `${project.source_path}/package.json`;
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-        if (pkg.scripts?.start) startCommand = "npm start";
-      }
-    } catch {}
-
+    const startCommand = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null; node server.js";
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
       project.source_path, deployment.id, 3000, startCommand, envVars, project.slug
