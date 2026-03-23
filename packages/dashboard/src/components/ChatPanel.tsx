@@ -305,27 +305,27 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         )}
       </div>
       <div style={s.inputArea}>
-        <input
-          style={s.input}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleChat();
-            }
-          }}
-          placeholder={isActive ? statusLabel : "Ask about your project or describe changes..."}
-          disabled={isActive}
-        />
-        <button
-          style={{ ...s.chatBtn, opacity: (isActive || !input.trim()) ? 0.5 : 1 }}
-          onClick={handleChat}
-          disabled={isActive || !input.trim()}
-          title="Chat with Claude (free)"
-        >
-          Chat
-        </button>
+        <div style={s.inputRow}>
+          <input
+            style={s.input}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleChat();
+              }
+            }}
+            placeholder={isActive ? statusLabel : "Ask a question... (Enter to send)"}
+            disabled={isActive}
+          />
+          <button
+            style={{ ...s.sendIcon, opacity: (isActive || !input.trim()) ? 0.3 : 1 }}
+            onClick={handleChat}
+            disabled={isActive || !input.trim()}
+            title="Send message (Enter)"
+          >&#8593;</button>
+        </div>
         <button
           style={{
             ...s.deployBtn,
@@ -334,9 +334,8 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
           }}
           onClick={handleDeploy}
           disabled={isActive || (!input.trim() && !hasSuggestion)}
-          title="Apply changes and deploy"
         >
-          {hasSuggestion ? "Apply & Deploy" : "Deploy"}
+          {hasSuggestion ? "Apply & Deploy" : "Deploy changes"}
         </button>
       </div>
     </div>
@@ -348,10 +347,11 @@ const s = {
   messages: { flex: 1, minHeight: 0, overflow: "auto", padding: "0.75rem", display: "flex", flexDirection: "column" as const, gap: "0.5rem" },
   userMsg: { alignSelf: "flex-end" as const, background: "#7c3aed", color: "#fff", padding: "0.5rem 0.75rem", borderRadius: "0.75rem 0.75rem 0.25rem 0.75rem", maxWidth: "85%", fontSize: "0.85rem", whiteSpace: "pre-wrap" as const, animation: "slideInRight 0.2s ease" },
   assistantMsg: { alignSelf: "flex-start" as const, background: "#1a1a2e", color: "#e0e0e0", padding: "0.5rem 0.75rem", borderRadius: "0.75rem 0.75rem 0.75rem 0.25rem", maxWidth: "90%", fontSize: "0.85rem", whiteSpace: "pre-wrap" as const, animation: "slideInLeft 0.2s ease" },
-  inputArea: { display: "flex", gap: "0.5rem", padding: "0.5rem 0.75rem", borderTop: "1px solid #1e1e30", background: "#0d0d14" },
+  inputArea: { display: "flex", flexDirection: "column" as const, gap: "0.4rem", padding: "0.5rem 0.75rem", borderTop: "1px solid #1e1e30", background: "#0d0d14" },
+  inputRow: { display: "flex", gap: "0.35rem", alignItems: "center" },
   input: { flex: 1, padding: "0.5rem 0.6rem", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.5rem", color: "#e0e0e0", fontSize: "0.85rem", outline: "none", fontFamily: "inherit" },
-  chatBtn: { padding: "0.5rem 0.75rem", background: "#1a1a2e", color: "#a78bfa", border: "1px solid #2e2e4a", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" as const, fontFamily: "inherit" },
-  deployBtn: { padding: "0.5rem 0.75rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" as const, fontFamily: "inherit" },
+  sendIcon: { width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1a2e", color: "#a78bfa", border: "1px solid #2e2e4a", borderRadius: "0.4rem", cursor: "pointer", fontSize: "1rem", fontWeight: 700, flexShrink: 0, fontFamily: "inherit", lineHeight: 1 },
+  deployBtn: { padding: "0.45rem 0.75rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.5rem", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" as const, fontFamily: "inherit", width: "100%" },
   empty: { color: "#555", textAlign: "center" as const, padding: "2rem 1rem", fontSize: "0.85rem" },
   emptyState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flex: 1, gap: "0.75rem", padding: "2rem 1rem", animation: "fadeInUp 0.4s ease" },
   emptyIcon: { opacity: 0.6, marginBottom: "0.25rem" },
