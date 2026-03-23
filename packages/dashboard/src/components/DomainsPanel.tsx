@@ -122,6 +122,17 @@ const styles = {
   dnsValue: {
     color: "#60a5fa",
   },
+  copyBtn: {
+    marginLeft: "0.5rem",
+    padding: "0.1rem 0.4rem",
+    background: "#1a1a2e",
+    color: "#888",
+    border: "1px solid #2e2e4a",
+    borderRadius: "0.25rem",
+    cursor: "pointer",
+    fontSize: "0.65rem",
+    fontFamily: "inherit",
+  },
 };
 
 export default function DomainsPanel({ projectId, projectSlug }: { projectId: string; projectSlug: string }) {
@@ -265,7 +276,7 @@ export default function DomainsPanel({ projectId, projectSlug }: { projectId: st
               <div style={styles.dnsRecord}>
                 <div style={styles.dnsRow}><span style={styles.dnsLabel}>Type</span><span style={styles.dnsValue}>A</span></div>
                 <div style={styles.dnsRow}><span style={styles.dnsLabel}>Name</span><span style={styles.dnsValue}>@</span></div>
-                <div style={styles.dnsRow}><span style={styles.dnsLabel}>Value</span><span style={styles.dnsValue}>{serverIp}</span></div>
+                <div style={styles.dnsRow}><span style={styles.dnsLabel}>Value</span><span style={styles.dnsValue}>{serverIp}</span><button style={styles.copyBtn} onClick={() => { navigator.clipboard.writeText(serverIp); }}>Copy</button></div>
                 <div style={styles.dnsRow}><span style={styles.dnsLabel}>TTL</span><span style={styles.dnsValue}>600</span></div>
               </div>
               {d.domain.split(".").length === 2 && (
