@@ -429,7 +429,13 @@ export default function ProjectDetail() {
         </div>
 
         {/* Preview iframe or placeholder */}
-        {hasRunningDep ? (
+        {isDeploying ? (
+          <div style={styles.previewEmpty}>
+            <div style={spinnerStyle} />
+            <div style={styles.previewSpinner}>Building your app...</div>
+            <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Chat tab for progress</div>
+          </div>
+        ) : hasRunningDep ? (
           <div ref={previewContainerRef} style={previewContainerStyle}>
             <iframe
               ref={iframeRef}
@@ -446,18 +452,8 @@ export default function ProjectDetail() {
           </div>
         ) : (
           <div style={styles.previewEmpty}>
-            {isDeploying ? (
-              <>
-                <div style={spinnerStyle} />
-                <div style={styles.previewSpinner}>Building your app...</div>
-                <div style={{ fontSize: "0.8rem", color: "#444" }}>Watch the Chat tab for progress</div>
-              </>
-            ) : (
-              <>
-                <div>No app running</div>
-                <div style={{ fontSize: "0.8rem", color: "#444" }}>Use the Chat tab to describe what you want to build</div>
-              </>
-            )}
+            <div>No app running</div>
+            <div style={{ fontSize: "0.8rem", color: "#444" }}>Use the Chat tab to describe what you want to build</div>
           </div>
         )}
       </div>
