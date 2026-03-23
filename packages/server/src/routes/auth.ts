@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
-import { sendVerificationEmail, sendWelcomeEmail } from "../services/email.js";
+import { sendVerificationEmail, sendWelcomeEmail, notifyNewSignup } from "../services/email.js";
 import "../types.js";
 
 const router = Router();
@@ -54,6 +54,7 @@ router.post("/auth/signup", async (req: Request, res: Response) => {
 
   // Send verification email (falls back to console.log if RESEND_API_KEY not set)
   sendVerificationEmail(email.toLowerCase().trim(), verificationCode);
+  notifyNewSignup(email.toLowerCase().trim());
 
   res.json({
     token: sessionId,

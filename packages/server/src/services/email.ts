@@ -39,6 +39,20 @@ export async function sendVerificationEmail(to: string, code: string): Promise<b
   }
 }
 
+export async function notifyNewSignup(email: string): Promise<void> {
+  if (!resend) return;
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: "hello@vibestack.build",
+      subject: `New signup: ${email}`,
+      html: `<p>New user signed up: <strong>${email}</strong></p><p>Time: ${new Date().toISOString()}</p>`,
+    });
+  } catch {
+    // Don't block signup if notification fails
+  }
+}
+
 export async function sendWelcomeEmail(to: string): Promise<boolean> {
   if (!resend) return false;
 
