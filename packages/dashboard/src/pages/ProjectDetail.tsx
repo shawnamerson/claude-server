@@ -190,7 +190,6 @@ export default function ProjectDetail() {
   const [sideTab, setSideTab] = useState<SideTab>((searchParams.get("tab") as SideTab) || "chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const lastRunningIdRef = useRef<string | null>(null);
-  const hadRunningOnMount = useRef<boolean | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeSrcSet = useRef(false);
@@ -346,33 +345,34 @@ export default function ProjectDetail() {
     iframeSrcSet.current = false;
   }, [project?.slug]);
 
-  // When a genuinely NEW deployment starts running, retry loading the preview
+  // When a new deployment starts running, reset iframe and retry loading
   useEffect(() => {
     const runningId = runningDep?.id || null;
     if (runningId && runningId !== lastRunningIdRef.current) {
-      // Track if there was a running deployment when the page first loaded
-      if (hadRunningOnMount.current === null) {
-        hadRunningOnMount.current = true; // First running dep detected — was it already running?
-        lastRunningIdRef.current = runningId;
-        // If the iframe already has a src (page loaded with running dep), skip retries
-        if (iframeSrcSet.current) return;
-        // Otherwise this is a fresh deploy — fall through to retry logic
-      }
+      const isFirstDetection = lastRunningIdRef.current === null;
       lastRunningIdRef.current = runningId;
-      // Reset iframe and retry at increasing intervals
+
+      // If page loaded with an already-running deployment, just set src once
+      if (isFirstDetection && !isDeploying) {
+        iframeSrcSet.current = false; // Let the src-setting effect handle it
+        return;
+      }
+
+      // Fresh deploy finished — reset and retry until app is ready
       iframeSrcSet.current = false;
       setIframeLoaded(false);
-      if (iframeRef.current) iframeRef.current.removeAttribute("src");
 
-      const retries = [3000, 8000, 15000, 25000];
+      // Retry at increasing intervals — app needs time for npm install + startup
+      const retries = [1000, 3000, 8000, 15000, 25000];
       const timeouts = retries.map(delay => setTimeout(() => {
-        if (iframeRef.current) {
+        if (iframeRef.current && previewUrl) {
           iframeRef.current.src = previewUrl;
+          iframeSrcSet.current = true;
         }
       }, delay));
       return () => timeouts.forEach(clearTimeout);
     }
-  }, [runningDep?.id, previewUrl]);
+  }, [runningDep?.id, previewUrl, isDeploying]);
 
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
