@@ -245,7 +245,7 @@ export default function App() {
         <Route path="/new" element={<NewProject />} />
         <Route path="/project/:id" element={<ProjectDetail />} />
         <Route path="/billing" element={<Billing />} />
-        <Route path="/admin" element={isAdmin ? <Admin /> : <div style={{ color: "#666", padding: "2rem", textAlign: "center" }}>Access denied</div>} />
+        <Route path="/admin" element={isAdmin ? <Admin /> : <ProjectList />} />
         <Route path="*" element={<ProjectList />} />
       </Routes>
     </AppShell>
