@@ -183,9 +183,10 @@ export default function ProjectDetail() {
   const [previewReady, setPreviewReady] = useState(false);
   const [prevStatus, setPrevStatus] = useState<string | null>(null);
 
-  // When deployment goes to "running", poll the health endpoint before showing preview
+  // When deployment goes to "running", wait then show preview
   useEffect(() => {
-    const currentStatus = deployments[0]?.status;
+    const activeDep = deployments.find(d => d.status === "running") || deployments[0];
+    const currentStatus = activeDep?.status;
     if (prevStatus && prevStatus !== "running" && currentStatus === "running") {
       setPreviewReady(false);
       // Give the container 3 seconds to start serving, then show preview
