@@ -259,6 +259,7 @@ export default function Landing() {
           <Link to="/blog" style={s.footerLink}>Blog</Link>
           <Link to="/faq" style={s.footerLink}>FAQ</Link>
           <Link to="/privacy" style={s.footerLink}>Privacy & Terms</Link>
+          <a href="mailto:hello@vibestack.build" style={s.footerLink}>Contact</a>
         </div>
         <div>VibeStack — Describe it. Ship it.</div>
       </div>
