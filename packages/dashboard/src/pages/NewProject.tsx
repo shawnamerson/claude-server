@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
 
 const styles = {
@@ -49,6 +49,17 @@ export default function NewProject() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [limitReached, setLimitReached] = useState(false);
+  const [limitInfo, setLimitInfo] = useState<{ projectCount: number; projectLimit: number } | null>(null);
+
+  useEffect(() => {
+    api.getBillingStatus().then(status => {
+      if (status.projectLimit > 0 && status.projectCount >= status.projectLimit) {
+        setLimitReached(true);
+        setLimitInfo(status);
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +80,25 @@ export default function NewProject() {
       setLoading(false);
     }
   };
+
+  if (limitReached) {
+    return (
+      <div style={styles.container}>
+        <h1 style={styles.title}>Project limit reached</h1>
+        <div style={{ background: "#1a1a2e", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "2rem", textAlign: "center" }}>
+          <div style={{ fontSize: "1rem", color: "#e0e0e0", marginBottom: "0.5rem" }}>
+            You've used {limitInfo?.projectCount} of {limitInfo?.projectLimit} projects on the Free plan.
+          </div>
+          <div style={{ fontSize: "0.9rem", color: "#888", marginBottom: "1.5rem" }}>
+            Upgrade to Pro for unlimited projects.
+          </div>
+          <Link to="/billing" style={{ display: "inline-block", padding: "0.75rem 2rem", background: "#7c3aed", color: "#fff", borderRadius: "0.5rem", textDecoration: "none", fontSize: "1rem", fontWeight: 600 }}>
+            Upgrade plan
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
