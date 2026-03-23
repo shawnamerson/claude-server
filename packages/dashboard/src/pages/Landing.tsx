@@ -1,4 +1,114 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+
+function AnimatedTerminal() {
+  const [lines, setLines] = useState<Array<{ text: string; style: Record<string, string>; typed?: boolean }>>([]);
+  const [cursorVisible, setCursorVisible] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const cursor = setInterval(() => setCursorVisible(v => !v), 530);
+    return () => clearInterval(cursor);
+  }, []);
+
+  useEffect(() => {
+    const script: Array<{ delay: number; line: { text: string; style: Record<string, string>; typed?: boolean } }> = [
+      { delay: 500, line: { text: "", style: {}, typed: true } }, // Start typing
+      { delay: 0, line: { text: "You: Build me a vacation rental site like Airbnb", style: { color: "#e0e0e0" }, typed: true } },
+      { delay: 2000, line: { text: "", style: {} } }, // pause
+      { delay: 800, line: { text: "Claude: I'll create a rental platform with property listings, search, booking calendar, and reviews...", style: { color: "#a78bfa" } } },
+      { delay: 1200, line: { text: "Writing 6 files...", style: { color: "#888", fontSize: "0.78rem" } } },
+      { delay: 400, line: { text: "  + package.json (245 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
+      { delay: 300, line: { text: "  + server.js (3,847 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
+      { delay: 250, line: { text: "  + public/index.html (2,156 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
+      { delay: 200, line: { text: "  + public/style.css (1,923 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
+      { delay: 200, line: { text: "  + public/app.js (4,102 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
+      { delay: 200, line: { text: "  + Dockerfile (89 bytes)", style: { color: "#34d399", fontSize: "0.78rem" } } },
+      { delay: 800, line: { text: "$ node -c server.js", style: { color: "#f59e0b", fontSize: "0.78rem" } } },
+      { delay: 600, line: { text: "Syntax OK", style: { color: "#888", fontSize: "0.78rem" } } },
+      { delay: 500, line: { text: "Starting app...", style: { color: "#888", fontSize: "0.78rem" } } },
+      { delay: 1500, line: { text: "Deployed! Live at rentals.justvibe.dev", style: { color: "#34d399", fontWeight: "600", fontSize: "0.9rem" } } },
+      { delay: 3000, line: { text: "", style: {} } }, // pause before repeat
+    ];
+
+    let timeouts: ReturnType<typeof setTimeout>[] = [];
+    let cancelled = false;
+
+    function runScript() {
+      if (cancelled) return;
+      setLines([]);
+      let cumDelay = 0;
+
+      script.forEach((item, i) => {
+        if (!item.line.text) {
+          cumDelay += item.delay;
+          return;
+        }
+        cumDelay += item.delay;
+        const t = setTimeout(() => {
+          if (cancelled) return;
+          setLines(prev => [...prev, item.line]);
+          // Auto-scroll
+          if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+          }
+        }, cumDelay);
+        timeouts.push(t);
+      });
+
+      // Loop
+      const total = script.reduce((sum, s) => sum + s.delay, 0);
+      const restart = setTimeout(() => {
+        if (!cancelled) runScript();
+      }, total + 1000);
+      timeouts.push(restart);
+    }
+
+    runScript();
+    return () => {
+      cancelled = true;
+      timeouts.forEach(clearTimeout);
+    };
+  }, []);
+
+  return (
+    <div style={termStyles.terminal}>
+      <div style={termStyles.bar}>
+        <div style={termStyles.dots}>
+          <span style={{ ...termStyles.dot, background: "#f87171" }} />
+          <span style={{ ...termStyles.dot, background: "#f59e0b" }} />
+          <span style={{ ...termStyles.dot, background: "#34d399" }} />
+        </div>
+        <span style={termStyles.title}>JustVibe</span>
+      </div>
+      <div ref={containerRef} style={termStyles.body}>
+        {lines.map((line, i) => (
+          <div key={i} style={{ ...termStyles.line, ...line.style }}>
+            {line.text}
+            {i === 0 && line.typed && (
+              <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed", transition: "opacity 0.1s" }}>|</span>
+            )}
+          </div>
+        ))}
+        {lines.length === 0 && (
+          <div style={termStyles.line}>
+            <span style={{ opacity: cursorVisible ? 1 : 0, color: "#7c3aed" }}>|</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const termStyles = {
+  terminal: { maxWidth: "600px", margin: "0 auto", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", overflow: "hidden", textAlign: "left" as const },
+  bar: { display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 1rem", borderBottom: "1px solid #1e1e30", background: "#0d0d14" },
+  dots: { display: "flex", gap: "0.35rem" },
+  dot: { width: "10px", height: "10px", borderRadius: "50%", display: "inline-block" },
+  title: { fontSize: "0.75rem", color: "#555" },
+  body: { padding: "1rem", fontFamily: "'JetBrains Mono', monospace", fontSize: "0.8rem", lineHeight: 1.7, minHeight: "220px", maxHeight: "280px", overflow: "hidden" },
+  line: { color: "#e0e0e0", whiteSpace: "pre-wrap" as const },
+};
 
 const responsiveCSS = `
   .jv-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
@@ -41,28 +151,8 @@ export default function Landing() {
         <div style={s.ctaRow}>
           <Link to="/signup" style={s.cta}>Start building free</Link>
         </div>
-        {/* Fake terminal preview */}
-        <div style={s.terminal}>
-          <div style={s.termBar}>
-            <div style={s.termDots}>
-              <span style={{ ...s.termDot, background: "#f87171" }} />
-              <span style={{ ...s.termDot, background: "#f59e0b" }} />
-              <span style={{ ...s.termDot, background: "#34d399" }} />
-            </div>
-            <span style={s.termTitle}>JustVibe</span>
-          </div>
-          <div style={s.termBody}>
-            <div style={s.termLine}><span style={s.termUser}>You:</span> Build me a marketplace like Etsy</div>
-            <div style={{ height: "0.5rem" }} />
-            <div style={s.termLine}><span style={s.termClaude}>Claude:</span> I'll build a marketplace with product listings, user auth, shopping cart, and Stripe checkout...</div>
-            <div style={{ height: "0.4rem" }} />
-            <div style={s.termFile}>5 files created <span style={s.termFileDetail}>package.json, server.js, public/index.html, public/style.css, public/app.js</span></div>
-            <div style={s.termCmd}>$ node -c server.js</div>
-            <div style={s.termFile}>2 files created <span style={s.termFileDetail}>Dockerfile, .dockerignore</span></div>
-            <div style={{ height: "0.3rem" }} />
-            <div style={s.termSuccess}>Deployed! Live at marketplace.justvibe.dev</div>
-          </div>
-        </div>
+        {/* Animated terminal demo */}
+        <AnimatedTerminal />
       </div>
 
       {/* Features */}
