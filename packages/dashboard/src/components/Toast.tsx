@@ -42,7 +42,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               borderRadius: "0.5rem",
               fontSize: "0.85rem",
               maxWidth: "350px",
-              animation: "fadeIn 0.2s ease",
+              animation: "slideInRight 0.3s ease",
               cursor: "pointer",
             }}
             onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}

@@ -116,11 +116,21 @@ function AppShell({ children, user, onLogout, onRefresh }: { children: React.Rea
         html, body, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; }
         *::-webkit-scrollbar { display: none; }
         * { scrollbar-width: none; }
+        button { transition: opacity 0.15s, transform 0.15s; }
         button:hover:not(:disabled) { opacity: 0.85; }
+        button:active:not(:disabled) { transform: scale(0.97); }
         button:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
-        input:focus { border-color: #7c3aed !important; }
+        input, textarea { transition: border-color 0.2s; }
+        input:focus, textarea:focus { border-color: #7c3aed !important; }
+        a { transition: opacity 0.15s; }
         a:hover { opacity: 0.8; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideInLeft { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
       `}</style>
       <nav style={styles.nav}>
         <Link to="/" style={styles.logo}>JustVibe</Link>

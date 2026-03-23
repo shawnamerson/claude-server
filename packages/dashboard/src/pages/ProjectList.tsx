@@ -34,6 +34,7 @@ const styles = {
     textDecoration: "none",
     color: "inherit",
     transition: "border-color 0.2s, transform 0.2s",
+    animation: "fadeInUp 0.3s ease",
   },
   cardHover: {
     borderColor: "#7c3aed",
@@ -62,7 +63,9 @@ const styles = {
   },
   skeletonLine: {
     borderRadius: "0.25rem",
-    background: "#1e1e30",
+    background: "linear-gradient(90deg, #1e1e30 25%, #2a2a40 50%, #1e1e30 75%)",
+    backgroundSize: "200% 100%",
+    animation: "shimmer 1.5s infinite",
   },
 };
 

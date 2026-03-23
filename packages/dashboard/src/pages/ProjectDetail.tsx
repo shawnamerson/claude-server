@@ -246,10 +246,12 @@ export default function ProjectDetail() {
       position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
       background: "rgba(0,0,0,0.7)", display: "flex",
       alignItems: "center", justifyContent: "center", zIndex: 1000,
+      animation: "fadeIn 0.15s ease",
     }} onClick={() => setShowDeleteModal(false)}>
       <div style={{
         background: "#12121a", border: "1px solid #1e1e30",
         borderRadius: "0.75rem", padding: "1.5rem", maxWidth: "400px", width: "90%",
+        animation: "scaleIn 0.2s ease",
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem" }}>Delete Project</div>
         <div style={{ color: "#888", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
