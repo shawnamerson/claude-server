@@ -239,11 +239,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setMessages(prev => [...prev, { id: Date.now() + 2, project_id: projectId, role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Chat failed"}`, created_at: new Date().toISOString() }]);
     } finally {
       setChatStreaming(false);
-      // Always show Apply & Deploy after a chat response — the user can
-      // decide whether the response warrants a deploy
-      if (assistantText.trim()) {
-        setHasSuggestion(true);
-      }
+      // Show Apply & Deploy only when Claude suggests actual code changes
+      const hasCodeBlock = /```/.test(assistantText);
+      const suggestsAction = /\b(fix|change|modify|update|replace|add|remove|install|create|delete|rename|move|refactor|rewrite)\b.*\b(file|code|server|component|function|route|endpoint|config|package|import|module)\b/i.test(assistantText);
+      const mentionsFiles = /\b(server\.js|index\.(js|ts|html)|package\.json|style\.css|app\.(js|ts)|\.env)\b/.test(assistantText);
+      setHasSuggestion(hasCodeBlock || (suggestsAction && mentionsFiles));
       // Sync with DB to get proper message IDs
       api.getChatHistory(projectId).then(setMessages);
     }
