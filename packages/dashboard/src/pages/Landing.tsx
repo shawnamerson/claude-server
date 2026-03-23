@@ -6,7 +6,7 @@ function HeroDemo() {
   const [deployed, setDeployed] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
-  const demoUrl = `${window.location.protocol}//vacation-rental.${window.location.hostname}`;
+  const demoUrl = `${window.location.protocol}//sushi-restaurant.${window.location.hostname}`;
 
   useEffect(() => {
     const cursor = setInterval(() => setCursorVisible(v => !v), 530);
@@ -15,8 +15,8 @@ function HeroDemo() {
 
   useEffect(() => {
     const script: Array<{ delay: number; text: string; style: Record<string, string> }> = [
-      { delay: 800, text: "You: Build me a vacation rental site", style: { color: "#e0e0e0" } },
-      { delay: 2200, text: "Claude: Creating a rental platform with listings, search, booking...", style: { color: "#a78bfa" } },
+      { delay: 800, text: "You: Build me a sushi restaurant website", style: { color: "#e0e0e0" } },
+      { delay: 2200, text: "Claude: Creating a restaurant site with menu, reservations, and online ordering...", style: { color: "#a78bfa" } },
       { delay: 1200, text: "Writing 6 files...", style: { color: "#888", fontSize: "0.75rem" } },
       { delay: 350, text: "  + server.js (3,847 bytes)", style: { color: "#34d399", fontSize: "0.75rem" } },
       { delay: 250, text: "  + public/index.html (2,156 bytes)", style: { color: "#34d399", fontSize: "0.75rem" } },
@@ -25,7 +25,7 @@ function HeroDemo() {
       { delay: 700, text: "$ node -c server.js", style: { color: "#f59e0b", fontSize: "0.75rem" } },
       { delay: 500, text: "Syntax OK", style: { color: "#888", fontSize: "0.75rem" } },
       { delay: 400, text: "Starting app...", style: { color: "#888", fontSize: "0.75rem" } },
-      { delay: 1200, text: "Deployed! Live at rentals.vibestack.build", style: { color: "#34d399", fontWeight: "600" } },
+      { delay: 1200, text: "Deployed! Live at sushi-restaurant.vibestack.build", style: { color: "#34d399", fontWeight: "600" } },
     ];
 
     const totalDuration = script.reduce((sum, s) => sum + s.delay, 0);
@@ -96,7 +96,7 @@ function HeroDemo() {
               <span style={{ ...t.dot, width: "8px", height: "8px", background: "#f59e0b" }} />
               <span style={{ ...t.dot, width: "8px", height: "8px", background: "#34d399" }} />
             </div>
-            <div style={t.urlChip}>{deployed ? "rentals.vibestack.build" : ""}</div>
+            <div style={t.urlChip}>{deployed ? "sushi-restaurant.vibestack.build" : ""}</div>
           </div>
           {deployed ? (
             <iframe src={demoUrl} style={t.iframeEl} title="Live demo" loading="eager" scrolling="no" />
