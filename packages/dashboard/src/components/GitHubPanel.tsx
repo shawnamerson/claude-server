@@ -73,7 +73,7 @@ const styles = {
   },
 };
 
-export default function GitHubPanel({ projectId }: { projectId: string }) {
+export default function GitHubPanel({ projectId, onDeploy }: { projectId: string; onDeploy?: () => void }) {
   const { showError } = useToast();
   const [connection, setConnection] = useState<GitHubConnection | null>(null);
   const [repoUrl, setRepoUrl] = useState("");
@@ -93,6 +93,13 @@ export default function GitHubPanel({ projectId }: { projectId: string }) {
       setWebhookSecret(result.webhookSecret);
       setConnection({ repoUrl, branch, webhookUrl: result.webhookUrl });
       setRepoUrl("");
+      // Auto-deploy after cloning
+      try {
+        await api.deploy(projectId, "Deploy from GitHub repository");
+        onDeploy?.();
+      } catch {
+        // Deploy might fail if no server.js etc — that's ok, user can iterate
+      }
     } catch (err) {
       showError(err instanceof Error ? err.message : "Failed to connect");
     } finally {

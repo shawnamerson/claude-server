@@ -406,7 +406,7 @@ export default function ProjectDetail() {
           {sideTab === "env" && <EnvVarsPanel projectId={project.id} />}
           {sideTab === "database" && <DatabasePanel projectId={project.id} />}
           {sideTab === "domains" && <DomainsPanel projectId={project.id} projectSlug={project.slug} />}
-          {sideTab === "github" && <GitHubPanel projectId={project.id} />}
+          {sideTab === "github" && <GitHubPanel projectId={project.id} onDeploy={refresh} />}
         </div>
       </div>
 
