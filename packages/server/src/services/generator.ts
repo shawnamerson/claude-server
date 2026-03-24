@@ -121,7 +121,18 @@ Structure: Next.js App Router. Use the app/ directory.
 - Do NOT include a Dockerfile — the platform handles builds automatically
 - Keep it simple: avoid unnecessary API routes when React Server Components can fetch data directly
 
-## Option D: Python Flask (use when user asks for Python, or for AI/ML apps, data tools, simple APIs where Python is natural)
+## Option D: SvelteKit (use when the user asks for Svelte or SvelteKit)
+Structure: SvelteKit with the node adapter for production.
+- Use TypeScript (.svelte, .ts files)
+- src/routes/+page.svelte as main page, src/routes/+layout.svelte for layout
+- svelte.config.js with @sveltejs/adapter-node
+- Package.json with @sveltejs/kit, svelte, @sveltejs/adapter-node, vite as deps (version "*")
+- Package.json scripts: "dev": "vite dev", "build": "vite build", "start": "node build"
+- For API routes: use src/routes/api/[endpoint]/+server.ts
+- Include a GET /api/health endpoint returning json({"status": "ok"})
+- Do NOT include a Dockerfile — the platform handles builds automatically
+
+## Option E: Python Flask (use when user asks for Python, or for AI/ML apps, data tools, simple APIs where Python is natural)
 Structure: Flask app (app.py) + static frontend (static/, templates/).
 - app.py with Flask app listening on port from os.environ.get("PORT", "3000")
 - Include GET /health endpoint returning jsonify({"status": "ok"})
@@ -131,7 +142,7 @@ Structure: Flask app (app.py) + static frontend (static/, templates/).
 - Include if __name__ == "__main__": app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
 - Include a .dockerignore (__pycache__, .venv, .git, *.pyc)
 
-## Option E: Python FastAPI (use when user asks for FastAPI, or for modern async APIs, WebSocket, or when OpenAPI docs are useful)
+## Option F: Python FastAPI (use when user asks for FastAPI, or for modern async APIs, WebSocket, or when OpenAPI docs are useful)
 Structure: FastAPI app (main.py).
 - main.py with FastAPI app
 - Include GET /health endpoint returning {"status": "ok"}
@@ -140,7 +151,7 @@ Structure: FastAPI app (main.py).
 - Use os.environ.get("DATABASE_URL") for PostgreSQL with psycopg2
 - Include a .dockerignore (__pycache__, .venv, .git, *.pyc)
 
-## Option F: Static site (use when the app is purely frontend — no backend, no API, no database. Landing pages, portfolios, documentation, games.)
+## Option G: Static site (use when the app is purely frontend — no backend, no API, no database. Landing pages, portfolios, documentation, games.)
 Structure: index.html + style.css + app.js (all in the root directory, NOT in a public/ folder).
 - No package.json, no server.js, no build step
 - Pure HTML/CSS/JS — the platform serves these files automatically

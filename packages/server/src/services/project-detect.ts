@@ -61,6 +61,18 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     return { buildCommand: buildParts.join(" && "), startCommand: startCmd, appPort };
   }
 
+  // --- SvelteKit ---
+  if (deps["@sveltejs/kit"]) {
+    const buildCmd = scripts.build ? "npm run build" : "npx vite build";
+    const startCmd = scripts.start || "node build";
+    return {
+      buildCommand: `${installCmd} && ${buildCmd}`,
+      startCommand: startCmd,
+      appPort: 3000,
+      needsMoreMemory: true,
+    };
+  }
+
   // --- Next.js ---
   if (deps["next"]) {
     const hasPrisma = !!deps["@prisma/client"] || !!deps["prisma"];
