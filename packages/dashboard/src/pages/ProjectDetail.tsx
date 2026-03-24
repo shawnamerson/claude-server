@@ -304,23 +304,23 @@ export default function ProjectDetail() {
 
   // Track deploy transitions and poll health for preview
   useEffect(() => {
-    if (isDeploying) wasDeployingRef.current = true;
+    if (isDeploying) {
+      wasDeployingRef.current = true;
+      setPreviewReady(false);
+    }
   }, [isDeploying]);
 
   useEffect(() => {
-    if (!runningDep?.id) {
-      setPreviewReady(false);
-      return;
-    }
+    if (!runningDep?.id || isDeploying) return;
 
     // Existing app on page load — show immediately
-    if (!wasDeployingRef.current && !previewReady) {
+    if (!wasDeployingRef.current) {
       lastRunningIdRef.current = runningDep.id;
-      setPreviewReady(true);
+      if (!previewReady) setPreviewReady(true);
       return;
     }
 
-    // New or restarted deploy just became running — poll health
+    // Deploy just finished — poll health then show preview
     if (wasDeployingRef.current) {
       lastRunningIdRef.current = runningDep.id;
       wasDeployingRef.current = false;
@@ -351,7 +351,7 @@ export default function ProjectDetail() {
       poll();
       return () => { cancelled = true; };
     }
-  }, [runningDep?.id, project?.slug]);
+  }, [runningDep?.id, project?.slug, isDeploying]);
 
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
