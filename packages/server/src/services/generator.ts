@@ -99,7 +99,19 @@ Structure: Express server (server.js) + static frontend (public/index.html, publ
 - For SPA fallback: app.use((req, res) => res.sendFile('index.html', { root: 'public' }))
 - Package.json: version "*" for all deps, "start": "node server.js"
 
-## Option B: Next.js (use when the user asks for Next.js, or when the app needs SSR, complex routing, or is clearly a multi-page content site)
+## Option B: React + Vite + Express (use when the user asks for React, or wants a polished interactive UI with a backend API)
+Structure: Vite React frontend (src/) + Express API server (server.js). The server serves the built frontend in production.
+- Package.json with vite, react, react-dom, @vitejs/plugin-react, express as deps (version "*")
+- src/main.jsx as React entry point, src/App.jsx as main component, src/index.css for styles
+- index.html in root with <div id="root"> and <script type="module" src="/src/main.jsx">
+- vite.config.js: configure proxy so /api requests go to Express during dev
+- server.js: Express server that serves dist/ with express.static, handles API routes, and has SPA fallback
+- Use require() not import in server.js (CommonJS)
+- NEVER use app.get('*', ...) — use app.use((req, res) => ...) for SPA catch-all
+- Package.json scripts: "dev": "vite", "build": "vite build", "start": "node server.js"
+- Include GET /api/health endpoint returning {"status": "ok"}
+
+## Option C: Next.js (use when the user asks for Next.js, or when the app needs SSR, complex routing, or is clearly a multi-page content site)
 Structure: Next.js App Router. Use the app/ directory.
 - Use TypeScript (.tsx/.ts files)
 - Use Tailwind CSS for styling — include tailwind.config.ts and configure it in globals.css
@@ -109,7 +121,7 @@ Structure: Next.js App Router. Use the app/ directory.
 - Do NOT include a Dockerfile — the platform handles builds automatically
 - Keep it simple: avoid unnecessary API routes when React Server Components can fetch data directly
 
-## Option C: Python Flask (use when user asks for Python, or for AI/ML apps, data tools, simple APIs where Python is natural)
+## Option D: Python Flask (use when user asks for Python, or for AI/ML apps, data tools, simple APIs where Python is natural)
 Structure: Flask app (app.py) + static frontend (static/, templates/).
 - app.py with Flask app listening on port from os.environ.get("PORT", "3000")
 - Include GET /health endpoint returning jsonify({"status": "ok"})
@@ -119,7 +131,7 @@ Structure: Flask app (app.py) + static frontend (static/, templates/).
 - Include if __name__ == "__main__": app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
 - Include a .dockerignore (__pycache__, .venv, .git, *.pyc)
 
-## Option D: Python FastAPI (use when user asks for FastAPI, or for modern async APIs, WebSocket, or when OpenAPI docs are useful)
+## Option E: Python FastAPI (use when user asks for FastAPI, or for modern async APIs, WebSocket, or when OpenAPI docs are useful)
 Structure: FastAPI app (main.py).
 - main.py with FastAPI app
 - Include GET /health endpoint returning {"status": "ok"}
@@ -128,7 +140,7 @@ Structure: FastAPI app (main.py).
 - Use os.environ.get("DATABASE_URL") for PostgreSQL with psycopg2
 - Include a .dockerignore (__pycache__, .venv, .git, *.pyc)
 
-## Option E: Static site (use when the app is purely frontend — no backend, no API, no database. Landing pages, portfolios, documentation, games.)
+## Option F: Static site (use when the app is purely frontend — no backend, no API, no database. Landing pages, portfolios, documentation, games.)
 Structure: index.html + style.css + app.js (all in the root directory, NOT in a public/ folder).
 - No package.json, no server.js, no build step
 - Pure HTML/CSS/JS — the platform serves these files automatically
