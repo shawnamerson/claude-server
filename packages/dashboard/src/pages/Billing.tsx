@@ -56,8 +56,10 @@ export default function Billing() {
 
   if (loading) return <div style={{ color: "#666", padding: "2rem" }}>Loading...</div>;
 
-  const deployPct = status ? (status.deploysThisMonth / status.deployLimit) * 100 : 0;
-  const chatPct = status ? (status.chatsThisMonth / status.chatLimit) * 100 : 0;
+  const isUnlimitedDeploys = status && status.deployLimit < 0;
+  const isUnlimitedChats = status && status.chatLimit < 0;
+  const deployPct = status ? (isUnlimitedDeploys ? 0 : (status.deploysThisMonth / status.deployLimit) * 100) : 0;
+  const chatPct = status ? (isUnlimitedChats ? 0 : (status.chatsThisMonth / status.chatLimit) * 100) : 0;
   const projectPct = status && status.projectLimit > 0 ? (status.projectCount / status.projectLimit) * 100 : 0;
 
   return (
@@ -73,15 +75,15 @@ export default function Billing() {
 
           <div style={s.statusRow}>
             <span style={s.statusLabel}>Deploys</span>
-            <span style={s.statusValue}>{status.deploysThisMonth} / {status.deployLimit}</span>
+            <span style={s.statusValue}>{status.deploysThisMonth}{isUnlimitedDeploys ? " / ∞" : ` / ${status.deployLimit}`}</span>
           </div>
-          <div style={s.progressBar}><div style={s.progressFill(deployPct)} /></div>
+          {!isUnlimitedDeploys && <div style={s.progressBar}><div style={s.progressFill(deployPct)} /></div>}
 
           <div style={s.statusRow}>
             <span style={s.statusLabel}>Chats</span>
-            <span style={s.statusValue}>{status.chatsThisMonth?.toLocaleString()} / {status.chatLimit?.toLocaleString()}</span>
+            <span style={s.statusValue}>{status.chatsThisMonth?.toLocaleString()}{isUnlimitedChats ? " / ∞" : ` / ${status.chatLimit?.toLocaleString()}`}</span>
           </div>
-          <div style={s.progressBar}><div style={s.progressFill(chatPct)} /></div>
+          {!isUnlimitedChats && <div style={s.progressBar}><div style={s.progressFill(chatPct)} /></div>}
 
           <div style={s.statusRow}>
             <span style={s.statusLabel}>Projects</span>
