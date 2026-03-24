@@ -274,7 +274,8 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug
+      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug,
+      projectConfig.needsMoreMemory ? { memoryMb: 1024 } : undefined
     );
 
     db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run("claude-server/base:latest", deploymentId);

@@ -350,7 +350,7 @@ export class DevContainer {
     await this.ensureRunning();
 
     // Wrap command with timeout to ensure it exits
-    const tout = timeoutSecs || (this.memoryOverride ? 300 : 12); // 5 min for builds, 12s for quick commands
+    const tout = timeoutSecs || (this.memoryOverride ? 600 : 12); // 10 min for builds, 12s for quick commands
     const wrappedCmd = `timeout ${tout} sh -c ${JSON.stringify(command)} 2>&1; echo "::EXIT_CODE::$?"`;
 
     const exec = await this.container!.exec({

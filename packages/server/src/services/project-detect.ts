@@ -82,10 +82,10 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     // Never use bare "next start" — it won't be in PATH in the production container
     const startCmd = scripts.start ? "npm start" : "npx next start";
     return {
-      buildCommand: `${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1536 ${buildCmd}`,
+      buildCommand: `NEXT_TELEMETRY_DISABLED=1 ${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1536 ${buildCmd}`,
       startCommand: startCmd,
       appPort: 3000,
-      needsMoreMemory: true, // 2GB for Next.js builds
+      needsMoreMemory: true, // 2GB for Next.js builds, 10 min timeout
     };
   }
 

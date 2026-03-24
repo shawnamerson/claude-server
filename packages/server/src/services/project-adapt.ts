@@ -109,6 +109,9 @@ INSTRUCTIONS:
 
   // --- Next.js projects ---
   if (allDeps["next"]) {
+    // Always add ignoreBuildErrors for imported repos — type errors shouldn't block deploy
+    issues.push('Add typescript: { ignoreBuildErrors: true } and eslint: { ignoreDuringBuilds: true } to next.config.js — imported projects may have type errors that should not block the build.');
+
     if (hasDockerCompose) {
       issues.push("This project has docker-compose.yml — this platform handles Docker automatically. Remove any multi-service dependencies or make them optional.");
     }
