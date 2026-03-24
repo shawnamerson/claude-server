@@ -101,7 +101,7 @@ export async function wakeContainer(slug: string): Promise<{ port: number } | nu
     if (wakeConfig.buildCommand && wakeConfig.needsMoreMemory) {
       const { DevContainer } = await import("../services/generator.js");
       const bc = new DevContainer(dep.source_path);
-      bc.memoryOverride = 1536 * 1024 * 1024;
+      bc.memoryOverride = 2048 * 1024 * 1024;
       try { await bc.exec(wakeConfig.buildCommand, () => {}); } finally { await bc.cleanup(); }
     }
 

@@ -66,10 +66,10 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     const buildCmd = scripts.build ? "npm run build" : "npx next build";
     const startCmd = scripts.start || "npx next start";
     return {
-      buildCommand: `${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1024 ${buildCmd}`,
+      buildCommand: `${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1536 ${buildCmd}`,
       startCommand: startCmd,
       appPort: 3000,
-      needsMoreMemory: true,
+      needsMoreMemory: true, // 2GB for Next.js builds
     };
   }
 

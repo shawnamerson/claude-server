@@ -280,6 +280,7 @@ export class DevContainer {
         Memory: this.memoryOverride || 256 * 1024 * 1024,
         CpuQuota: 50000,
         CpuPeriod: 100000,
+        Dns: ["8.8.8.8", "1.1.1.1"],
       },
       NetworkingConfig: {
         EndpointsConfig: { "claude-server-network": {} },

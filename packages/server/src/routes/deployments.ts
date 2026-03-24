@@ -217,7 +217,7 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
       const buildContainer = new DevContainer(project.source_path);
       if (projectConfig.needsMoreMemory) {
         // Override dev container memory for heavy builds
-        (buildContainer as any).memoryOverride = 1536 * 1024 * 1024;
+        (buildContainer as any).memoryOverride = 2048 * 1024 * 1024;
       }
       try {
         const buildOutput = await buildContainer.exec(projectConfig.buildCommand, (msg) => addLog(deploymentId, "system", msg));
@@ -348,7 +348,7 @@ async function autoFixAndRedeploy(
       addLog(deploymentId, "system", "Rebuilding...");
       const { DevContainer } = await import("../services/generator.js");
       const buildContainer = new DevContainer(project.source_path);
-      if (fixConfig.needsMoreMemory) (buildContainer as any).memoryOverride = 1536 * 1024 * 1024;
+      if (fixConfig.needsMoreMemory) (buildContainer as any).memoryOverride = 2048 * 1024 * 1024;
       try {
         await buildContainer.exec(fixConfig.buildCommand, (msg) => addLog(deploymentId, "system", msg));
       } finally {
@@ -540,7 +540,7 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
     if (restartConfig.buildCommand && restartConfig.needsMoreMemory) {
       const { DevContainer } = await import("../services/generator.js");
       const bc = new DevContainer(project.source_path);
-      bc.memoryOverride = 1536 * 1024 * 1024;
+      bc.memoryOverride = 2048 * 1024 * 1024;
       try { await bc.exec(restartConfig.buildCommand, () => {}); } finally { await bc.cleanup(); }
     }
 
