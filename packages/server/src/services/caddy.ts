@@ -93,6 +93,16 @@ export function generateCaddyfile(): string {
       caddyfile += `    header -Cross-Origin-Embedder-Policy\n`;
       caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
       caddyfile += `}\n\n`;
+
+      // Auto-redirect www variant to bare domain
+      if (!cd.domain.startsWith("www.")) {
+        const wwwDomain = `www.${cd.domain}`;
+        if (isSafeHostname(wwwDomain)) {
+          caddyfile += `${wwwDomain} {\n`;
+          caddyfile += `    redir https://${cd.domain}{uri} permanent\n`;
+          caddyfile += `}\n\n`;
+        }
+      }
     }
   }
 
