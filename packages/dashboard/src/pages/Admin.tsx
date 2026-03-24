@@ -7,6 +7,7 @@ interface Stats {
   chatsThisMonth: number;
   containersRunning: number;
   mrr: number;
+  apiCosts: { todayCents: number; monthCents: number; monthInputTokens: number; monthOutputTokens: number };
 }
 
 interface AdminUser {
@@ -173,11 +174,12 @@ export default function Admin() {
 
         {/* Stats Cards */}
         {stats && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
             <StatCard label="Total Users" value={stats.users.total} sub={`+${stats.users.signupsToday} today, +${stats.users.signupsThisWeek} this week`} />
             <StatCard label="Active Projects" value={stats.projects.active} sub={`${stats.projects.total} total`} />
             <StatCard label="Deploys Today" value={stats.deployments.today} sub={`${stats.deployments.thisMonth} this month, ${stats.deployments.total} total`} />
             <StatCard label="MRR" value={`$${(stats.mrr / 100).toFixed(0)}`} sub={`${stats.containersRunning} containers, ${stats.chatsThisMonth} chats/mo`} />
+            <StatCard label="API Costs" value={`$${(stats.apiCosts.monthCents / 100).toFixed(2)}`} sub={`$${(stats.apiCosts.todayCents / 100).toFixed(2)} today, ${((stats.apiCosts.monthInputTokens + stats.apiCosts.monthOutputTokens) / 1000000).toFixed(1)}M tokens`} />
           </div>
         )}
 

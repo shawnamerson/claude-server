@@ -102,6 +102,11 @@ router.get("/stats", async (_req: Request, res: Response) => {
     // Chat stats
     const chatsThisMonth = (db.prepare("SELECT COUNT(*) as cnt FROM chat_messages WHERE role = 'user' AND created_at >= ?").get(monthStr) as { cnt: number }).cnt;
 
+    // Anthropic API costs
+    const apiCostsThisMonth = (db.prepare("SELECT COALESCE(SUM(cost_cents), 0) as total FROM deployments WHERE created_at >= ?").get(monthStr) as { total: number }).total;
+    const apiCostsToday = (db.prepare("SELECT COALESCE(SUM(cost_cents), 0) as total FROM deployments WHERE created_at >= ?").get(todayStr) as { total: number }).total;
+    const apiTokensThisMonth = db.prepare("SELECT COALESCE(SUM(input_tokens), 0) as input, COALESCE(SUM(output_tokens), 0) as output FROM deployments WHERE created_at >= ?").get(monthStr) as { input: number; output: number };
+
     // Docker container count
     let containersRunning = 0;
     try {
@@ -142,6 +147,12 @@ router.get("/stats", async (_req: Request, res: Response) => {
       chatsThisMonth,
       containersRunning,
       mrr, // in cents
+      apiCosts: {
+        todayCents: apiCostsToday,
+        monthCents: apiCostsThisMonth,
+        monthInputTokens: apiTokensThisMonth.input,
+        monthOutputTokens: apiTokensThisMonth.output,
+      },
     });
   } catch (err) {
     console.error("Admin stats error:", err);
