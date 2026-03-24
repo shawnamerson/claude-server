@@ -48,9 +48,16 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { er
 const deployLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, message: { error: "Too many deploys. Wait a minute." } });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: "Too many requests. Slow down." } });
 
+const githubTokenLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, message: { error: "Too many attempts. Wait a minute." } });
+const cronTriggerLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: "Too many cron triggers. Wait a minute." } });
+const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: "Too many webhook requests. Wait a minute." } });
+
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/signup", authLimiter);
+app.use("/api/auth/github-token", githubTokenLimiter);
 app.use("/api/projects/*/deploy", deployLimiter);
+app.use("/api/projects/*/cron/*/trigger", cronTriggerLimiter);
+app.use("/api/github/webhook", webhookLimiter);
 app.use("/api", apiLimiter);
 
 // SEO routes — sitemap, robots.txt, OG image (before auth)

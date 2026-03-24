@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
 import { sendVerificationEmail, sendWelcomeEmail, notifyNewSignup } from "../services/email.js";
@@ -39,7 +40,7 @@ router.post("/auth/signup", async (req: Request, res: Response) => {
 
   const id = nanoid(12);
   const hashed = await bcrypt.hash(password, 10);
-  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+  const verificationCode = crypto.randomInt(100000, 999999).toString(); // 6-digit code
 
   db.prepare("INSERT INTO users (id, email, password, name, credits, email_verified, verification_code) VALUES (?, ?, ?, ?, 3, 0, ?)").run(
     id, email.toLowerCase().trim(), hashed, name || "", verificationCode
@@ -47,7 +48,7 @@ router.post("/auth/signup", async (req: Request, res: Response) => {
 
   // Create session
   const sessionId = nanoid(32);
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").run(sessionId, id, expiresAt);
 
   db.prepare("INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, 3, 'signup', 'Welcome bonus')").run(id);
@@ -106,7 +107,7 @@ router.post("/auth/resend-code", (req: Request, res: Response) => {
   }
 
   // Generate a new code
-  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const newCode = crypto.randomInt(100000, 999999).toString();
   db.prepare("UPDATE users SET verification_code = ? WHERE id = ?").run(newCode, user.id);
   sendVerificationEmail(userData!.email, newCode);
 
@@ -135,7 +136,7 @@ router.post("/auth/login", async (req: Request, res: Response) => {
   }
 
   const sessionId = nanoid(32);
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").run(sessionId, user.id, expiresAt);
 
   res.json({

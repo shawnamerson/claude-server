@@ -23,10 +23,19 @@ function addLog(deploymentId: string, stream: string, message: string) {
   logEmitter.emit(`log:${deploymentId}`, { stream, message, timestamp: new Date().toISOString() });
 }
 
+const VALID_EXTRA_COLUMNS = new Set(["container_id", "port", "error", "docker_image_id", "stopped_at"]);
+
 function updateStatus(deploymentId: string, status: string, extra: Record<string, unknown> = {}) {
   const db = getDb();
-  const sets = ["status = ?", ...Object.keys(extra).map((k) => `${k} = ?`)];
-  const values = [status, ...Object.values(extra), deploymentId];
+  const validKeys = Object.keys(extra).filter((k) => {
+    if (!VALID_EXTRA_COLUMNS.has(k)) {
+      console.warn(`updateStatus: rejecting invalid column name "${k}"`);
+      return false;
+    }
+    return true;
+  });
+  const sets = ["status = ?", ...validKeys.map((k) => `${k} = ?`)];
+  const values = [status, ...validKeys.map((k) => extra[k]), deploymentId];
   db.prepare(`UPDATE deployments SET ${sets.join(", ")} WHERE id = ?`).run(...values);
 }
 
@@ -260,17 +269,17 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
       const buildEnv = getEnvVarsForDeploy(project.id);
       // Add placeholder env vars so Next.js builds don't crash on missing secrets
       const placeholders = [
-        "NEXTAUTH_SECRET=build-placeholder",
+        "NEXTAUTH_SECRET=vibestack-build-placeholder-not-a-real-secret",
         "NEXTAUTH_URL=http://localhost:3000",
-        "STRIPE_SECRET_KEY=sk_placeholder",
-        "STRIPE_WEBHOOK_SECRET=whsec_placeholder",
-        "RESEND_API_KEY=re_placeholder",
+        "STRIPE_SECRET_KEY=sk_build_placeholder_not_real",
+        "STRIPE_WEBHOOK_SECRET=whsec_build_placeholder_not_real",
+        "RESEND_API_KEY=re_build_placeholder_not_real",
         "UPSTASH_REDIS_REST_URL=",
         "UPSTASH_REDIS_REST_TOKEN=",
-        "CLOUDINARY_API_KEY=placeholder",
-        "CLOUDINARY_API_SECRET=placeholder",
-        "CLOUDINARY_CLOUD_NAME=placeholder",
-        "CRON_SECRET=placeholder",
+        "CLOUDINARY_API_KEY=build_placeholder_not_real",
+        "CLOUDINARY_API_SECRET=build_placeholder_not_real",
+        "CLOUDINARY_CLOUD_NAME=build_placeholder_not_real",
+        "CRON_SECRET=build_placeholder_not_real",
         `NEXT_PUBLIC_APP_URL=https://${project.slug}.${config.domain}`,
       ];
       // Only add placeholders if not already set by actual env vars
