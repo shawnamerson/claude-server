@@ -109,8 +109,6 @@ INSTRUCTIONS:
 
   // --- Next.js projects ---
   if (allDeps["next"]) {
-    // Next.js projects generally "just work" with our build pipeline.
-    // Only flag issues if there are real problems.
     if (hasDockerCompose) {
       issues.push("This project has docker-compose.yml — this platform handles Docker automatically. Remove any multi-service dependencies or make them optional.");
     }
@@ -121,22 +119,69 @@ INSTRUCTIONS:
       issues.push('package.json is missing a "start" script. Add "start": "next start".');
     }
 
+    // Check Prisma schema for Vercel-specific env vars
+    const prismaSchema = path.join(sourcePath, "prisma", "schema.prisma");
+    if (fs.existsSync(prismaSchema)) {
+      try {
+        const schema = fs.readFileSync(prismaSchema, "utf-8");
+        // The platform auto-maps DATABASE_URL → POSTGRES_PRISMA_URL/POSTGRES_URL_NON_POOLING at deploy time.
+        // But the build script might run prisma db push which needs DB access.
+        // Rewrite build to skip db push since it's handled separately.
+        if (scripts.build && scripts.build.includes("prisma db push")) {
+          issues.push('The build script includes "prisma db push" which requires database access at build time. Change the build script to just "prisma generate && next build" — database migrations will be handled separately.');
+        }
+      } catch {}
+    }
+
+    // Check for middleware that uses external services (Redis, etc.)
+    const middlewarePath = path.join(sourcePath, "src", "middleware.ts");
+    if (!fs.existsSync(middlewarePath)) {
+      // Also check root middleware
+      const rootMiddleware = path.join(sourcePath, "middleware.ts");
+      if (fs.existsSync(rootMiddleware)) {
+        try {
+          const mw = fs.readFileSync(rootMiddleware, "utf-8");
+          if (mw.includes("upstash") || mw.includes("redis")) {
+            issues.push("The middleware uses Upstash Redis for rate limiting. Make the Redis connection optional — if UPSTASH_REDIS_REST_URL is not set, skip rate limiting and allow all requests through. The middleware must not crash if Redis is unavailable.");
+          }
+        } catch {}
+      }
+    } else {
+      try {
+        const mw = fs.readFileSync(middlewarePath, "utf-8");
+        if (mw.includes("upstash") || mw.includes("redis")) {
+          issues.push("The middleware uses Upstash Redis for rate limiting. Make the Redis connection optional — if UPSTASH_REDIS_REST_URL is not set, skip rate limiting and allow all requests through. The middleware must not crash if Redis is unavailable.");
+        }
+      } catch {}
+    }
+
+    // Check for services that need graceful fallbacks
+    if (allDeps["@upstash/redis"] || allDeps["@upstash/ratelimit"]) {
+      if (!issues.some(i => i.includes("Upstash"))) {
+        issues.push("This project uses Upstash Redis. Any Redis usage must gracefully handle missing UPSTASH_REDIS_REST_URL — wrap in try/catch and provide fallback behavior.");
+      }
+    }
+
     if (issues.length === 0) return null;
 
-    return `This Next.js project was imported from GitHub and needs minor fixes to deploy.
+    return `This Next.js project was imported from GitHub and needs adaptation to deploy on this platform.
 
 CRITICAL REQUIREMENTS:
 - The app must work with "npm run build" followed by "npm start"
 - It must listen on process.env.PORT (default 3000) — Next.js does this by default
-- Do NOT rewrite the app. Make MINIMAL changes.
+- Do NOT rewrite the app. Make MINIMAL, targeted changes.
+- The platform auto-provides DATABASE_URL, POSTGRES_PRISMA_URL, and POSTGRES_URL_NON_POOLING (all same value)
+- Any external service (Redis, Stripe, Cloudinary, etc.) must be OPTIONAL — the app must start and serve pages even if these env vars are missing
+- NEVER change "next start" to "next dev" — always use production mode
 
 ISSUES TO FIX:
 ${issues.map(i => `- ${i}`).join("\n")}
 
 INSTRUCTIONS:
-1. Read ONLY the files that need changes (likely just package.json or next.config)
-2. Make the minimal edits
-3. Call done when finished`;
+1. Read ONLY the files that need changes
+2. Make the minimal edits — wrap external services in try/catch, add null checks
+3. Do NOT rewrite entire files. Only change the lines that need fixing.
+4. Call done when finished`;
   }
 
   // --- SvelteKit projects ---

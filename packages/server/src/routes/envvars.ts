@@ -48,12 +48,24 @@ router.delete("/projects/:id/env/:key", (req: Request, res: Response) => {
 });
 
 // Helper: get env vars as array of "KEY=VALUE" strings for Docker
+// Auto-maps DATABASE_URL to common aliases (Prisma/Vercel conventions)
 export function getEnvVarsForDeploy(projectId: string): string[] {
   const db = getDb();
   const vars = db
     .prepare("SELECT key, value FROM env_vars WHERE project_id = ?")
     .all(projectId) as Array<{ key: string; value: string }>;
-  return vars.map((v) => `${v.key}=${v.value}`);
+
+  const envMap = new Map(vars.map(v => [v.key, v.value]));
+
+  // Auto-map DATABASE_URL to Prisma/Vercel-style env vars if not explicitly set
+  const dbUrl = envMap.get("DATABASE_URL");
+  if (dbUrl) {
+    if (!envMap.has("POSTGRES_PRISMA_URL")) envMap.set("POSTGRES_PRISMA_URL", dbUrl);
+    if (!envMap.has("POSTGRES_URL_NON_POOLING")) envMap.set("POSTGRES_URL_NON_POOLING", dbUrl);
+    if (!envMap.has("POSTGRES_URL")) envMap.set("POSTGRES_URL", dbUrl);
+  }
+
+  return Array.from(envMap.entries()).map(([k, v]) => `${k}=${v}`);
 }
 
 export default router;
