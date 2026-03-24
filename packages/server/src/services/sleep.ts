@@ -98,7 +98,8 @@ export async function wakeContainer(slug: string): Promise<{ port: number } | nu
     const wakeConfig = detectProjectConfig(dep.source_path);
     const envVars = getEnvVarsForDeploy(dep.project_id);
     const { containerId, hostPort } = await deployFromVolume(
-      dep.source_path, dep.id, wakeConfig.appPort, wakeConfig.startCommand, envVars, dep.slug
+      dep.source_path, dep.id, wakeConfig.appPort, wakeConfig.startCommand, envVars, dep.slug,
+      wakeConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
     );
 
     db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")

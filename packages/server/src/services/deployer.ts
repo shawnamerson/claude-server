@@ -57,7 +57,8 @@ export async function deployFromVolume(
   appPort: number,
   startCommand: string,
   extraEnv: string[] = [],
-  projectSlug?: string
+  projectSlug?: string,
+  opts?: { memoryMb?: number }
 ): Promise<{ containerId: string; hostPort: number }> {
   const relativeToData = sourcePath.replace(/^\/app\/data\//, "");
   const workDir = `/data/${relativeToData}`;
@@ -70,6 +71,7 @@ export async function deployFromVolume(
     WorkingDir: workDir,
     Cmd: ["sh", "-c", startCommand],
     extraBinds: [`claude-server_app-data:/data:rw`],
+    memoryMb: opts?.memoryMb,
   });
 }
 
@@ -83,10 +85,12 @@ async function _createAndStartContainer(
     WorkingDir?: string;
     Cmd?: string[];
     extraBinds?: string[];
+    memoryMb?: number;
   }
 ): Promise<{ containerId: string; hostPort: number }> {
   const hostPort = await findAvailablePort();
   const domain = process.env.DOMAIN || "localhost";
+  const memoryBytes = (opts.memoryMb || 512) * 1024 * 1024;
 
   addLog(deploymentId, "system", `Deploying container on port ${hostPort} -> ${appPort}`);
   if (projectSlug) {
@@ -117,8 +121,8 @@ async function _createAndStartContainer(
       },
       Binds: opts.extraBinds || [],
       RestartPolicy: { Name: "no" },
-      Memory: 512 * 1024 * 1024,
-      MemorySwap: 512 * 1024 * 1024,
+      Memory: memoryBytes,
+      MemorySwap: memoryBytes,
       CpuPeriod: 100000,
       CpuQuota: 50000,
       PidsLimit: 256,

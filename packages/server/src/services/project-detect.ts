@@ -6,6 +6,8 @@ export interface ProjectConfig {
   startCommand: string;
   /** The port the app listens on */
   appPort: number;
+  /** Whether this project needs more memory (e.g. Next.js builds) */
+  needsMoreMemory?: boolean;
 }
 
 /**
@@ -70,11 +72,14 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
 
   // --- Next.js ---
   if (deps["next"]) {
-    const buildCmd = scripts.build ? "npm run build 2>/dev/null" : "npx next build 2>/dev/null";
+    const hasPrisma = !!deps["@prisma/client"] || !!deps["prisma"];
+    const prismaCmd = hasPrisma ? " && npx prisma generate" : "";
+    const buildCmd = scripts.build ? "npm run build" : "npx next build";
     const startCmd = scripts.start || "npx next start";
     return {
-      startCommand: `${installCmd} && ${buildCmd} && ${startCmd}`,
+      startCommand: `${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1024 ${buildCmd} && ${startCmd}`,
       appPort: 3000,
+      needsMoreMemory: true,
     };
   }
 

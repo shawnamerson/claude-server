@@ -214,7 +214,8 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug
+      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug,
+      projectConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
     );
 
     db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run("claude-server/base:latest", deploymentId);
@@ -325,7 +326,8 @@ async function autoFixAndRedeploy(
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId: newId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug
+      project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug,
+      fixConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
     );
 
     updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: "claude-server/base:latest" });
@@ -501,7 +503,8 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
     const restartConfig = detectProjectConfig(project.source_path);
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deployment.id, restartConfig.appPort, restartConfig.startCommand, envVars, project.slug
+      project.source_path, deployment.id, restartConfig.appPort, restartConfig.startCommand, envVars, project.slug,
+      restartConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
     );
 
     db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")
