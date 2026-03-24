@@ -37,7 +37,7 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
   if (scripts.start && scripts.start.includes("5000")) appPort = 5000;
   if (scripts.start && scripts.start.includes("8080")) appPort = 8080;
 
-  const installCmd = "npm install --prefer-offline --no-audit --no-fund 2>/dev/null";
+  const installCmd = "rm -f package-lock.json && npm install --no-audit --no-fund 2>/dev/null";
 
   // --- Monorepo: has client/ with its own package.json ---
   if (hasClientDir) {
