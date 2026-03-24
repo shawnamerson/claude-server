@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../hooks/useAuth";
@@ -48,10 +48,11 @@ const styles = {
 
 export default function NewProject() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showError, showWarning } = useToast();
   const { user } = useAuth();
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(searchParams.get("prompt") || "");
   const [loading, setLoading] = useState(false);
   const [nameError, setNameError] = useState("");
   const [limitReached, setLimitReached] = useState(false);

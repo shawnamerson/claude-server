@@ -136,6 +136,7 @@ const responsiveCSS = `
   .jv-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
   .jv-steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
   .jv-comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .jv-pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
   .jv-nav-links { display: flex; gap: 1.5rem; align-items: center; }
   .jv-title { font-size: 3.2rem; }
   .jv-hero-demo { display: grid; grid-template-columns: 1fr 1.2fr; gap: 1rem; height: 380px; }
@@ -149,6 +150,8 @@ const responsiveCSS = `
     .jv-feature-grid { grid-template-columns: 1fr; }
     .jv-steps-grid { grid-template-columns: 1fr; }
     .jv-comp-grid { grid-template-columns: 1fr; }
+    .jv-pricing-grid { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 500px) { .jv-pricing-grid { grid-template-columns: 1fr; } }
     .jv-nav-links a:not(:last-child) { display: none; }
     .jv-title { font-size: 2rem; }
   }
@@ -164,6 +167,7 @@ export default function Landing() {
         <div className="jv-nav-links">
           <a href="#features" style={s.navLink}>Features</a>
           <a href="#how" style={s.navLink}>How it works</a>
+          <a href="#pricing" style={s.navLink}>Pricing</a>
           <Link to="/login" style={s.navLink}>Log in</Link>
           <Link to="/signup" style={s.ctaSmall}>Get started</Link>
         </div>
@@ -177,9 +181,29 @@ export default function Landing() {
           Tell AI what you want. Watch it write code, test it, and deploy — all in real-time.
           Your app is live in under a minute.
         </p>
-        <div style={s.ctaRow}>
-          <Link to="/signup" style={s.cta}>Start building free</Link>
+        <div style={s.tryIt}>
+          <input
+            id="hero-prompt"
+            style={s.tryInput}
+            placeholder="Describe your app... e.g. A habit tracker with streaks and charts"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const val = (e.target as HTMLInputElement).value.trim();
+                if (val) window.location.href = `/signup?prompt=${encodeURIComponent(val)}`;
+              }
+            }}
+          />
+          <button
+            style={s.tryBtn}
+            onClick={() => {
+              const input = document.getElementById("hero-prompt") as HTMLInputElement;
+              const val = input?.value.trim();
+              if (val) window.location.href = `/signup?prompt=${encodeURIComponent(val)}`;
+              else window.location.href = "/signup";
+            }}
+          >Build it</button>
         </div>
+        <div style={{ fontSize: "0.8rem", color: "#555", marginTop: "0.5rem" }}>No credit card required</div>
 
         {/* Side-by-side: terminal on left, live app on right */}
         <HeroDemo />
@@ -248,10 +272,71 @@ export default function Landing() {
         </div>
       </div>
 
+      {/* Pricing */}
+      <div id="pricing" style={s.pricing}>
+        <h2 style={s.sectionTitle}>Simple pricing</h2>
+        <div className="jv-pricing-grid">
+          <div style={s.priceCard}>
+            <div style={s.planName}>Free</div>
+            <div style={s.planPrice}>$0</div>
+            <div style={s.planPer}>forever</div>
+            <div style={s.planFeatures}>
+              <div>5 deploys / month</div>
+              <div>1 project</div>
+              <div>50 AI chats</div>
+              <div>PostgreSQL database</div>
+              <div>Custom subdomain</div>
+            </div>
+            <Link to="/signup" style={s.planBtn}>Get started</Link>
+          </div>
+          <div style={{ ...s.priceCard, borderColor: "#7c3aed", position: "relative" }}>
+            <div style={s.popular}>Most popular</div>
+            <div style={{ ...s.planName, color: "#a78bfa" }}>Pro</div>
+            <div style={s.planPrice}>$19<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
+            <div style={s.planPer}>per month</div>
+            <div style={s.planFeatures}>
+              <div>100 deploys / month</div>
+              <div>10 projects</div>
+              <div>5,000 AI chats</div>
+              <div>GitHub import</div>
+              <div>Custom domains</div>
+              <div>Cron jobs</div>
+            </div>
+            <Link to="/signup" style={{ ...s.planBtn, background: "#7c3aed" }}>Start Pro</Link>
+          </div>
+          <div style={s.priceCard}>
+            <div style={s.planName}>Growth</div>
+            <div style={s.planPrice}>$39<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
+            <div style={s.planPer}>per month</div>
+            <div style={s.planFeatures}>
+              <div>500 deploys / month</div>
+              <div>50 projects</div>
+              <div>20,000 AI chats</div>
+              <div>Everything in Pro</div>
+              <div>Priority support</div>
+            </div>
+            <Link to="/signup" style={s.planBtn}>Start Growth</Link>
+          </div>
+          <div style={s.priceCard}>
+            <div style={s.planName}>Team</div>
+            <div style={s.planPrice}>$79<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
+            <div style={s.planPer}>per month</div>
+            <div style={s.planFeatures}>
+              <div>2,000 deploys / month</div>
+              <div>Unlimited projects</div>
+              <div>Unlimited AI chats</div>
+              <div>Team collaboration</div>
+              <div>Everything in Growth</div>
+            </div>
+            <Link to="/signup" style={s.planBtn}>Start Team</Link>
+          </div>
+        </div>
+      </div>
+
       {/* Final CTA */}
       <div style={s.finalCta}>
         <h2 style={s.finalTitle}>Stop configuring. Start shipping.</h2>
-        <p style={s.finalSub}>20 free deploys every month. No credit card required.</p>
+        <p style={s.finalSub}>5 free deploys every month. No credit card required.</p>
         <Link to="/signup" style={s.cta}>Start building free</Link>
       </div>
 
@@ -290,6 +375,9 @@ const s = {
   subtitle: { fontSize: "1.2rem", color: "#888", lineHeight: 1.6, maxWidth: "550px", margin: "0 auto 2rem" },
   ctaRow: { display: "flex", gap: "1rem", justifyContent: "center", marginBottom: "2.5rem" },
   cta: { display: "inline-block", padding: "0.85rem 2.5rem", background: "#7c3aed", color: "#fff", border: "none", borderRadius: "0.6rem", fontSize: "1.05rem", fontWeight: 600, textDecoration: "none", cursor: "pointer" },
+  tryIt: { display: "flex", gap: "0", maxWidth: "540px", margin: "0 auto", background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.6rem", overflow: "hidden" },
+  tryInput: { flex: 1, padding: "0.9rem 1rem", background: "transparent", border: "none", color: "#e0e0e0", fontSize: "0.95rem", outline: "none", fontFamily: "inherit" },
+  tryBtn: { padding: "0.9rem 1.5rem", background: "#7c3aed", color: "#fff", border: "none", fontSize: "0.95rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const },
   features: { maxWidth: "1000px", margin: "0 auto", padding: "4rem 2rem" },
   sectionTitle: { fontSize: "2rem", fontWeight: 700, textAlign: "center" as const, marginBottom: "2.5rem", color: "#e0e0e0" },
   featureCard: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "1.5rem" },
@@ -308,6 +396,14 @@ const s = {
   compItem: { fontSize: "0.9rem", color: "#bbb", display: "flex", gap: "0.5rem", alignItems: "center" },
   compX: { color: "#f87171", fontWeight: 700, fontSize: "0.85rem" },
   compCheck: { color: "#34d399", fontWeight: 700, fontSize: "0.85rem" },
+  pricing: { maxWidth: "1000px", margin: "0 auto", padding: "4rem 2rem" },
+  priceCard: { background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "1.5rem", display: "flex", flexDirection: "column" as const },
+  popular: { position: "absolute" as const, top: "-10px", left: "50%", transform: "translateX(-50%)", background: "#7c3aed", color: "#fff", fontSize: "0.7rem", fontWeight: 600, padding: "0.2rem 0.75rem", borderRadius: "9999px", whiteSpace: "nowrap" as const },
+  planName: { fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.25rem" },
+  planPrice: { fontSize: "2.5rem", fontWeight: 800, lineHeight: 1.1 },
+  planPer: { fontSize: "0.8rem", color: "#666", marginBottom: "1rem" },
+  planFeatures: { display: "flex", flexDirection: "column" as const, gap: "0.4rem", fontSize: "0.88rem", color: "#aaa", flex: 1, marginBottom: "1.25rem" },
+  planBtn: { display: "block", textAlign: "center" as const, padding: "0.65rem 1rem", background: "#1e1e30", color: "#e0e0e0", borderRadius: "0.5rem", textDecoration: "none", fontSize: "0.9rem", fontWeight: 600 },
   finalCta: { textAlign: "center" as const, padding: "4rem 2rem" },
   finalTitle: { fontSize: "2rem", fontWeight: 700, marginBottom: "0.75rem" },
   finalSub: { fontSize: "1.05rem", color: "#888", marginBottom: "2rem" },
