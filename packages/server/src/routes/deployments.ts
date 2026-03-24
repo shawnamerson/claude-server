@@ -268,6 +268,9 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
       addLog(deploymentId, "system", "Build complete");
     }
 
+    // Mark build as succeeded — auto-fix will restart instead of rewriting code
+    buildSucceeded.add(deploymentId);
+
     // Deploy: start the production container with just the start command
     updateStatus(deploymentId, "deploying");
     addLog(deploymentId, "system", `Starting: ${projectConfig.startCommand}`);
@@ -332,7 +335,10 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
   }
 }
 
-// Auto-fix: read error logs, ask Claude to fix, rebuild, redeploy
+// Track whether the initial build succeeded — if so, auto-fix should NOT rewrite files
+const buildSucceeded = new Set<string>();
+
+// Auto-fix: if build succeeded, just restart with more memory. If build failed, ask Claude to fix code.
 async function autoFixAndRedeploy(
   project: Project,
   deploymentId: string,
@@ -342,7 +348,44 @@ async function autoFixAndRedeploy(
 
   addLog(deploymentId, "system", `${reason} — Auto-fixing...`);
 
-  // Get error logs
+  // Stop old container
+  const oldDep = db.prepare("SELECT container_id, port FROM deployments WHERE id = ?").get(deploymentId) as { container_id: string | null; port: number | null } | undefined;
+  if (oldDep?.container_id) {
+    try { await stopContainer(oldDep.container_id); } catch (err) {
+      console.warn("Failed to stop old container during auto-fix:", err instanceof Error ? err.message : String(err));
+    }
+    if (oldDep.port) releasePort(oldDep.port);
+  }
+
+  const fixConfig = detectProjectConfig(project.source_path);
+
+  // If the build succeeded, don't let Claude rewrite files — just restart with more resources
+  if (buildSucceeded.has(deploymentId)) {
+    addLog(deploymentId, "system", "Build was successful — restarting with more memory (not rewriting code)");
+
+    try {
+      updateStatus(deploymentId, "deploying");
+      const envVars = getEnvVarsForDeploy(project.id);
+      const { containerId: newId, hostPort } = await deployFromVolume(
+        project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug,
+        { memoryMb: 1536 } // Bump memory on retry
+      );
+
+      updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: "claude-server/base:latest" });
+      addLog(deploymentId, "system", `Restarted with more memory on port ${hostPort}`);
+      addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
+
+      reloadCaddyConfig().catch((err) => console.warn("Caddy reload failed after restart:", err));
+      return newId;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addLog(deploymentId, "system", `Restart failed: ${msg}`);
+      updateStatus(deploymentId, "failed", { error: `${reason}, restart failed: ${msg}` });
+      return null;
+    }
+  }
+
+  // Build failed — ask Claude to fix
   const errorLogs = db
     .prepare("SELECT stream, message FROM logs WHERE deployment_id = ? AND stream IN ('stderr', 'stdout', 'system') ORDER BY id DESC LIMIT 50")
     .all(deploymentId) as Array<{ stream: string; message: string }>;
@@ -364,23 +407,11 @@ async function autoFixAndRedeploy(
     const fixResult = await modifyProject(
       project.source_path,
       [],
-      `The application crashed. Fix it quickly.\n\nError:\n\`\`\`\n${errorText.slice(-1500)}\n\`\`\`\n\nBe fast: read ONLY the file that caused the error, fix it, and call done. Do NOT read every file.\n\nCommon fixes:\n- "Missing parameter name" / PathError: NEVER use app.get('*', ...) — use app.use((req, res) => ...) for catch-all\n- Database connection error: wrap db init in try/catch (or try/except for Python), don't crash if DATABASE_URL is missing\n- ESM/CJS mismatch: use require() not import\n- Missing dependency: add to package.json with version "*" or requirements.txt\n- Use crypto.randomUUID() instead of uuid package\n- Python ModuleNotFoundError: add the missing package to requirements.txt\n- Python "Address already in use": use PORT env var — os.environ.get("PORT", 3000)\n- Flask: use app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))\n- psycopg2 OperationalError: wrap db connection in try/except`,
+      `The application crashed. Fix it quickly.\n\nError:\n\`\`\`\n${errorText.slice(-1500)}\n\`\`\`\n\nBe fast: read ONLY the file that caused the error, fix it, and call done. Do NOT read every file.\n\nCRITICAL RULES:\n- NEVER change "next start" to "next dev" — always use production mode\n- NEVER rewrite package.json scripts unless they are actually broken\n- Only fix the specific error shown above\n\nCommon fixes:\n- "Missing parameter name" / PathError: NEVER use app.get('*', ...) — use app.use((req, res) => ...) for catch-all\n- Database connection error: wrap db init in try/catch, don't crash if DATABASE_URL is missing\n- Missing .next directory: the build step handles this, do NOT change the start script\n- Missing dependency: add to package.json with version "*"\n- Python ModuleNotFoundError: add the missing package to requirements.txt\n- Flask: use app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))\n- psycopg2 OperationalError: wrap db connection in try/except`,
       log
     );
 
     addLog(deploymentId, "system", `Claude generated fix — ${fixResult.files.length} files`);
-
-    // Stop old container if running
-    const oldDep = db.prepare("SELECT container_id, port FROM deployments WHERE id = ?").get(deploymentId) as { container_id: string | null; port: number | null } | undefined;
-    if (oldDep?.container_id) {
-      try { await stopContainer(oldDep.container_id); } catch (err) {
-        console.warn("Failed to stop old container during auto-fix:", err instanceof Error ? err.message : String(err));
-      }
-      if (oldDep.port) releasePort(oldDep.port);
-    }
-
-    // Rebuild if needed, then redeploy
-    const fixConfig = detectProjectConfig(project.source_path);
 
     if (fixConfig.buildCommand) {
       updateStatus(deploymentId, "building");
@@ -400,7 +431,8 @@ async function autoFixAndRedeploy(
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId: newId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug
+      project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug,
+      fixConfig.needsMoreMemory ? { memoryMb: 1024 } : undefined
     );
 
     updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: "claude-server/base:latest" });
