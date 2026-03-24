@@ -48,11 +48,12 @@ const styles = {
 
 export default function NewProject() {
   const navigate = useNavigate();
-  const { showError } = useToast();
+  const { showError, showWarning } = useToast();
   const { user } = useAuth();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [nameError, setNameError] = useState("");
   const [limitReached, setLimitReached] = useState(false);
   const [limitInfo, setLimitInfo] = useState<{ projectCount: number; projectLimit: number } | null>(null);
 
@@ -127,12 +128,13 @@ export default function NewProject() {
         <div>
           <div style={styles.label}>Project Name</div>
           <input
-            style={styles.input}
+            style={{ ...styles.input, ...(nameError ? { borderColor: "#f59e0b" } : {}) }}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => { setName(e.target.value); setNameError(""); }}
             placeholder="my-awesome-app"
             required
           />
+          {nameError && <div style={{ color: "#fbbf24", fontSize: "0.8rem", marginTop: "0.35rem" }}>{nameError}</div>}
         </div>
         <div>
           <div style={styles.label}>What do you want to build?</div>
@@ -155,7 +157,7 @@ export default function NewProject() {
         <span
           style={{ color: "#60a5fa", fontSize: "0.82rem", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "2px" }}
           onClick={() => {
-            if (!name.trim()) { showError("Enter a project name first"); return; }
+            if (!name.trim()) { setNameError("Enter a project name first"); return; }
             setLoading(true);
             api.createProject(name, "").then(p => navigate(`/project/${p.id}?tab=github`)).catch(err => {
               showError(err instanceof Error ? err.message : "Failed to create project");
