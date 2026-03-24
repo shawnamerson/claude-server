@@ -187,11 +187,48 @@ router.post("/auth/logout", (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// Short-lived SSE tokens — maps sseToken -> userId, expires after 60s
+const sseTokens = new Map<string, { userId: string; expires: number }>();
+
+// Exchange session token for a short-lived SSE token (safe for query params)
+router.post("/auth/sse-token", (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: "Authentication required" }); return; }
+  const sseToken = nanoid(32);
+  sseTokens.set(sseToken, { userId: user.id, expires: Date.now() + 60000 }); // 60 seconds
+  res.json({ token: sseToken });
+});
+
+// Clean up expired SSE tokens every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of sseTokens) {
+    if (val.expires < now) sseTokens.delete(key);
+  }
+}, 5 * 60 * 1000);
+
 // Middleware: attach user to request if authenticated
 export function authMiddleware(req: Request, _res: Response, next: NextFunction) {
   // Support token via Authorization header or ?token= query param (for SSE/EventSource)
   const token = req.headers.authorization?.replace("Bearer ", "") || (req.query.token as string);
   if (!token) { next(); return; }
+
+  // Check if it's a short-lived SSE token first
+  const sseEntry = sseTokens.get(token);
+  if (sseEntry) {
+    if (sseEntry.expires < Date.now()) {
+      sseTokens.delete(token);
+      next();
+      return;
+    }
+    // SSE tokens are single-use for the connection lifetime — don't delete here
+    // since SSE may reconnect with the same token within the 60s window
+    const db = getDb();
+    const user = db.prepare("SELECT id, email, name, credits, email_verified FROM users WHERE id = ?").get(sseEntry.userId) as Request["user"];
+    req.user = user;
+    next();
+    return;
+  }
 
   const db = getDb();
   const session = db.prepare(

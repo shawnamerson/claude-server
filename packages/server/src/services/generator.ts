@@ -259,6 +259,11 @@ function createToolHandlers(
     {
       name: "run_command",
       execute: async (input: { command: string }) => {
+        // Block dangerous commands that could escape the sandbox or cause damage
+        const blocked = /\b(curl|wget|nc|ncat|ssh|scp|rsync|dd|mkfs|mount|umount|iptables|passwd|useradd|chmod\s+[0-7]*s)\b/;
+        if (blocked.test(input.command)) {
+          return "Error: command not allowed for security reasons";
+        }
         onLog(`$ ${input.command}`);
         try {
           return await devContainer.exec(input.command, onLog);

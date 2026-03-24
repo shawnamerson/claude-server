@@ -5,6 +5,25 @@ interface SSEOptions {
   enabled?: boolean;
 }
 
+/** Fetch a short-lived SSE token from the server */
+async function getSSEToken(): Promise<string | null> {
+  const authToken = (window as any).__authToken;
+  if (!authToken) return null;
+  try {
+    const res = await fetch("/api/auth/sse-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.token || null;
+  } catch {
+    return null;
+  }
+}
+
+export { getSSEToken };
+
 export function useSSE<T>(options: SSEOptions) {
   const { url, enabled = true } = options;
   const [events, setEvents] = useState<T[]>([]);
@@ -21,12 +40,13 @@ export function useSSE<T>(options: SSEOptions) {
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let closed = false;
 
-    function connect() {
+    async function connect() {
       if (closed) return;
 
-      const authToken = (window as any).__authToken;
+      // Get a short-lived token for SSE (not the long-lived session token)
+      const sseToken = await getSSEToken();
       const separator = url.includes("?") ? "&" : "?";
-      const fullUrl = authToken ? `${url}${separator}token=${authToken}` : url;
+      const fullUrl = sseToken ? `${url}${separator}token=${sseToken}` : url;
       const source = new EventSource(fullUrl);
       sourceRef.current = source;
 
@@ -41,7 +61,7 @@ export function useSSE<T>(options: SSEOptions) {
 
       source.onerror = () => {
         source.close();
-        // Reconnect after 2 seconds
+        // Reconnect after 2 seconds (will get a fresh SSE token)
         if (!closed) {
           reconnectTimer = setTimeout(connect, 2000);
         }

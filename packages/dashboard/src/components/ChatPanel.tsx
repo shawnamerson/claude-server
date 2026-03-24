@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { api, ChatMsg } from "../api/client";
+import { getSSEToken } from "../hooks/useSSE";
 
 interface LogLine {
   stream: string;
@@ -162,31 +163,40 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     }
 
     sseDepId.current = deploymentId;
-    const authToken = (window as any).__authToken;
-    const tokenParam = authToken ? `?token=${authToken}` : "";
-    const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream${tokenParam}`);
-    sseSource.current = source;
+    let cancelled = false;
 
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as LogLine;
-        if (data.stream === "system") {
-          const item = parseLogToActivity(data.message);
-          if (item) {
-            activityRef.current = [...activityRef.current, item];
-            setActivity([...activityRef.current]);
+    // Use short-lived SSE token instead of session token in URL
+    (async () => {
+      const sseToken = await getSSEToken();
+      if (cancelled) return;
+      const tokenParam = sseToken ? `?token=${sseToken}` : "";
+      const source = new EventSource(`/api/deployments/${deploymentId}/logs/stream${tokenParam}`);
+      sseSource.current = source;
+
+      source.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as LogLine;
+          if (data.stream === "system") {
+            const item = parseLogToActivity(data.message);
+            if (item) {
+              activityRef.current = [...activityRef.current, item];
+              setActivity([...activityRef.current]);
+            }
           }
-        }
-      } catch {}
-    };
+        } catch {}
+      };
 
-    source.onerror = () => {
-      // Don't reconnect — just let it die. New events will come when the connection is re-established.
-    };
+      source.onerror = () => {
+        // Don't reconnect — just let it die.
+      };
+    })();
 
     return () => {
-      source.close();
-      sseSource.current = null;
+      cancelled = true;
+      if (sseSource.current) {
+        sseSource.current.close();
+        sseSource.current = null;
+      }
       sseDepId.current = null;
     };
   }, [deploymentId, lastFinishedDepId]);
