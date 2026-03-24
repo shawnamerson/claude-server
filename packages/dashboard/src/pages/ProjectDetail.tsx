@@ -322,28 +322,47 @@ export default function ProjectDetail() {
       }
       wasDeployingRef.current = false;
 
-      // New deploy — poll health until app is ready
+      // New deploy — poll until app is reachable via its public URL (includes SSL check)
       setPreviewReady(false);
       let cancelled = false;
 
       const poll = async () => {
         const authToken = (window as any).__authToken;
-        for (let i = 0; i < 10; i++) {
+        const publicUrl = project ? `${window.location.protocol}//${project.slug}.${window.location.hostname}` : "";
+
+        for (let i = 0; i < 20; i++) {
           await new Promise(r => setTimeout(r, 3000));
           if (cancelled) return;
+
+          // First check internal health (app is running)
           try {
             const res = await fetch(`/api/app-health/${project?.slug}`, {
               headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
             });
             const data = await res.json();
-            if (data.ok) {
+            if (!data.ok) continue;
+          } catch { continue; }
+
+          // Then check the actual public URL (Caddy + SSL ready)
+          if (publicUrl) {
+            try {
+              const res = await fetch(publicUrl, { mode: "no-cors" });
+              // no-cors returns opaque response — if it doesn't throw, SSL is working
               setPreviewReady(true);
               setPreviewKey(k => k + 1);
               return;
+            } catch {
+              // SSL not ready yet — keep polling
+              continue;
             }
-          } catch {}
+          }
+
+          // Fallback if no public URL
+          setPreviewReady(true);
+          setPreviewKey(k => k + 1);
+          return;
         }
-        // Give up after 30s — show it anyway
+        // Give up after 60s — show it anyway
         setPreviewReady(true);
         setPreviewKey(k => k + 1);
       };
