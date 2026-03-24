@@ -365,7 +365,7 @@ export function canDeploy(userId: string): { allowed: boolean; reason?: string }
     "SELECT COUNT(*) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id WHERE p.user_id = ? AND d.created_at >= ?"
   ).get(userId, monthStart.toISOString()) as { cnt: number };
 
-  if (deploysThisMonth.cnt >= limits.deploys) {
+  if (limits.deploys >= 0 && deploysThisMonth.cnt >= limits.deploys) {
     return { allowed: false, reason: `Monthly deploy limit reached (${limits.deploys}). Upgrade your plan for more.` };
   }
 
@@ -408,7 +408,7 @@ export function canChat(userId: string): { allowed: boolean; reason?: string } {
     "SELECT COUNT(*) as cnt FROM chat_messages cm JOIN projects p ON p.id = cm.project_id WHERE p.user_id = ? AND cm.role = 'user' AND cm.created_at >= ?"
   ).get(userId, monthStart.toISOString()) as { cnt: number };
 
-  if (chatsThisMonth.cnt >= limits.chats) {
+  if (limits.chats >= 0 && chatsThisMonth.cnt >= limits.chats) {
     return { allowed: false, reason: `Monthly chat limit reached (${limits.chats.toLocaleString()}). Upgrade your plan for more.` };
   }
 
