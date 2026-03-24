@@ -382,8 +382,15 @@ async function autoFixAndRedeploy(
 
   const fixConfig = detectProjectConfig(project.source_path);
 
-  // If the build succeeded, don't let Claude rewrite files — just restart with more resources
-  if (buildSucceeded.has(deploymentId)) {
+  // Check error logs for code/dependency errors that need Claude to fix (not just memory)
+  const recentErrors = db.prepare(
+    "SELECT message FROM logs WHERE deployment_id = ? AND stream IN ('stderr', 'system') ORDER BY id DESC LIMIT 20"
+  ).all(deploymentId) as Array<{ message: string }>;
+  const recentErrorText = recentErrors.map(l => l.message).join("\n");
+  const isCodeError = /ModuleNotFoundError|ImportError|SyntaxError|NameError|TypeError|Cannot find module|require\(\) of ES Module/.test(recentErrorText);
+
+  // If the build succeeded AND the error is NOT a code issue, just restart with more memory
+  if (buildSucceeded.has(deploymentId) && !isCodeError) {
     addLog(deploymentId, "system", "Build was successful — restarting with more memory (not rewriting code)");
 
     try {
