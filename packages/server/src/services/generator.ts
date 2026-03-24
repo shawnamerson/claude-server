@@ -366,7 +366,7 @@ export class DevContainer {
     try {
       const streamTimeout = (tout + 5) * 1000; // a bit longer than command timeout
       output = await Promise.race([
-        streamToString(stream),
+        streamToStringWithCallback(stream, onLog),
         new Promise<string>((resolve) =>
           setTimeout(() => resolve("(command timed out)"), streamTimeout)
         ),
@@ -398,16 +398,32 @@ export class DevContainer {
   }
 }
 
-function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
+function streamToStringWithCallback(stream: NodeJS.ReadableStream, onLog: (msg: string) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let lineBuffer = "";
+
     stream.on("data", (chunk: Buffer) => {
       // Skip 8-byte Docker multiplex header per frame
       if (chunk.length > 8) {
-        chunks.push(chunk.subarray(8));
+        const payload = chunk.subarray(8);
+        chunks.push(payload);
+
+        // Stream lines to onLog in real time
+        lineBuffer += payload.toString("utf-8");
+        const lines = lineBuffer.split("\n");
+        lineBuffer = lines.pop() || ""; // keep incomplete last line in buffer
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed) onLog(trimmed);
+        }
       }
     });
-    stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8").trim()));
+    stream.on("end", () => {
+      // Flush remaining buffer
+      if (lineBuffer.trim()) onLog(lineBuffer.trim());
+      resolve(Buffer.concat(chunks).toString("utf-8").trim());
+    });
     stream.on("error", reject);
   });
 }
