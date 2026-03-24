@@ -32,8 +32,12 @@ RUN npm init -y && \
 ENV NODE_PATH=/app/node_modules
 ENV PATH=/app/node_modules/.bin:$PATH
 
-# OpenSSL 1.1 compat for Prisma engine binaries
-RUN apk add --no-cache openssl1-compat || true
+# OpenSSL compat for Prisma engine binaries
+# Prisma v5 looks for libssl.so.1.1 but Alpine 3.20+ only has OpenSSL 3.
+# Symlink so Prisma finds it. This works because the ABI is forward-compatible for loading.
+RUN apk add --no-cache openssl && \
+    ln -sf /usr/lib/libssl.so.3 /usr/lib/libssl.so.1.1 && \
+    ln -sf /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.1.1
 
 # Python runtime + common packages
 RUN apk add --no-cache python3 py3-pip build-base && \
