@@ -79,11 +79,18 @@ export default function GitHubPanel({ projectId, onDeploy }: { projectId: string
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("main");
   const [githubToken, setGithubToken] = useState("");
+  const [savedToken, setSavedToken] = useState(false);
+  const [savingToken, setSavingToken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
 
   useEffect(() => {
     api.getGitHub(projectId).then(setConnection);
+    // Check if user has a saved GitHub token
+    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${(window as any).__authToken}` } })
+      .then(r => r.json())
+      .then(data => { if (data.has_github_token) setSavedToken(true); })
+      .catch(() => {});
   }, [projectId]);
 
   const connect = async () => {
@@ -158,15 +165,37 @@ export default function GitHubPanel({ projectId, onDeploy }: { projectId: string
           placeholder="main"
         />
       </div>
-      <div style={styles.label}>Personal Access Token <span style={{ color: "#555" }}>(optional — for private repos)</span></div>
+      <div style={styles.label}>
+        Personal Access Token <span style={{ color: "#555" }}>(for private repos)</span>
+        {savedToken && !githubToken && <span style={{ color: "#34d399", marginLeft: "0.5rem" }}>Saved token will be used</span>}
+      </div>
       <div style={styles.row}>
         <input
           style={styles.input}
           type="password"
           value={githubToken}
           onChange={(e) => setGithubToken(e.target.value)}
-          placeholder="ghp_xxxxxxxxxxxx"
+          placeholder={savedToken ? "Using saved token (paste new to override)" : "ghp_xxxxxxxxxxxx"}
         />
+        {githubToken && (
+          <button
+            style={{ ...styles.btn, background: "#064e3b", fontSize: "0.75rem" }}
+            disabled={savingToken}
+            onClick={async () => {
+              setSavingToken(true);
+              try {
+                await fetch("/api/auth/github-token", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${(window as any).__authToken}` },
+                  body: JSON.stringify({ token: githubToken }),
+                });
+                setSavedToken(true);
+              } catch {} finally { setSavingToken(false); }
+            }}
+          >
+            {savingToken ? "..." : "Save"}
+          </button>
+        )}
       </div>
       <div style={styles.row}>
         <button style={styles.btn} onClick={connect} disabled={loading}>
@@ -174,7 +203,7 @@ export default function GitHubPanel({ projectId, onDeploy }: { projectId: string
         </button>
       </div>
       <div style={styles.hint}>
-        This will clone the repo and set up auto-deploy on push. For private repos, create a <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style={{ color: "#7c3aed" }}>Personal Access Token</a> with repo scope.
+        This will clone the repo and set up auto-deploy on push. For private repos, create a <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style={{ color: "#7c3aed" }}>Personal Access Token</a> with repo scope. Save it once and it works for all projects.
       </div>
     </div>
   );

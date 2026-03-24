@@ -41,10 +41,13 @@ router.post("/projects/:id/github", async (req: Request, res: Response) => {
   const { repoUrl, branch, githubToken } = req.body;
   if (!repoUrl) { res.status(400).json({ error: "repoUrl is required" }); return; }
 
+  // Use provided token, or fall back to user's saved token
+  const effectiveToken = githubToken || (req.user ? (db.prepare("SELECT github_token FROM users WHERE id = ?").get(req.user.id) as { github_token: string | null } | undefined)?.github_token : null);
+
   const webhookSecret = nanoid(32);
 
   // Build clone URL — inject token for private repos
-  const cloneUrl = buildCloneUrl(repoUrl, githubToken);
+  const cloneUrl = buildCloneUrl(repoUrl, effectiveToken);
 
   // Clone the repo into the project source path
   try {
@@ -62,14 +65,14 @@ router.post("/projects/:id/github", async (req: Request, res: Response) => {
     ], { timeout: 60000 });
 
     // Reset remote to the clean URL (without token) so it doesn't leak in .git/config
-    if (githubToken) {
+    if (effectiveToken) {
       await execFileAsync("git", ["-C", project.source_path, "remote", "set-url", "origin", repoUrl], { timeout: 5000 });
     }
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Strip token from error messages
-    const safeMsg = githubToken ? msg.replace(new RegExp(githubToken, "g"), "***") : msg;
+    const safeMsg = effectiveToken ? msg.replace(new RegExp(effectiveToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "g"), "***") : msg;
     res.status(400).json({ error: `Failed to clone: ${safeMsg}` });
     return;
   }
@@ -79,7 +82,7 @@ router.post("/projects/:id/github", async (req: Request, res: Response) => {
     `INSERT INTO github_repos (project_id, repo_url, branch, webhook_secret, github_token)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(project_id) DO UPDATE SET repo_url = excluded.repo_url, branch = excluded.branch, webhook_secret = excluded.webhook_secret, github_token = excluded.github_token`
-  ).run(project.id, repoUrl, branch || "main", webhookSecret, githubToken || null);
+  ).run(project.id, repoUrl, branch || "main", webhookSecret, effectiveToken || null);
 
   db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 

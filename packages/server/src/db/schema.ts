@@ -207,6 +207,11 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec("UPDATE users SET email_verified = 1 WHERE email_verified = 0");
   }
 
+  // GitHub token on user account — shared across all projects
+  if (!userCols.find(c => c.name === "github_token")) {
+    db.exec("ALTER TABLE users ADD COLUMN github_token TEXT");
+  }
+
   // GitHub token migration — support private repos
   const ghCols = db.prepare("PRAGMA table_info(github_repos)").all() as Array<{ name: string }>;
   if (!ghCols.find(c => c.name === "github_token")) {

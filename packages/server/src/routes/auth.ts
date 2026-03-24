@@ -151,7 +151,28 @@ router.get("/auth/me", (req: Request, res: Response) => {
     res.status(401).json({ error: "Not logged in" });
     return;
   }
-  res.json({ id: user.id, email: user.email, name: user.name, credits: user.credits, email_verified: !!user.email_verified });
+  const db = getDb();
+  const userData = db.prepare("SELECT github_token FROM users WHERE id = ?").get(user.id) as { github_token: string | null } | undefined;
+  res.json({ id: user.id, email: user.email, name: user.name, credits: user.credits, email_verified: !!user.email_verified, has_github_token: !!userData?.github_token });
+});
+
+// Save GitHub token on user account
+router.post("/auth/github-token", (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: "Authentication required" }); return; }
+  const { token } = req.body;
+  const db = getDb();
+  db.prepare("UPDATE users SET github_token = ? WHERE id = ?").run(token || null, user.id);
+  res.json({ ok: true });
+});
+
+// Delete GitHub token
+router.delete("/auth/github-token", (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: "Authentication required" }); return; }
+  const db = getDb();
+  db.prepare("UPDATE users SET github_token = NULL WHERE id = ?").run(user.id);
+  res.json({ ok: true });
 });
 
 // Logout
