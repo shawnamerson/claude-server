@@ -50,7 +50,7 @@ router.delete("/projects/:id/env/:key", (req: Request, res: Response) => {
 
 // Helper: get env vars as array of "KEY=VALUE" strings for Docker
 // Auto-maps DATABASE_URL to common aliases (Prisma/Vercel conventions)
-export function getEnvVarsForDeploy(projectId: string): string[] {
+export function getEnvVarsForDeploy(projectId: string, projectSlug?: string): string[] {
   const db = getDb();
   const vars = db
     .prepare("SELECT key, value FROM env_vars WHERE project_id = ?")
@@ -66,6 +66,14 @@ export function getEnvVarsForDeploy(projectId: string): string[] {
     if (!envMap.has("POSTGRES_URL_NON_POOLING")) envMap.set("POSTGRES_URL_NON_POOLING", dbUrl);
     if (!envMap.has("POSTGRES_URL")) envMap.set("POSTGRES_URL", dbUrl);
   }
+
+  // Auto-set NextAuth env vars for Next.js projects
+  const domain = process.env.DOMAIN || "vibestack.build";
+  if (projectSlug) {
+    if (!envMap.has("NEXTAUTH_URL")) envMap.set("NEXTAUTH_URL", `https://${projectSlug}.${domain}`);
+    if (!envMap.has("NEXT_PUBLIC_APP_URL")) envMap.set("NEXT_PUBLIC_APP_URL", `https://${projectSlug}.${domain}`);
+  }
+  if (!envMap.has("NEXTAUTH_SECRET")) envMap.set("NEXTAUTH_SECRET", require("crypto").randomBytes(32).toString("hex"));
 
   return Array.from(envMap.entries()).map(([k, v]) => `${k}=${v}`);
 }

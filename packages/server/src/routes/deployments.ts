@@ -266,7 +266,7 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
         buildContainer.memoryOverride = 2048 * 1024 * 1024;
       }
       // Pass project env vars to build container (needed for Next.js builds that reference env vars at build time)
-      const buildEnv = getEnvVarsForDeploy(project.id);
+      const buildEnv = getEnvVarsForDeploy(project.id, project.slug);
       // Add placeholder env vars so Next.js builds don't crash on missing secrets
       const placeholders = [
         "NEXTAUTH_SECRET=vibestack-build-placeholder-not-a-real-secret",
@@ -307,7 +307,7 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     updateStatus(deploymentId, "deploying");
     addLog(deploymentId, "system", `Starting: ${projectConfig.startCommand}`);
 
-    const envVars = getEnvVarsForDeploy(project.id);
+    const envVars = getEnvVarsForDeploy(project.id, project.slug);
     const { containerId, hostPort } = await deployFromVolume(
       project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug,
       projectConfig.needsMoreMemory ? { memoryMb: 1024 } : undefined
@@ -404,7 +404,7 @@ async function autoFixAndRedeploy(
 
     try {
       updateStatus(deploymentId, "deploying");
-      const envVars = getEnvVarsForDeploy(project.id);
+      const envVars = getEnvVarsForDeploy(project.id, project.slug);
       const { containerId: newId, hostPort } = await deployFromVolume(
         project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug,
         { memoryMb: 1536 } // Bump memory on retry
@@ -468,7 +468,7 @@ async function autoFixAndRedeploy(
     updateStatus(deploymentId, "deploying");
     addLog(deploymentId, "system", "Starting fixed app...");
 
-    const envVars = getEnvVarsForDeploy(project.id);
+    const envVars = getEnvVarsForDeploy(project.id, project.slug);
     const { containerId: newId, hostPort } = await deployFromVolume(
       project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug,
       fixConfig.needsMoreMemory ? { memoryMb: 1024 } : undefined
@@ -654,7 +654,7 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
       try { await bc.exec(restartConfig.buildCommand, () => {}); } finally { await bc.cleanup(); }
     }
 
-    const envVars = getEnvVarsForDeploy(project.id);
+    const envVars = getEnvVarsForDeploy(project.id, project.slug);
     const { containerId, hostPort } = await deployFromVolume(
       project.source_path, deployment.id, restartConfig.appPort, restartConfig.startCommand, envVars, project.slug
     );
