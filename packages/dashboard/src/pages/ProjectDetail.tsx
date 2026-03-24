@@ -9,8 +9,9 @@ import EnvVarsPanel from "../components/EnvVarsPanel";
 import GitHubPanel from "../components/GitHubPanel";
 import DatabasePanel from "../components/DatabasePanel";
 import DomainsPanel from "../components/DomainsPanel";
+import CronPanel from "../components/CronPanel";
 
-type SideTab = "chat" | "logs" | "files" | "env" | "database" | "domains" | "github";
+type SideTab = "chat" | "logs" | "files" | "env" | "database" | "domains" | "github" | "cron";
 
 const styles = {
   page: {
@@ -376,9 +377,9 @@ export default function ProjectDetail() {
 
         {/* Tabs */}
         <div style={styles.tabs}>
-          {(["chat", "logs", "files", "env", "database", "domains", "github"] as SideTab[]).map((tab) => (
+          {(["chat", "logs", "files", "env", "database", "domains", "github", "cron"] as SideTab[]).map((tab) => (
             <button key={tab} style={styles.tab(sideTab === tab)} onClick={() => setSideTab(tab)}>
-              {{ chat: "Chat", logs: "Logs", files: "Files", env: "Env", database: "DB", domains: "Domains", github: "Git" }[tab]}
+              {{ chat: "Chat", logs: "Logs", files: "Files", env: "Env", database: "DB", domains: "Domains", github: "Git", cron: "Cron" }[tab]}
             </button>
           ))}
         </div>
@@ -401,6 +402,7 @@ export default function ProjectDetail() {
           {sideTab === "database" && <DatabasePanel projectId={project.id} />}
           {sideTab === "domains" && <DomainsPanel projectId={project.id} projectSlug={project.slug} />}
           {sideTab === "github" && <GitHubPanel projectId={project.id} onDeploy={refresh} />}
+          {sideTab === "cron" && <CronPanel projectId={project.id} />}
         </div>
       </div>
 

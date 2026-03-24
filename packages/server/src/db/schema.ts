@@ -141,6 +141,29 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_env_vars_project ON env_vars(project_id);
     CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
     CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
+
+    CREATE TABLE IF NOT EXISTS cron_jobs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      path        TEXT NOT NULL,
+      schedule    TEXT NOT NULL,
+      method      TEXT NOT NULL DEFAULT 'GET',
+      enabled     INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(project_id, path)
+    );
+
+    CREATE TABLE IF NOT EXISTS cron_logs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      cron_job_id INTEGER NOT NULL REFERENCES cron_jobs(id) ON DELETE CASCADE,
+      status      INTEGER,
+      duration_ms INTEGER,
+      error       TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cron_jobs_project ON cron_jobs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_cron_logs_job ON cron_logs(cron_job_id);
   `);
 
   // Migrations for existing databases

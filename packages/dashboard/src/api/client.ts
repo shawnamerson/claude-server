@@ -152,6 +152,27 @@ export interface DatabaseCreateResult {
   message: string;
 }
 
+export interface CronJob {
+  id: number;
+  project_id: string;
+  path: string;
+  schedule: string;
+  method: string;
+  enabled: number;
+  created_at: string;
+  last_status?: number | null;
+  last_run?: string | null;
+}
+
+export interface CronLog {
+  id: number;
+  cron_job_id: number;
+  status: number | null;
+  duration_ms: number | null;
+  error: string | null;
+  created_at: string;
+}
+
 export const api = {
   // Projects
   listProjects: () => request<Project[]>("/projects"),
@@ -242,6 +263,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ sql }),
     }),
+
+  // Cron jobs
+  getCronJobs: (projectId: string) => request<CronJob[]>(`/projects/${projectId}/cron`),
+  createCronJob: (projectId: string, path: string, schedule: string, method?: string) =>
+    request<CronJob[]>(`/projects/${projectId}/cron`, {
+      method: "POST",
+      body: JSON.stringify({ path, schedule, method }),
+    }),
+  updateCronJob: (projectId: string, cronId: number, updates: Partial<{ path: string; schedule: string; method: string; enabled: boolean }>) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/cron/${cronId}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    }),
+  deleteCronJob: (projectId: string, cronId: number) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/cron/${cronId}`, { method: "DELETE" }),
+  getCronLogs: (projectId: string, cronId: number) =>
+    request<CronLog[]>(`/projects/${projectId}/cron/${cronId}/logs`),
+  triggerCronJob: (projectId: string, cronId: number) =>
+    request<{ ok: boolean; status?: number; duration_ms?: number; error?: string }>(`/projects/${projectId}/cron/${cronId}/trigger`, { method: "POST" }),
 
   // Email verification
   verifyEmail: (code: string) => request<{ ok: boolean }>("/auth/verify", { method: "POST", body: JSON.stringify({ code }) }),

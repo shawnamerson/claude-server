@@ -23,7 +23,8 @@ import { initializeDbPortTracking } from "./services/database.js";
 import { reloadCaddyConfig } from "./services/caddy.js";
 import { cleanupOrphanedDevContainers } from "./services/generator.js";
 import { backupAllDatabases } from "./services/backups.js";
-
+import { startCronRunner } from "./services/cron.js";
+import cronRoutes from "./routes/cron.js";
 import seoRoutes, { prerenderMiddleware } from "./routes/seo.js";
 import fs from "fs";
 
@@ -81,6 +82,7 @@ app.use("/api", envRoutes);
 app.use("/api", githubRoutes);
 app.use("/api", databaseRoutes);
 app.use("/api", domainRoutes);
+app.use("/api", cronRoutes);
 
 // Proxy to deployed containers (must be before static files)
 app.use(proxyRoutes);
@@ -280,6 +282,9 @@ async function start() {
     console.log(`Database backups scheduled — next at ${next3am.toISOString()}`);
   }
   scheduleBackup();
+
+  // Start cron job runner
+  startCronRunner();
 
   app.listen(config.port, () => {
     console.log(`Claude Server running on http://localhost:${config.port}`);
