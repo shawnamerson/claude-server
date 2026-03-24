@@ -163,7 +163,8 @@ router.post("/auth/github-token", (req: Request, res: Response) => {
   if (!user) { res.status(401).json({ error: "Authentication required" }); return; }
   const { token } = req.body;
   const db = getDb();
-  db.prepare("UPDATE users SET github_token = ? WHERE id = ?").run(token || null, user.id);
+  const { encrypt } = require("../services/encrypt.js");
+  db.prepare("UPDATE users SET github_token = ? WHERE id = ?").run(encrypt(token), user.id);
   res.json({ ok: true });
 });
 

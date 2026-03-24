@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "../db/client.js";
+import { encrypt, decrypt } from "../services/encrypt.js";
 
 const router = Router();
 
@@ -10,16 +11,16 @@ interface EnvVar {
   value: string;
 }
 
-// List env vars for a project
+// List env vars for a project (decrypt values for display)
 router.get("/projects/:id/env", (req: Request, res: Response) => {
   const db = getDb();
   const vars = db
     .prepare("SELECT * FROM env_vars WHERE project_id = ? ORDER BY key")
     .all(req.params.id as string) as EnvVar[];
-  res.json(vars);
+  res.json(vars.map(v => ({ ...v, value: decrypt(v.value) || "" })));
 });
 
-// Set an env var (upsert)
+// Set an env var (upsert, encrypt value)
 router.post("/projects/:id/env", (req: Request, res: Response) => {
   const { key, value } = req.body;
   if (!key || typeof value !== "string") {
@@ -31,12 +32,12 @@ router.post("/projects/:id/env", (req: Request, res: Response) => {
   db.prepare(
     `INSERT INTO env_vars (project_id, key, value) VALUES (?, ?, ?)
      ON CONFLICT(project_id, key) DO UPDATE SET value = excluded.value`
-  ).run(req.params.id as string, key, value);
+  ).run(req.params.id as string, key, encrypt(value));
 
   const vars = db
     .prepare("SELECT * FROM env_vars WHERE project_id = ? ORDER BY key")
-    .all(req.params.id as string);
-  res.json(vars);
+    .all(req.params.id as string) as EnvVar[];
+  res.json(vars.map(v => ({ ...v, value: decrypt(v.value) || "" })));
 });
 
 // Delete an env var
@@ -55,7 +56,8 @@ export function getEnvVarsForDeploy(projectId: string): string[] {
     .prepare("SELECT key, value FROM env_vars WHERE project_id = ?")
     .all(projectId) as Array<{ key: string; value: string }>;
 
-  const envMap = new Map(vars.map(v => [v.key, v.value]));
+  // Decrypt values for deployment
+  const envMap = new Map(vars.map(v => [v.key, decrypt(v.value) || v.value]));
 
   // Auto-map DATABASE_URL to Prisma/Vercel-style env vars if not explicitly set
   const dbUrl = envMap.get("DATABASE_URL");

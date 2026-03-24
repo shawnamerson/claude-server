@@ -1,6 +1,7 @@
 import Dockerode from "dockerode";
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { encrypt } from "./encrypt.js";
 
 const docker = new Dockerode();
 
@@ -136,12 +137,12 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
     ).run(projectId, container.id, containerName, dbName, dbUser, dbPassword, hostPort);
   }
 
-  // Auto-set DATABASE_URL env var for the project
+  // Auto-set DATABASE_URL env var for the project (encrypted)
   const connectionString = `postgresql://${dbUser}:${dbPassword}@${containerName}:5432/${dbName}`;
   db.prepare(
     `INSERT INTO env_vars (project_id, key, value) VALUES (?, 'DATABASE_URL', ?)
      ON CONFLICT(project_id, key) DO UPDATE SET value = excluded.value`
-  ).run(projectId, connectionString);
+  ).run(projectId, encrypt(connectionString));
 
   return {
     host: containerName,

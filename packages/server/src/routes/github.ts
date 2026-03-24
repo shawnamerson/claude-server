@@ -6,6 +6,7 @@ import { promisify } from "util";
 import fs from "fs";
 import { getDb } from "../db/client.js";
 import { Project } from "../types.js";
+import { encrypt, decrypt } from "../services/encrypt.js";
 
 const execFileAsync = promisify(execFile);
 const router = Router();
@@ -41,8 +42,9 @@ router.post("/projects/:id/github", async (req: Request, res: Response) => {
   const { repoUrl, branch, githubToken } = req.body;
   if (!repoUrl) { res.status(400).json({ error: "repoUrl is required" }); return; }
 
-  // Use provided token, or fall back to user's saved token
-  const effectiveToken = githubToken || (req.user ? (db.prepare("SELECT github_token FROM users WHERE id = ?").get(req.user.id) as { github_token: string | null } | undefined)?.github_token : null);
+  // Use provided token, or fall back to user's saved token (decrypt from DB)
+  const userTokenRow = req.user ? (db.prepare("SELECT github_token FROM users WHERE id = ?").get(req.user.id) as { github_token: string | null } | undefined) : undefined;
+  const effectiveToken = githubToken || decrypt(userTokenRow?.github_token);
 
   const webhookSecret = nanoid(32);
 
@@ -82,7 +84,7 @@ router.post("/projects/:id/github", async (req: Request, res: Response) => {
     `INSERT INTO github_repos (project_id, repo_url, branch, webhook_secret, github_token)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(project_id) DO UPDATE SET repo_url = excluded.repo_url, branch = excluded.branch, webhook_secret = excluded.webhook_secret, github_token = excluded.github_token`
-  ).run(project.id, repoUrl, branch || "main", webhookSecret, effectiveToken || null);
+  ).run(project.id, repoUrl, branch || "main", webhookSecret, encrypt(effectiveToken));
 
   db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 
@@ -146,7 +148,7 @@ router.post("/github/webhook/:projectId", async (req: Request, res: Response) =>
   if (!project) { res.status(404).json({ error: "Project not found" }); return; }
 
   // Pull latest code
-  const pullUrl = buildCloneUrl(repo.repo_url, (repo as any).github_token);
+  const pullUrl = buildCloneUrl(repo.repo_url, decrypt((repo as any).github_token));
   try {
     // Temporarily set remote with token for pull
     if ((repo as any).github_token) {
