@@ -59,6 +59,13 @@ function trackUsage(deploymentId: string | null, message: Anthropic.Message) {
     }
   }
 
+  // Track all API usage in a central table (deploy + chat)
+  try {
+    const db = getDb();
+    const source = deploymentId ? "deploy" : "chat";
+    db.prepare("INSERT INTO api_usage (input_tokens, output_tokens, cost_cents, source) VALUES (?, ?, ?, ?)").run(input, output, costCents, source);
+  } catch {}
+
   return { inputTokens: input, outputTokens: output, costCents };
 }
 

@@ -164,6 +164,15 @@ export function initializeDatabase(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_cron_jobs_project ON cron_jobs(project_id);
     CREATE INDEX IF NOT EXISTS idx_cron_logs_job ON cron_logs(cron_job_id);
+
+    CREATE TABLE IF NOT EXISTS api_usage (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      input_tokens    INTEGER NOT NULL DEFAULT 0,
+      output_tokens   INTEGER NOT NULL DEFAULT 0,
+      cost_cents      INTEGER NOT NULL DEFAULT 0,
+      source          TEXT NOT NULL DEFAULT 'deploy',
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Migrations for existing databases
