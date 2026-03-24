@@ -329,8 +329,8 @@ export default function ProjectDetail() {
       const authToken = (window as any).__authToken;
 
       const poll = async () => {
-        for (let i = 0; i < 15; i++) {
-          await new Promise(r => setTimeout(r, 2000));
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 1000));
           if (cancelled) return;
           try {
             const res = await fetch(`/api/app-health/${project?.slug}`, {
@@ -338,8 +338,6 @@ export default function ProjectDetail() {
             });
             const data = await res.json();
             if (data.ok) {
-              await new Promise(r => setTimeout(r, 1500));
-              if (cancelled) return;
               setPreviewReady(true);
               setPreviewKey(k => k + 1);
               return;
