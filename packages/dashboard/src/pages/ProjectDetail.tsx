@@ -302,65 +302,58 @@ export default function ProjectDetail() {
   );
   const hasRunningDep = !!runningDep;
 
-  // Track if we saw a deploy in progress
+  // Track deploy transitions and poll health for preview
   useEffect(() => {
     if (isDeploying) wasDeployingRef.current = true;
   }, [isDeploying]);
 
-  // When a deployment starts running, poll health then show preview
   useEffect(() => {
-    const runningId = runningDep?.id || null;
-    if (!runningId) return;
-
-    const isNewDeploy = runningId !== lastRunningIdRef.current;
-    const needsPoll = isNewDeploy || (!previewReady && wasDeployingRef.current);
-
-    if (isNewDeploy) {
-      lastRunningIdRef.current = runningId;
+    if (!runningDep?.id) {
+      setPreviewReady(false);
+      return;
     }
 
-    if (!needsPoll) return;
-
-    // If we never saw a deploy in progress, this is an existing app — show immediately
-    if (!wasDeployingRef.current) {
+    // Existing app on page load — show immediately
+    if (!wasDeployingRef.current && !previewReady) {
+      lastRunningIdRef.current = runningDep.id;
       setPreviewReady(true);
       return;
     }
-    wasDeployingRef.current = false;
 
-    // Poll until app is reachable
-    setPreviewReady(false);
-    let cancelled = false;
+    // New or restarted deploy just became running — poll health
+    if (wasDeployingRef.current) {
+      lastRunningIdRef.current = runningDep.id;
+      wasDeployingRef.current = false;
 
-    const poll = async () => {
+      let cancelled = false;
       const authToken = (window as any).__authToken;
 
-      for (let i = 0; i < 15; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        if (cancelled) return;
-
-        try {
-          const res = await fetch(`/api/app-health/${project?.slug}`, {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          });
-          const data = await res.json();
-          if (data.ok) {
-            // Small delay for Caddy SSL provisioning on first deploy
-            await new Promise(r => setTimeout(r, 2000));
-            if (cancelled) return;
-            setPreviewReady(true);
-            setPreviewKey(k => k + 1);
-            return;
-          }
-        } catch { /* keep polling */ }
-      }
-      // Give up after 30s — show it anyway
-      setPreviewReady(true);
-      setPreviewKey(k => k + 1);
-    };
-    poll();
-    return () => { cancelled = true; };
-  }, [runningDep?.id, project?.slug, previewReady]);
+      const poll = async () => {
+        for (let i = 0; i < 15; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          if (cancelled) return;
+          try {
+            const res = await fetch(`/api/app-health/${project?.slug}`, {
+              headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+            });
+            const data = await res.json();
+            if (data.ok) {
+              await new Promise(r => setTimeout(r, 1500));
+              if (cancelled) return;
+              setPreviewReady(true);
+              setPreviewKey(k => k + 1);
+              return;
+            }
+          } catch { /* keep polling */ }
+        }
+        // Give up — show anyway
+        setPreviewReady(true);
+        setPreviewKey(k => k + 1);
+      };
+      poll();
+      return () => { cancelled = true; };
+    }
+  }, [runningDep?.id, project?.slug]);
 
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
