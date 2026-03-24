@@ -230,8 +230,9 @@ export default function Landing() {
             <div style={s.compList}>
               <div style={s.compItem}><span style={s.compX}>x</span> Prototypes that don't persist</div>
               <div style={s.compItem}><span style={s.compX}>x</span> No real databases</div>
-              <div style={s.compItem}><span style={s.compX}>x</span> Manual deployment required</div>
+              <div style={s.compItem}><span style={s.compX}>x</span> One stack, take it or leave it</div>
               <div style={s.compItem}><span style={s.compX}>x</span> Breaks and you're on your own</div>
+              <div style={s.compItem}><span style={s.compX}>x</span> Can't import existing code</div>
             </div>
           </div>
           <div style={{ ...s.compCard, borderColor: "#7c3aed" }}>
@@ -239,8 +240,9 @@ export default function Landing() {
             <div style={s.compList}>
               <div style={s.compItem}><span style={s.compCheck}>+</span> Real apps with real URLs</div>
               <div style={s.compItem}><span style={s.compCheck}>+</span> PostgreSQL databases included</div>
-              <div style={s.compItem}><span style={s.compCheck}>+</span> Auto-deployed with HTTPS</div>
+              <div style={s.compItem}><span style={s.compCheck}>+</span> 7 stacks — React, Next.js, Python, and more</div>
               <div style={s.compItem}><span style={s.compCheck}>+</span> Self-healing — auto-fixes crashes</div>
+              <div style={s.compItem}><span style={s.compCheck}>+</span> Import from GitHub, auto-deploy on push</div>
             </div>
           </div>
         </div>
@@ -249,7 +251,7 @@ export default function Landing() {
       {/* Final CTA */}
       <div style={s.finalCta}>
         <h2 style={s.finalTitle}>Stop configuring. Start shipping.</h2>
-        <p style={s.finalSub}>Your first 3 deploys are free. No credit card required.</p>
+        <p style={s.finalSub}>20 free deploys every month. No credit card required.</p>
         <Link to="/signup" style={s.cta}>Start building free</Link>
       </div>
 
@@ -269,11 +271,11 @@ export default function Landing() {
 
 const features = [
   { emoji: ">>", title: "Real-time building", desc: "Watch Claude write code, test it, and fix errors live in the chat. Not a black box — you see everything." },
+  { emoji: "**", title: "Any stack", desc: "Express, React, Next.js, SvelteKit, Python Flask, FastAPI, or static HTML. Claude picks the right tool for the job." },
   { emoji: "DB", title: "Built-in databases", desc: "One-click PostgreSQL. Connection string auto-injected. Schema viewer and query runner included." },
-  { emoji: "{}", title: "Code editor", desc: "Full Monaco editor with syntax highlighting. Edit any file, save, and redeploy." },
   { emoji: "!!", title: "Self-healing apps", desc: "If your app crashes, Claude detects it, reads the error logs, fixes the code, and redeploys automatically." },
-  { emoji: "@@", title: "Instant preview", desc: "See your app in a live preview as soon as it deploys. No waiting, no manual refresh." },
-  { emoji: "//", title: "Custom domains", desc: "Every project gets a subdomain. Add your own domain with automatic HTTPS via Let's Encrypt." },
+  { emoji: "GH", title: "GitHub import", desc: "Clone any repo — public or private — and deploy it. Auto-adapts to your stack. Webhook auto-deploys on push." },
+  { emoji: "//", title: "Custom domains & cron", desc: "Every project gets a subdomain with HTTPS. Add custom domains. Schedule cron jobs to hit your app on a timer." },
 ];
 
 const s = {
