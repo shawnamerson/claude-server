@@ -32,6 +32,9 @@ RUN npm init -y && \
 ENV NODE_PATH=/app/node_modules
 ENV PATH=/app/node_modules/.bin:$PATH
 
+# OpenSSL 1.1 compat for Prisma engine binaries
+RUN apk add --no-cache openssl1-compat || true
+
 # Python runtime + common packages
 RUN apk add --no-cache python3 py3-pip build-base && \
     python3 -m pip install --break-system-packages \
