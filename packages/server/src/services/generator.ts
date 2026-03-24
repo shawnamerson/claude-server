@@ -78,7 +78,7 @@ const FULL_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "run_command",
-    description: "Run a shell command in the project directory inside a Node.js container. Use for testing: node -c server.js, npm install, etc. Times out after 12 seconds.",
+    description: "Run a shell command in the project directory inside a container with Node.js and Python 3. Use for testing: node -c server.js, python -c 'import app', npm install, pip install, etc. Times out after 12 seconds.",
     input_schema: {
       type: "object" as const,
       properties: { command: { type: "string", description: "Shell command to run" } },
@@ -109,12 +109,30 @@ Structure: Next.js App Router. Use the app/ directory.
 - Do NOT include a Dockerfile — the platform handles builds automatically
 - Keep it simple: avoid unnecessary API routes when React Server Components can fetch data directly
 
-SHARED RULES (both stacks):
-- For data persistence: use PostgreSQL via process.env.DATABASE_URL with "pg" package. CREATE TABLE IF NOT EXISTS on startup. Wrap database init in try/catch so the app starts even if the database isn't available yet.
-- Use crypto.randomUUID() instead of uuid package
+## Option C: Python Flask (use when user asks for Python, or for AI/ML apps, data tools, simple APIs where Python is natural)
+Structure: Flask app (app.py) + static frontend (static/, templates/).
+- app.py with Flask app listening on port from os.environ.get("PORT", "3000")
+- Include GET /health endpoint returning jsonify({"status": "ok"})
+- requirements.txt: list all deps (flask, gunicorn, psycopg2-binary, etc.)
+- Use os.environ.get("DATABASE_URL") for PostgreSQL with psycopg2
+- Wrap database connections in try/except so the app starts without a database
+- Include if __name__ == "__main__": app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
+- Include a .dockerignore (__pycache__, .venv, .git, *.pyc)
+
+## Option D: Python FastAPI (use when user asks for FastAPI, or for modern async APIs, WebSocket, or when OpenAPI docs are useful)
+Structure: FastAPI app (main.py).
+- main.py with FastAPI app
+- Include GET /health endpoint returning {"status": "ok"}
+- requirements.txt: list all deps (fastapi, uvicorn[standard], psycopg2-binary, etc.)
+- Use Pydantic models for request/response validation
+- Use os.environ.get("DATABASE_URL") for PostgreSQL with psycopg2
+- Include a .dockerignore (__pycache__, .venv, .git, *.pyc)
+
+SHARED RULES (all stacks):
+- For data persistence: use PostgreSQL via DATABASE_URL env var. CREATE TABLE IF NOT EXISTS on startup. Wrap database init in try/catch (or try/except for Python) so the app starts even if the database isn't available yet.
 - Always handle database connection errors gracefully — don't crash the server
-- NEVER put HTML in template literals
-- Include a .dockerignore (node_modules, .git, .next)
+- NEVER put HTML in template literals or Python f-strings — use separate template/HTML files
+- The app MUST listen on process.env.PORT or os.environ.get("PORT") — default 3000
 
 Make it functional with real features and sample data. Call done with a 1-2 sentence description.`;
 
@@ -125,16 +143,16 @@ IMPORTANT: Be fast and targeted. Only read the files you need to change. Do NOT 
 WORKFLOW:
 1. Read ONLY the file(s) relevant to the requested change
 2. Write the updated file(s) using write_files
-3. For Express projects: run "node -c server.js" to syntax check. For Next.js: skip syntax check.
+3. For Express: run "node -c server.js" to syntax check. For Python: run "python -c 'import ast; ast.parse(open(\"app.py\").read())'". For Next.js: skip syntax check.
 4. Call "done"
 
 RULES:
 - Only modify files that need to change. Don't rewrite files that are fine.
-- NEVER put HTML inside JavaScript template literals — use separate files.
-- For data persistence, use PostgreSQL via process.env.DATABASE_URL.
-- Keep the app listening on process.env.PORT (default 3000).
+- NEVER put HTML inside JavaScript template literals or Python f-strings — use separate template files.
+- For data persistence, use PostgreSQL via DATABASE_URL env var.
+- Keep the app listening on PORT env var (default 3000).
 - Maximum 3-4 tool calls total. Be efficient.
-- Respect the existing stack. If the project is Next.js, use Next.js patterns (App Router, server components, etc.). If Express, use Express patterns.
+- Respect the existing stack. If the project is Next.js, use Next.js patterns. If Express, use Express patterns. If Flask/FastAPI, use Python patterns.
 
 Call "done" with a brief note about what you changed.`;
 
@@ -523,10 +541,22 @@ function collectResult(sourcePath: string, notes: string): GenerationResult {
 
   // Fallback if Claude forgot Dockerfile
   if (!dockerfile) {
-    dockerfile = `FROM claude-server/base:latest\nWORKDIR /app\nCOPY . .\nEXPOSE 3000\nCMD ["node", "server.js"]\n`;
+    const isPython = files.some(f =>
+      f.path === "requirements.txt" || f.path === "app.py" || f.path === "main.py"
+    );
+    if (isPython) {
+      const entry = files.some(f => f.path === "main.py") ? "main" : "app";
+      const isFastAPI = files.some(f => f.content.includes("FastAPI") || f.content.includes("fastapi"));
+      const cmd = isFastAPI
+        ? `python -m uvicorn ${entry}:app --host 0.0.0.0 --port 3000`
+        : `python -m gunicorn --bind 0.0.0.0:3000 ${entry}:app`;
+      dockerfile = `FROM claude-server/base:latest\nWORKDIR /app\nCOPY . .\nEXPOSE 3000\nCMD ["sh", "-c", "${cmd}"]\n`;
+    } else {
+      dockerfile = `FROM claude-server/base:latest\nWORKDIR /app\nCOPY . .\nEXPOSE 3000\nCMD ["node", "server.js"]\n`;
+    }
   }
   if (!dockerignore) {
-    dockerignore = "node_modules\n.git\n*.md\n";
+    dockerignore = "node_modules\n.git\n*.md\n__pycache__\n.venv\n*.pyc\n.next\n";
   }
 
   return { files, dockerfile, dockerignore, notes };

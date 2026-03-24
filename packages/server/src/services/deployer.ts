@@ -66,6 +66,7 @@ export async function deployFromVolume(
   return _createAndStartContainer(deploymentId, appPort, [
     ...extraEnv,
     "NODE_PATH=/app/node_modules",
+    "PYTHONUNBUFFERED=1",
   ], projectSlug, {
     Image: "claude-server/base:latest",
     WorkingDir: workDir,

@@ -31,3 +31,21 @@ RUN npm init -y && \
 # Keep node_modules in a shared layer — project builds copy on top
 ENV NODE_PATH=/app/node_modules
 ENV PATH=/app/node_modules/.bin:$PATH
+
+# Python runtime + common packages
+RUN apk add --no-cache python3 py3-pip build-base && \
+    python3 -m pip install --break-system-packages \
+      flask \
+      fastapi \
+      "uvicorn[standard]" \
+      gunicorn \
+      psycopg2-binary \
+      python-dotenv \
+      requests \
+      httpx \
+      sqlalchemy \
+      pydantic \
+      jinja2 \
+    && rm -rf /root/.cache/pip
+
+ENV PYTHONUNBUFFERED=1

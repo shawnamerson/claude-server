@@ -10,6 +10,8 @@ export interface ProjectConfig {
   appPort: number;
   /** Whether this project needs more memory for building */
   needsMoreMemory?: boolean;
+  /** Runtime environment */
+  runtime?: "node" | "python";
 }
 
 /**
@@ -114,6 +116,55 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
   // --- Has index.js ---
   if (fs.existsSync(path.join(sourcePath, "index.js"))) {
     return { buildCommand: installCmd, startCommand: "node index.js", appPort: 3000 };
+  }
+
+  // --- Python ---
+  const hasRequirements = fs.existsSync(path.join(sourcePath, "requirements.txt"));
+  const hasPyproject = fs.existsSync(path.join(sourcePath, "pyproject.toml"));
+  const hasAppPy = fs.existsSync(path.join(sourcePath, "app.py"));
+  const hasMainPy = fs.existsSync(path.join(sourcePath, "main.py"));
+
+  if (hasRequirements || hasPyproject || hasAppPy || hasMainPy) {
+    // Detect framework from requirements or source files
+    let framework: "fastapi" | "flask" | "unknown" = "unknown";
+    const filesToScan: string[] = [];
+    if (hasRequirements) filesToScan.push(path.join(sourcePath, "requirements.txt"));
+    if (hasPyproject) filesToScan.push(path.join(sourcePath, "pyproject.toml"));
+    if (hasAppPy) filesToScan.push(path.join(sourcePath, "app.py"));
+    if (hasMainPy) filesToScan.push(path.join(sourcePath, "main.py"));
+
+    for (const f of filesToScan) {
+      try {
+        const content = fs.readFileSync(f, "utf-8").toLowerCase();
+        if (content.includes("fastapi")) { framework = "fastapi"; break; }
+        if (content.includes("flask")) { framework = "flask"; break; }
+      } catch {}
+    }
+
+    const pipInstall = hasRequirements
+      ? "pip install --break-system-packages -r requirements.txt 2>/dev/null"
+      : hasPyproject
+      ? "pip install --break-system-packages -e . 2>/dev/null"
+      : null;
+
+    if (framework === "fastapi") {
+      const entryModule = hasMainPy ? "main" : "app";
+      return {
+        buildCommand: pipInstall,
+        startCommand: `python -m uvicorn ${entryModule}:app --host 0.0.0.0 --port 3000`,
+        appPort: 3000,
+        runtime: "python",
+      };
+    }
+
+    // Flask or unknown Python — use gunicorn
+    const entryModule = hasAppPy ? "app" : "main";
+    return {
+      buildCommand: pipInstall,
+      startCommand: `python -m gunicorn --bind 0.0.0.0:3000 ${entryModule}:app`,
+      appPort: 3000,
+      runtime: "python",
+    };
   }
 
   // --- Fallback ---

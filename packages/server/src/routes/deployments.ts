@@ -157,6 +157,43 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
           fs.writeFileSync(serverPath, code);
         }
       }
+
+      // Python auto-fixes
+      const appPyPath = `${project.source_path}/app.py`;
+      const mainPyPath = `${project.source_path}/main.py`;
+      const pyEntry = fs.existsSync(appPyPath) ? appPyPath : fs.existsSync(mainPyPath) ? mainPyPath : null;
+
+      if (pyEntry) {
+        let pyCode = fs.readFileSync(pyEntry, "utf-8");
+        let pyFixed = false;
+
+        // Fix: Flask app not binding to PORT env var
+        if (pyCode.includes("app.run(") && !pyCode.includes("os.environ")) {
+          pyCode = pyCode.replace(
+            /app\.run\([^)]*\)/,
+            'app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))'
+          );
+          if (!pyCode.includes("import os")) {
+            pyCode = "import os\n" + pyCode;
+          }
+          pyFixed = true;
+          addLog(deploymentId, "system", "Auto-fix: Flask app.run() now uses PORT env var");
+        }
+
+        // Fix: Database connection without try/except
+        if (pyCode.includes("psycopg2.connect") && !pyCode.includes("try:") && pyCode.includes("DATABASE_URL")) {
+          pyCode = pyCode.replace(
+            /(conn\s*=\s*psycopg2\.connect\([^)]*\))/,
+            'try:\n    $1\nexcept Exception as e:\n    print(f"Database not available: {e}")\n    conn = None'
+          );
+          pyFixed = true;
+          addLog(deploymentId, "system", "Auto-fix: wrapped database connection in try/except");
+        }
+
+        if (pyFixed) {
+          fs.writeFileSync(pyEntry, pyCode);
+        }
+      }
     } catch (err) {
       console.warn("Auto-fix scan failed:", err instanceof Error ? err.message : String(err));
     }
@@ -179,7 +216,8 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
 
     // Auto-create database if the project uses pg/DATABASE_URL
     const needsDb = result.files.some(f =>
-      f.content.includes("DATABASE_URL") || f.content.includes("pg") || f.content.includes("Pool")
+      f.content.includes("DATABASE_URL") || f.content.includes("pg") || f.content.includes("Pool") ||
+      f.content.includes("psycopg2") || f.content.includes("sqlalchemy")
     );
     if (needsDb && !getDatabaseInfo(project.id)) {
       try {
@@ -325,7 +363,7 @@ async function autoFixAndRedeploy(
     const fixResult = await modifyProject(
       project.source_path,
       [],
-      `The application crashed. Fix it quickly.\n\nError:\n\`\`\`\n${errorText.slice(-1500)}\n\`\`\`\n\nBe fast: read ONLY the file that caused the error, fix it, and call done. Do NOT read every file.\n\nCommon fixes:\n- "Missing parameter name" / PathError: NEVER use app.get('*', ...) — use app.use((req, res) => ...) for catch-all\n- Database connection error: wrap db init in try/catch, don't crash if DATABASE_URL is missing\n- ESM/CJS mismatch: use require() not import\n- Missing dependency: add to package.json with version "*"\n- Use crypto.randomUUID() instead of uuid package`,
+      `The application crashed. Fix it quickly.\n\nError:\n\`\`\`\n${errorText.slice(-1500)}\n\`\`\`\n\nBe fast: read ONLY the file that caused the error, fix it, and call done. Do NOT read every file.\n\nCommon fixes:\n- "Missing parameter name" / PathError: NEVER use app.get('*', ...) — use app.use((req, res) => ...) for catch-all\n- Database connection error: wrap db init in try/catch (or try/except for Python), don't crash if DATABASE_URL is missing\n- ESM/CJS mismatch: use require() not import\n- Missing dependency: add to package.json with version "*" or requirements.txt\n- Use crypto.randomUUID() instead of uuid package\n- Python ModuleNotFoundError: add the missing package to requirements.txt\n- Python "Address already in use": use PORT env var — os.environ.get("PORT", 3000)\n- Flask: use app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))\n- psycopg2 OperationalError: wrap db connection in try/except`,
       log
     );
 
