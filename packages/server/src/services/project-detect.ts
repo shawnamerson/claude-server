@@ -165,21 +165,19 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
       } catch {}
     }
 
-    // Install pip packages into a local directory on the volume so they persist
+    // Install pip packages at startup (runs in the deploy container so they're available).
+    // Base image has common packages pre-installed; pip skips those, only installs extras.
     const pipInstall = hasRequirements
-      ? "pip install --break-system-packages --target ./pip_packages -r requirements.txt 2>/dev/null"
+      ? "pip install --break-system-packages -q -r requirements.txt 2>/dev/null && "
       : hasPyproject
-      ? "pip install --break-system-packages --target ./pip_packages -e . 2>/dev/null"
-      : null;
-
-    // Prepend pip_packages to PYTHONPATH so installed packages are found at runtime
-    const pythonPathPrefix = "PYTHONPATH=/data/" + (hasRequirements || hasPyproject ? "$(pwd)/pip_packages:${PYTHONPATH:-}" : "");
+      ? "pip install --break-system-packages -q -e . 2>/dev/null && "
+      : "";
 
     if (framework === "fastapi") {
       const entryModule = hasMainPy ? "main" : "app";
       return {
-        buildCommand: pipInstall,
-        startCommand: `${pythonPathPrefix} python -m uvicorn ${entryModule}:app --host 0.0.0.0 --port 3000`,
+        buildCommand: null,
+        startCommand: `${pipInstall}python -m uvicorn ${entryModule}:app --host 0.0.0.0 --port 3000`,
         appPort: 3000,
         runtime: "python",
       };
@@ -188,8 +186,8 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     // Flask or unknown Python — use gunicorn
     const entryModule = hasAppPy ? "app" : "main";
     return {
-      buildCommand: pipInstall,
-      startCommand: `PYTHONPATH=./pip_packages:\${PYTHONPATH:-} python -m gunicorn --bind 0.0.0.0:3000 ${entryModule}:app`,
+      buildCommand: null,
+      startCommand: `${pipInstall}python -m gunicorn --bind 0.0.0.0:3000 ${entryModule}:app`,
       appPort: 3000,
       runtime: "python",
     };
