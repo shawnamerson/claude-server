@@ -128,6 +128,13 @@ Structure: FastAPI app (main.py).
 - Use os.environ.get("DATABASE_URL") for PostgreSQL with psycopg2
 - Include a .dockerignore (__pycache__, .venv, .git, *.pyc)
 
+## Option E: Static site (use when the app is purely frontend — no backend, no API, no database. Landing pages, portfolios, documentation, games.)
+Structure: index.html + style.css + app.js (all in the root directory, NOT in a public/ folder).
+- No package.json, no server.js, no build step
+- Pure HTML/CSS/JS — the platform serves these files automatically
+- Use vanilla JS or include libraries via CDN (e.g. <script src="https://cdn.jsdelivr.net/...">)
+- Keep it simple: one HTML file, one CSS file, one JS file unless the project clearly needs more
+
 SHARED RULES (all stacks):
 - For data persistence: use PostgreSQL via DATABASE_URL env var. CREATE TABLE IF NOT EXISTS on startup. Wrap database init in try/catch (or try/except for Python) so the app starts even if the database isn't available yet.
 - Always handle database connection errors gracefully — don't crash the server

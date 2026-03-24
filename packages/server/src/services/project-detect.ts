@@ -118,6 +118,16 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     return { buildCommand: installCmd, startCommand: "node index.js", appPort: 3000 };
   }
 
+  // --- Static site (HTML/CSS/JS only, no server) ---
+  const hasIndexHtml = fs.existsSync(path.join(sourcePath, "index.html"));
+  if (hasIndexHtml && !fs.existsSync(pkgPath)) {
+    return {
+      buildCommand: null,
+      startCommand: "npx serve . -l 3000 -s",
+      appPort: 3000,
+    };
+  }
+
   // --- Python ---
   const hasRequirements = fs.existsSync(path.join(sourcePath, "requirements.txt"));
   const hasPyproject = fs.existsSync(path.join(sourcePath, "pyproject.toml"));
