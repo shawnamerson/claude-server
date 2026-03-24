@@ -165,17 +165,21 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
       } catch {}
     }
 
+    // Install pip packages into a local directory on the volume so they persist
     const pipInstall = hasRequirements
-      ? "pip install --break-system-packages -r requirements.txt 2>/dev/null"
+      ? "pip install --break-system-packages --target ./pip_packages -r requirements.txt 2>/dev/null"
       : hasPyproject
-      ? "pip install --break-system-packages -e . 2>/dev/null"
+      ? "pip install --break-system-packages --target ./pip_packages -e . 2>/dev/null"
       : null;
+
+    // Prepend pip_packages to PYTHONPATH so installed packages are found at runtime
+    const pythonPathPrefix = "PYTHONPATH=/data/" + (hasRequirements || hasPyproject ? "$(pwd)/pip_packages:${PYTHONPATH:-}" : "");
 
     if (framework === "fastapi") {
       const entryModule = hasMainPy ? "main" : "app";
       return {
         buildCommand: pipInstall,
-        startCommand: `python -m uvicorn ${entryModule}:app --host 0.0.0.0 --port 3000`,
+        startCommand: `${pythonPathPrefix} python -m uvicorn ${entryModule}:app --host 0.0.0.0 --port 3000`,
         appPort: 3000,
         runtime: "python",
       };
@@ -185,7 +189,7 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     const entryModule = hasAppPy ? "app" : "main";
     return {
       buildCommand: pipInstall,
-      startCommand: `python -m gunicorn --bind 0.0.0.0:3000 ${entryModule}:app`,
+      startCommand: `PYTHONPATH=./pip_packages:\${PYTHONPATH:-} python -m gunicorn --bind 0.0.0.0:3000 ${entryModule}:app`,
       appPort: 3000,
       runtime: "python",
     };

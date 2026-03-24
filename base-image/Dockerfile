@@ -46,6 +46,11 @@ RUN apk add --no-cache python3 py3-pip build-base && \
       sqlalchemy \
       pydantic \
       jinja2 \
+      flask-login \
+      flask-cors \
+      flask-sqlalchemy \
+      flask-wtf \
+      bcrypt \
     && rm -rf /root/.cache/pip
 
 ENV PYTHONUNBUFFERED=1
