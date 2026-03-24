@@ -122,7 +122,18 @@ function parseRecommendations(text: string): Array<{ text: string; prompt: strin
     items.push({ text: desc.trim(), prompt: currentTitle.trim() });
   }
 
-  return items.length >= 2 ? items : null;
+  if (items.length < 2) return null;
+
+  // Filter out items that are user instructions, not code changes
+  const codeChangeWords = /\b(add|create|fix|update|change|modify|replace|remove|delete|install|refactor|rename|move|implement|write|set|configure|wrap|import|export)\b/i;
+  const instructionWords = /\b(go to|visit|open|click|login|log in|navigate|try|check|look at|see|access|run|copy|paste)\b/i;
+
+  const codeItems = items.filter(item => {
+    const isInstruction = instructionWords.test(item.prompt) && !codeChangeWords.test(item.prompt);
+    return !isInstruction;
+  });
+
+  return codeItems.length >= 2 ? codeItems : null;
 }
 
 interface Props {
