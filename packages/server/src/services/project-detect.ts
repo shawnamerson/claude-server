@@ -78,7 +78,9 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     const hasPrisma = !!deps["@prisma/client"] || !!deps["prisma"];
     const prismaCmd = hasPrisma ? " && npx prisma generate" : "";
     const buildCmd = scripts.build ? "npm run build" : "npx next build";
-    const startCmd = scripts.start || "npx next start";
+    // Always use npm start (which resolves local binaries) or npx as fallback
+    // Never use bare "next start" — it won't be in PATH in the production container
+    const startCmd = scripts.start ? "npm start" : "npx next start";
     return {
       buildCommand: `${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1536 ${buildCmd}`,
       startCommand: startCmd,

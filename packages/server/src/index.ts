@@ -182,16 +182,61 @@ async function start() {
   await cleanupStoppedContainers();
   await cleanupOrphanedContainers();
 
-  // Recover stuck deployments from previous server run
+  // Auto-resume deployments interrupted by server restart
   const db = getDb();
   const stuck = db.prepare(
-    "SELECT id FROM deployments WHERE status IN ('pending', 'generating', 'building', 'deploying')"
-  ).all() as Array<{ id: string }>;
+    `SELECT d.id, d.project_id, d.status FROM deployments d
+     WHERE d.status IN ('pending', 'generating', 'building', 'deploying')
+     ORDER BY d.created_at DESC`
+  ).all() as Array<{ id: string; project_id: string; status: string }>;
+
   if (stuck.length > 0) {
-    db.prepare(
-      "UPDATE deployments SET status = 'failed', error = 'Server restarted during deployment' WHERE status IN ('pending', 'generating', 'building', 'deploying')"
-    ).run();
-    console.log(`Recovered ${stuck.length} stuck deployment(s)`);
+    // Only resume the latest deployment per project — mark older ones as failed
+    const seenProjects = new Set<string>();
+    const toResume: Array<{ id: string; project_id: string }> = [];
+    const toFail: string[] = [];
+
+    for (const dep of stuck) {
+      if (seenProjects.has(dep.project_id)) {
+        toFail.push(dep.id);
+      } else {
+        seenProjects.add(dep.project_id);
+        toResume.push(dep);
+      }
+    }
+
+    if (toFail.length > 0) {
+      for (const id of toFail) {
+        db.prepare("UPDATE deployments SET status = 'failed', error = 'Server restarted — superseded by newer deploy' WHERE id = ?").run(id);
+      }
+    }
+
+    // Resume each interrupted deployment after server is fully started
+    setTimeout(async () => {
+      const { runPipeline } = await import("./routes/deployments.js");
+      for (const dep of toResume) {
+        const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(dep.project_id) as any;
+        if (!project) {
+          db.prepare("UPDATE deployments SET status = 'failed', error = 'Project not found' WHERE id = ?").run(dep.id);
+          continue;
+        }
+        // Get the original prompt from chat history
+        const lastChat = db.prepare(
+          "SELECT content FROM chat_messages WHERE project_id = ? AND deployment_id = ? AND role = 'user' ORDER BY created_at DESC LIMIT 1"
+        ).get(project.id, dep.id) as { content: string } | undefined;
+
+        console.log(`Auto-resuming deployment ${dep.id} for project ${project.slug}...`);
+        db.prepare("UPDATE deployments SET status = 'pending' WHERE id = ?").run(dep.id);
+
+        runPipeline(project, dep.id, lastChat?.content).catch((err) => {
+          console.error(`Auto-resume failed for ${dep.id}:`, err);
+          db.prepare("UPDATE deployments SET status = 'failed', error = ? WHERE id = ?")
+            .run(err instanceof Error ? err.message : String(err), dep.id);
+        });
+      }
+    }, 5000); // Wait 5s for server to be fully ready
+
+    console.log(`Auto-resuming ${toResume.length} interrupted deployment(s), failed ${toFail.length} superseded`);
   }
 
   // Check "running" deployments whose containers are gone
