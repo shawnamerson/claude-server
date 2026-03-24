@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 interface Stats {
   users: { total: number; byPlan: Record<string, number>; signupsToday: number; signupsThisWeek: number };
-  projects: { total: number; active: number; sleeping: number };
+  projects: { total: number; active: number };
   deployments: { total: number; today: number; thisMonth: number };
   chatsThisMonth: number;
   containersRunning: number;
@@ -66,7 +66,7 @@ function timeAgo(dateStr: string): string {
 
 const STATUS_COLORS: Record<string, string> = {
   running: "#10b981",
-  sleeping: "#6366f1",
+
   building: "#f59e0b",
   deploying: "#f59e0b",
   pending: "#6b7280",
@@ -175,7 +175,7 @@ export default function Admin() {
         {stats && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
             <StatCard label="Total Users" value={stats.users.total} sub={`+${stats.users.signupsToday} today, +${stats.users.signupsThisWeek} this week`} />
-            <StatCard label="Active Projects" value={stats.projects.active} sub={`${stats.projects.total} total, ${stats.projects.sleeping} sleeping`} />
+            <StatCard label="Active Projects" value={stats.projects.active} sub={`${stats.projects.total} total`} />
             <StatCard label="Deploys Today" value={stats.deployments.today} sub={`${stats.deployments.thisMonth} this month, ${stats.deployments.total} total`} />
             <StatCard label="MRR" value={`$${(stats.mrr / 100).toFixed(0)}`} sub={`${stats.containersRunning} containers, ${stats.chatsThisMonth} chats/mo`} />
           </div>

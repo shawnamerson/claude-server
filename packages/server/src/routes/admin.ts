@@ -89,8 +89,6 @@ router.get("/stats", async (_req: Request, res: Response) => {
     // Project stats (excluding admin projects)
     const totalProjects = (db.prepare(`SELECT COUNT(*) as cnt FROM projects p JOIN users u ON u.id = p.user_id WHERE 1=1 ${andExcludeAdmins}`).get(...adminEmails) as { cnt: number }).cnt;
     const activeProjects = (db.prepare(`SELECT COUNT(DISTINCT d.project_id) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id JOIN users u ON u.id = p.user_id WHERE d.status = 'running' ${andExcludeAdmins}`).get(...adminEmails) as { cnt: number }).cnt;
-    const sleepingProjects = (db.prepare(`SELECT COUNT(DISTINCT d.project_id) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id JOIN users u ON u.id = p.user_id WHERE d.status = 'sleeping' ${andExcludeAdmins}`).get(...adminEmails) as { cnt: number }).cnt;
-
     // Deployment stats
     const totalDeployments = (db.prepare("SELECT COUNT(*) as cnt FROM deployments").get() as { cnt: number }).cnt;
     const deploysToday = (db.prepare("SELECT COUNT(*) as cnt FROM deployments WHERE created_at >= ?").get(todayStr) as { cnt: number }).cnt;
@@ -135,7 +133,6 @@ router.get("/stats", async (_req: Request, res: Response) => {
       projects: {
         total: totalProjects,
         active: activeProjects,
-        sleeping: sleepingProjects,
       },
       deployments: {
         total: totalDeployments,

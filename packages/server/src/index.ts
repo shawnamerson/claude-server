@@ -23,7 +23,7 @@ import { initializeDbPortTracking } from "./services/database.js";
 import { reloadCaddyConfig } from "./services/caddy.js";
 import { cleanupOrphanedDevContainers } from "./services/generator.js";
 import { backupAllDatabases } from "./services/backups.js";
-import { sleepIdleContainers } from "./services/sleep.js";
+
 import seoRoutes, { prerenderMiddleware } from "./routes/seo.js";
 import fs from "fs";
 
@@ -81,35 +81,6 @@ app.use("/api", envRoutes);
 app.use("/api", githubRoutes);
 app.use("/api", databaseRoutes);
 app.use("/api", domainRoutes);
-
-// Wake-on-request: if a sleeping app's subdomain hits this server, wake it
-app.use(async (req, res, next) => {
-  const host = req.hostname;
-  const domain = process.env.DOMAIN || "localhost";
-  if (!host.endsWith(`.${domain}`) || host === domain) return next();
-
-  const slug = host.replace(`.${domain}`, "");
-  if (!slug || slug.includes(".")) return next();
-
-  // Check if this slug has a sleeping deployment
-  const db = getDb();
-  const sleeping = db.prepare(`
-    SELECT d.id FROM deployments d JOIN projects p ON p.id = d.project_id
-    WHERE p.slug = ? AND d.status = 'sleeping' LIMIT 1
-  `).get(slug) as { id: string } | undefined;
-
-  if (!sleeping) return next();
-
-  // Wake the container and show a loading page
-  const { wakeContainer } = await import("./services/sleep.js");
-  res.status(200).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Waking up...</title>
-    <style>body{margin:0;background:#0a0a12;color:#e0e0e0;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem}
-    .spin{width:32px;height:32px;border:3px solid #1e1e30;border-top:3px solid #7c3aed;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}</style>
-    <meta http-equiv="refresh" content="5"></head><body><div class="spin"></div><div>Waking up your app...</div><div style="color:#666;font-size:0.85rem">This page will refresh automatically</div></body></html>`);
-
-  // Wake in background
-  wakeContainer(slug).catch(err => console.error(`Wake failed for ${slug}:`, err));
-});
 
 // Proxy to deployed containers (must be before static files)
 app.use(proxyRoutes);
@@ -242,11 +213,10 @@ async function start() {
   // Generate initial Caddy config
   reloadCaddyConfig().catch(() => console.log("Caddy not available yet — config will update on first deploy"));
 
-  // Every 5 minutes: reconcile ports, clean up orphans, sleep idle containers
+  // Every 5 minutes: reconcile ports, clean up orphans
   setInterval(() => {
     reconcilePorts().catch((err) => console.warn("Port reconciliation error:", err));
     cleanupOrphanedContainers().catch((err) => console.warn("Orphan cleanup error:", err));
-    sleepIdleContainers().catch((err) => console.warn("Sleep check error:", err));
   }, 5 * 60 * 1000);
 
   // Daily database backups at 3am UTC

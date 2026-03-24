@@ -1,5 +1,4 @@
 const statusTooltips: Record<string, string> = {
-  sleeping: "Idle for 30 min — auto-stopped to save resources. Wakes up automatically when visited.",
   failed: "The app crashed. Check logs or chat with Claude to fix it.",
 };
 
@@ -10,7 +9,7 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string; labe
   deploying:  { bg: "#1e3a5f", text: "#60a5fa", dot: "#60a5fa", label: "Deploying" },
   pending:    { bg: "#1a1a2e", text: "#888",    dot: "#888",    label: "Pending" },
   failed:     { bg: "#450a0a", text: "#f87171", dot: "#f87171", label: "Error" },
-  sleeping:   { bg: "#1a1a2e", text: "#f59e0b", dot: "#f59e0b", label: "Sleeping" },
+
   stopped:    { bg: "#1a1a2e", text: "#666",    dot: "#666",    label: "Stopped" },
   none:       { bg: "#1a1a2e", text: "#555",    dot: "#555",    label: "None" },
 };

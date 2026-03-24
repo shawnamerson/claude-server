@@ -76,26 +76,6 @@ export function generateCaddyfile(): string {
     caddyfile += `}\n\n`;
   }
 
-  // Sleeping deployments: route to main server for wake-on-request
-  const sleeping = db.prepare(`
-    SELECT DISTINCT p.slug
-    FROM deployments d
-    JOIN projects p ON p.id = d.project_id
-    WHERE d.status = 'sleeping'
-  `).all() as Array<{ slug: string }>;
-
-  for (const { slug } of sleeping) {
-    // Skip if already has a running deployment route
-    if ([...projectPorts.values()].some(p => p.slug === slug)) continue;
-    if (!isSafeHostname(slug)) continue;
-    caddyfile += `${slug}.${domain} {\n`;
-    caddyfile += `    reverse_proxy ${MAIN_SERVER}\n`;
-    caddyfile += `    header -X-Frame-Options\n`;
-    caddyfile += `    header -Content-Security-Policy\n`;
-    caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
-    caddyfile += `}\n\n`;
-  }
-
   // Custom domain routing
   for (const cd of customDomains) {
     const mapping = projectPorts.get(cd.project_id);
