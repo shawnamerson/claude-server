@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "../db/client.js";
+import crypto from "crypto";
 import { encrypt, decrypt } from "../services/encrypt.js";
 
 const router = Router();
@@ -73,7 +74,7 @@ export function getEnvVarsForDeploy(projectId: string, projectSlug?: string): st
     if (!envMap.has("NEXTAUTH_URL")) envMap.set("NEXTAUTH_URL", `https://${projectSlug}.${domain}`);
     if (!envMap.has("NEXT_PUBLIC_APP_URL")) envMap.set("NEXT_PUBLIC_APP_URL", `https://${projectSlug}.${domain}`);
   }
-  if (!envMap.has("NEXTAUTH_SECRET")) envMap.set("NEXTAUTH_SECRET", require("crypto").randomBytes(32).toString("hex"));
+  if (!envMap.has("NEXTAUTH_SECRET")) envMap.set("NEXTAUTH_SECRET", crypto.randomBytes(32).toString("hex"));
 
   return Array.from(envMap.entries()).map(([k, v]) => `${k}=${v}`);
 }
