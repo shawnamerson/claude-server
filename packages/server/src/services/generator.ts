@@ -307,6 +307,7 @@ export class DevContainer {
   private workDir: string;
   private sourcePath: string;
   public memoryOverride: number | null = null;
+  public extraEnv: string[] = [];
 
   constructor(sourcePath: string) {
     this.sourcePath = sourcePath;
@@ -331,7 +332,7 @@ export class DevContainer {
       name: containerName,
       Cmd: ["sleep", "900"],
       WorkingDir: this.workDir,
-      Env: ["NODE_PATH=/app/node_modules"],
+      Env: ["NODE_PATH=/app/node_modules", "NEXT_TELEMETRY_DISABLED=1", ...this.extraEnv],
       HostConfig: {
         Binds: [`claude-server_app-data:/data:rw`],
         Memory: this.memoryOverride || 256 * 1024 * 1024,

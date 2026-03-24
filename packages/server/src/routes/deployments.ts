@@ -254,9 +254,32 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
       const { DevContainer } = await import("../services/generator.js");
       const buildContainer = new DevContainer(project.source_path);
       if (projectConfig.needsMoreMemory) {
-        // Override dev container memory for heavy builds
-        (buildContainer as any).memoryOverride = 2048 * 1024 * 1024;
+        buildContainer.memoryOverride = 2048 * 1024 * 1024;
       }
+      // Pass project env vars to build container (needed for Next.js builds that reference env vars at build time)
+      const buildEnv = getEnvVarsForDeploy(project.id);
+      // Add placeholder env vars so Next.js builds don't crash on missing secrets
+      const placeholders = [
+        "NEXTAUTH_SECRET=build-placeholder",
+        "NEXTAUTH_URL=http://localhost:3000",
+        "STRIPE_SECRET_KEY=sk_placeholder",
+        "STRIPE_WEBHOOK_SECRET=whsec_placeholder",
+        "RESEND_API_KEY=re_placeholder",
+        "UPSTASH_REDIS_REST_URL=",
+        "UPSTASH_REDIS_REST_TOKEN=",
+        "CLOUDINARY_API_KEY=placeholder",
+        "CLOUDINARY_API_SECRET=placeholder",
+        "CLOUDINARY_CLOUD_NAME=placeholder",
+        "CRON_SECRET=placeholder",
+        `NEXT_PUBLIC_APP_URL=https://${project.slug}.${config.domain}`,
+      ];
+      // Only add placeholders if not already set by actual env vars
+      const existingKeys = new Set(buildEnv.map(e => e.split("=")[0]));
+      for (const p of placeholders) {
+        const key = p.split("=")[0];
+        if (!existingKeys.has(key)) buildEnv.push(p);
+      }
+      buildContainer.extraEnv = buildEnv;
       try {
         const buildOutput = await buildContainer.exec(projectConfig.buildCommand, (msg) => addLog(deploymentId, "system", msg));
         if (buildOutput.includes("ERR!") || buildOutput.includes("FATAL") || buildOutput.includes("error TS")) {
@@ -418,7 +441,7 @@ async function autoFixAndRedeploy(
       addLog(deploymentId, "system", "Rebuilding...");
       const { DevContainer } = await import("../services/generator.js");
       const buildContainer = new DevContainer(project.source_path);
-      if (fixConfig.needsMoreMemory) (buildContainer as any).memoryOverride = 2048 * 1024 * 1024;
+      if (fixConfig.needsMoreMemory) buildContainer.memoryOverride = 2048 * 1024 * 1024;
       try {
         await buildContainer.exec(fixConfig.buildCommand, (msg) => addLog(deploymentId, "system", msg));
       } finally {
