@@ -1,12 +1,14 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "../db/client.js";
-import { claudeStream } from "../services/claude.js";
+import { getClient } from "../services/claude.js";
 import { readProjectFiles } from "../services/generator.js";
 import { getRecentLogs } from "../services/logger.js";
-import { getDatabaseInfo } from "../services/database.js";
 import { queryProjectDatabase } from "../services/database.js";
 import { Project, Deployment, ChatMessage } from "../types.js";
 import { canChat } from "./auth.js";
+import Anthropic from "@anthropic-ai/sdk";
+import fs from "fs";
+import path from "path";
 import "../types.js";
 
 const router = Router();
@@ -20,209 +22,251 @@ router.get("/projects/:projectId/chat", (req: Request, res: Response) => {
   res.json(messages);
 });
 
-// Chat with Claude about a project (SSE streaming)
+// Tools for chat Claude
+const CHAT_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "read_file",
+    description: "Read the contents of a file in the project. Use this to inspect code, configs, or any file.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: { type: "string", description: "Relative file path (e.g., src/lib/auth.ts, package.json)" },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "list_files",
+    description: "List all files in the project directory. Use this to understand the project structure.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "search_files",
+    description: "Search for a string or pattern across all project files. Returns matching lines with file paths.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Text to search for" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_logs",
+    description: "Get recent container logs (stdout/stderr) from the running deployment.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        lines: { type: "number", description: "Number of recent log lines to fetch (default 50)" },
+      },
+    },
+  },
+  {
+    name: "query_database",
+    description: "Get the database schema, tables, and row counts for the project's PostgreSQL database.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+];
+
+function createChatToolHandlers(sourcePath: string, projectId: string) {
+  const SKIP = new Set(["node_modules", ".git", "__pycache__", ".venv", ".next", "dist", "pip_packages"]);
+  const SKIP_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".lock"]);
+
+  function listFiles(dir: string, prefix = ""): string[] {
+    const results: string[] = [];
+    if (!fs.existsSync(dir)) return results;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (SKIP.has(entry.name)) continue;
+      const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        results.push(...listFiles(path.join(dir, entry.name), relPath));
+      } else {
+        results.push(relPath);
+      }
+    }
+    return results;
+  }
+
+  return new Map<string, (input: any) => Promise<string>>([
+    ["read_file", async (input: { path: string }) => {
+      const resolved = path.resolve(sourcePath, input.path);
+      if (!resolved.startsWith(path.resolve(sourcePath))) return "Error: path traversal not allowed";
+      if (!fs.existsSync(resolved)) return `Error: file not found: ${input.path}`;
+      if (SKIP_EXT.has(path.extname(input.path))) return "(binary file)";
+      const content = fs.readFileSync(resolved, "utf-8");
+      return content.length > 10000 ? content.slice(0, 10000) + "\n...(truncated)" : content;
+    }],
+    ["list_files", async () => {
+      const files = listFiles(sourcePath);
+      return files.length > 0 ? files.join("\n") : "(empty project)";
+    }],
+    ["search_files", async (input: { query: string }) => {
+      const files = listFiles(sourcePath);
+      const results: string[] = [];
+      for (const file of files) {
+        if (SKIP_EXT.has(path.extname(file))) continue;
+        try {
+          const content = fs.readFileSync(path.join(sourcePath, file), "utf-8");
+          const lines = content.split("\n");
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].toLowerCase().includes(input.query.toLowerCase())) {
+              results.push(`${file}:${i + 1}: ${lines[i].trim()}`);
+              if (results.length >= 30) return results.join("\n") + "\n...(more results truncated)";
+            }
+          }
+        } catch {}
+      }
+      return results.length > 0 ? results.join("\n") : `No matches found for "${input.query}"`;
+    }],
+    ["get_logs", async (input: { lines?: number }) => {
+      const db = getDb();
+      const dep = db.prepare("SELECT id FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT 1").get(projectId) as { id: string } | undefined;
+      if (!dep) return "(No deployments)";
+      const logs = getRecentLogs(dep.id, input.lines || 50);
+      return logs.reverse().map(l => `[${l.stream}] ${l.message}`).join("\n") || "(No logs)";
+    }],
+    ["query_database", async () => {
+      try {
+        return await queryProjectDatabase(projectId);
+      } catch {
+        return "(No database or database not accessible)";
+      }
+    }],
+  ]);
+}
+
+// Chat with Claude about a project (SSE streaming with tools)
 router.post("/projects/:projectId/chat", async (req: Request, res: Response) => {
   const db = getDb();
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.projectId) as Project | undefined;
-  if (!project) {
-    res.status(404).json({ error: "Project not found" });
-    return;
-  }
+  if (!project) { res.status(404).json({ error: "Project not found" }); return; }
 
   const { message } = req.body;
-  if (!message) {
-    res.status(400).json({ error: "Message is required" });
-    return;
-  }
+  if (!message) { res.status(400).json({ error: "Message is required" }); return; }
 
-  // Check chat limits
   const user = req.user;
   if (user) {
     const chatCheck = canChat(user.id);
-    if (!chatCheck.allowed) {
-      res.status(402).json({ error: chatCheck.reason });
-      return;
-    }
+    if (!chatCheck.allowed) { res.status(402).json({ error: chatCheck.reason }); return; }
   }
 
-  // Save user message
-  db.prepare(
-    "INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'user', ?)"
-  ).run(project.id, message);
+  db.prepare("INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'user', ?)").run(project.id, message);
 
-  // Build context — cap total file content to avoid exceeding context limits
-  const MAX_FILE_CONTEXT = 50000; // ~50K chars max for file context
-  const files = readProjectFiles(project.source_path);
-  const latestDeployment = db
-    .prepare("SELECT * FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT 1")
-    .get(project.id) as Deployment | undefined;
+  // Lightweight context — just overview, Claude uses tools to dig deeper
+  const fileList = Object.keys(readProjectFiles(project.source_path));
+  const latestDeployment = db.prepare("SELECT * FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT 1").get(project.id) as Deployment | undefined;
 
-  let logsContext = "";
-  if (latestDeployment) {
-    const logs = getRecentLogs(latestDeployment.id, 200);
-    logsContext = logs
-      .reverse()
-      .map((l) => `[${l.stream}] ${l.message}`)
-      .join("\n");
-  }
-
-  // Prioritize key files, truncate large ones
-  const fileEntries = Object.entries(files);
-  const priorityFiles = ["server.js", "server/index.js", "package.json", "index.js", "app.js"];
-  fileEntries.sort((a, b) => {
-    const aP = priorityFiles.findIndex(p => a[0].endsWith(p));
-    const bP = priorityFiles.findIndex(p => b[0].endsWith(p));
-    if (aP !== -1 && bP === -1) return -1;
-    if (aP === -1 && bP !== -1) return 1;
-    return a[0].localeCompare(b[0]);
-  });
-
-  let filesContext = "";
-  let totalChars = 0;
-  const includedFiles: string[] = [];
-  const skippedFiles: string[] = [];
-
-  for (const [filePath, content] of fileEntries) {
-    const entry = `### ${filePath}\n\`\`\`\n${content}\n\`\`\`\n\n`;
-    if (totalChars + entry.length > MAX_FILE_CONTEXT) {
-      skippedFiles.push(filePath);
-      continue;
-    }
-    filesContext += entry;
-    totalChars += entry.length;
-    includedFiles.push(filePath);
-  }
-
-  if (skippedFiles.length > 0) {
-    filesContext += `\n(${skippedFiles.length} additional files not shown: ${skippedFiles.slice(0, 10).join(", ")}${skippedFiles.length > 10 ? "..." : ""})\n`;
-  }
-
-  // Get database info if available
-  let dbContext = "";
-  try {
-    dbContext = await queryProjectDatabase(project.id);
-  } catch {
-    dbContext = "(No database)";
-  }
-
-  // Get env vars — show the full set including auto-injected ones
   const { getEnvVarsForDeploy } = await import("./envvars.js");
   const allEnvVars = getEnvVarsForDeploy(project.id, project.slug);
-  const envContext = allEnvVars.length > 0
-    ? allEnvVars.map(e => { const [k, ...v] = e.split("="); return `${k}=${k.includes("SECRET") || k.includes("PASSWORD") || k.includes("TOKEN") ? "***" : v.join("=")}`; }).join("\n")
-    : "(No environment variables set)";
-
-  // Get GitHub connection
-  const githubRepo = db
-    .prepare("SELECT repo_url, branch FROM github_repos WHERE project_id = ?")
-    .get(project.id) as { repo_url: string; branch: string } | undefined;
-  const githubContext = githubRepo
-    ? `Connected to ${githubRepo.repo_url} (branch: ${githubRepo.branch})`
-    : "(No GitHub repo connected)";
-
-  const systemPrompt = `You are a helpful AI assistant integrated into a cloud deployment platform. You have full context about the user's project.
-
-IMPORTANT: You CAN see the project files, recent server/container logs, environment variables, database schema, and deployment history below. USE THEM. When something is wrong, diagnose it from the logs and code — don't ask the user to check things you can already see. Be direct: "The error is X, I'll fix it by doing Y."
-
-Project: ${project.name}
-Description: ${project.description}
-
-## Current Project Files
-${filesContext || "(No files generated yet)"}
-
-## Deployments
-${(() => {
-  const allDeps = db.prepare("SELECT id, status, port, error, created_at FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT 5").all(project.id) as Array<{ id: string; status: string; port: number | null; error: string | null; created_at: string }>;
-  if (allDeps.length === 0) return "No deployments yet.";
-  return allDeps.map(d => {
-    let line = `- ${d.status.toUpperCase()} (${d.created_at})`;
-    if (d.port) line += ` — port ${d.port}`;
-    if (d.error) line += ` — Error: ${d.error}`;
-    return line;
+  const envContext = allEnvVars.map(e => {
+    const [k, ...v] = e.split("=");
+    return `${k}=${k.includes("SECRET") || k.includes("PASSWORD") || k.includes("TOKEN") ? "***" : v.join("=")}`;
   }).join("\n");
-})()}
-${latestDeployment?.status && ["pending", "generating", "building", "deploying"].includes(latestDeployment.status)
-  ? "\n⚠️ A deployment is currently in progress. Do NOT suggest deploying right now — wait for it to finish."
-  : ""}
 
-## Recent Logs
-\`\`\`
-${logsContext || "(No logs)"}
-\`\`\`
+  const domain = process.env.DOMAIN || "vibestack.build";
+  const systemPrompt = `You are a senior full-stack developer integrated into VibeStack, a cloud deployment platform. You have tools to explore the project — USE THEM.
 
-## Environment Variables
-\`\`\`
+Project: ${project.name} (${project.slug})
+URL: https://${project.slug}.${domain}
+Files: ${fileList.length} files — ${fileList.slice(0, 20).join(", ")}${fileList.length > 20 ? "..." : ""}
+Status: ${latestDeployment?.status || "no deployments"}${latestDeployment?.error ? ` — Error: ${latestDeployment.error}` : ""}
+
+Environment Variables:
 ${envContext}
-\`\`\`
 
-## Database
-${dbContext}
+YOU HAVE TOOLS — use them:
+- read_file: Read any project file to see the code
+- list_files: See the full project structure
+- search_files: Find where something is used across the codebase
+- get_logs: See the latest container stdout/stderr logs
+- query_database: See database tables, schema, and row counts
 
-## GitHub
-${githubContext}
+RULES:
+- When the user asks about code, READ THE FILE first — don't guess from the file list.
+- When something is broken, check get_logs FIRST, then read the relevant file.
+- Be direct and concise. Diagnose, don't list possibilities.
+- When you suggest code changes, tell the user to click "Apply & Deploy".
+- The platform handles everything: builds, deploys, databases, env vars, SSL, domains.
+- NEVER say you can't do something. NEVER tell the user to SSH or configure things manually.
+- NEVER ask the user to refresh or check things — you have the tools to check yourself.`;
 
-IMPORTANT CONTEXT ABOUT THIS PLATFORM:
-- This is VibeStack, a cloud deployment platform. You are the AI assistant built into it.
-- When the user clicks "Apply & Deploy", YOU will modify the code files and the platform will automatically rebuild and redeploy.
-- The platform handles EVERYTHING automatically: npm install, pip install, database setup, Prisma migrations, builds, Docker containers, SSL, domains.
-- PostgreSQL databases are auto-created and DATABASE_URL is auto-injected.
-- Environment variables like NEXTAUTH_URL, DATABASE_URL, POSTGRES_PRISMA_URL are auto-set by the platform. The user does NOT need to set them manually.
-- You DO have the ability to make code changes — the user just needs to describe what they want and click "Apply & Deploy".
-- NEVER say you "cannot run commands" or "cannot access the database" — the platform does this for you.
-- NEVER say you "cannot set environment variables" — the platform handles env vars automatically.
-- NEVER tell the user to SSH into anything or run commands manually.
-- NEVER tell the user to go to a settings panel or configure things outside the chat.
-
-WHAT THE PLATFORM AUTO-PROVIDES:
-- DATABASE_URL (PostgreSQL connection string)
-- POSTGRES_PRISMA_URL and POSTGRES_URL_NON_POOLING (same as DATABASE_URL, for Prisma)
-- NEXTAUTH_URL (set to https://{project-slug}.vibestack.build)
-- NEXTAUTH_SECRET (auto-generated)
-- PORT=3000
-- All npm/pip dependencies are installed automatically
-- Prisma generate and migrations run automatically during build
-- The app URL is: https://${project.slug}.${process.env.DOMAIN || "vibestack.build"}
-
-YOUR ROLE:
-- Be confident, direct, and concise. No hedging, no "possible issues", no asking the user to check things you can see.
-- When something is broken, say exactly what's wrong and what you'll fix. Don't list possibilities — diagnose from the logs and code.
-- When they want changes, tell them what you'll change and suggest they click "Apply & Deploy".
-- NEVER ask the user to "try refreshing" or "check if the page loads" — you can see the logs, diagnose from there.
-- NEVER list multiple "possible issues" — pick the most likely one based on the evidence and fix it.
-- If the user reports a problem, look at the Recent Logs section FIRST and give a specific diagnosis.`;
-
-  // Get chat history
-  const history = db
-    .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
-    .all(project.id) as ChatMessage[];
-
-  const messages = history.map((m) => ({
+  const history = db.prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC").all(project.id) as ChatMessage[];
+  const messages: Anthropic.MessageParam[] = history.map(m => ({
     role: m.role as "user" | "assistant",
     content: m.content,
   }));
 
-  // Stream response via SSE
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
+  const handlers = createChatToolHandlers(project.source_path, project.id);
+
+  // Stream response via SSE with tool support
+  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
 
   try {
-    const stream = claudeStream(systemPrompt, messages);
+    const client = getClient();
     let fullResponse = "";
+    const MAX_TURNS = 10;
 
-    stream.on("text", (text) => {
-      fullResponse += text;
-      res.write(`data: ${JSON.stringify({ type: "text", content: text })}\n\n`);
-    });
+    for (let turn = 0; turn < MAX_TURNS; turn++) {
+      const stream = client.messages.stream({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages,
+        tools: CHAT_TOOLS,
+      });
 
-    await stream.finalMessage();
+      const response = await stream.finalMessage();
 
-    // Save assistant response
-    db.prepare(
-      "INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'assistant', ?)"
-    ).run(project.id, fullResponse);
+      // Process response blocks
+      const toolUses: Array<{ id: string; name: string; input: any }> = [];
+
+      for (const block of response.content) {
+        if (block.type === "text") {
+          fullResponse += block.text;
+          res.write(`data: ${JSON.stringify({ type: "text", content: block.text })}\n\n`);
+        } else if (block.type === "tool_use") {
+          toolUses.push({ id: block.id, name: block.name, input: block.input });
+          // Show the user what we're doing
+          const inp = block.input as Record<string, any>;
+          const action = block.name === "read_file" ? `Reading ${inp.path}...`
+            : block.name === "list_files" ? "Listing files..."
+            : block.name === "search_files" ? `Searching for "${inp.query}"...`
+            : block.name === "get_logs" ? "Checking logs..."
+            : block.name === "query_database" ? "Checking database..."
+            : `Using ${block.name}...`;
+          res.write(`data: ${JSON.stringify({ type: "status", content: action })}\n\n`);
+        }
+      }
+
+      // No tool calls — Claude is done
+      if (toolUses.length === 0) break;
+
+      // Execute tools and continue
+      messages.push({ role: "assistant", content: response.content });
+      const results: Anthropic.ToolResultBlockParam[] = [];
+
+      for (const tu of toolUses) {
+        const handler = handlers.get(tu.name);
+        if (!handler) {
+          results.push({ type: "tool_result", tool_use_id: tu.id, content: `Unknown tool: ${tu.name}`, is_error: true });
+          continue;
+        }
+        try {
+          const result = await handler(tu.input);
+          results.push({ type: "tool_result", tool_use_id: tu.id, content: result });
+        } catch (err) {
+          results.push({ type: "tool_result", tool_use_id: tu.id, content: `Error: ${err instanceof Error ? err.message : String(err)}`, is_error: true });
+        }
+      }
+
+      messages.push({ role: "user", content: results });
+    }
+
+    // Save the full text response
+    if (fullResponse) {
+      db.prepare("INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'assistant', ?)").run(project.id, fullResponse);
+    }
 
     res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
     res.end();
