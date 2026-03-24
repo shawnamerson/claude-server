@@ -104,7 +104,8 @@ app.get("/api/app-health/:slug", async (req, res) => {
   try {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 3000);
-    await fetch(`http://${config.dockerHostIp}:${dep.port}/`, { signal: controller.signal });
+    await fetch(`http://${config.dockerHostIp}:${dep.port}/`, { signal: controller.signal, redirect: "manual" });
+    // Any response (200, 302, 404) means the server is alive
     res.json({ ok: true });
   } catch {
     res.json({ ok: false });
