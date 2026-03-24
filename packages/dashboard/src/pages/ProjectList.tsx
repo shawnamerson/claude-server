@@ -87,8 +87,20 @@ function SkeletonCard() {
   );
 }
 
+const teamBadgeStyle = {
+  fontSize: "0.7rem",
+  fontWeight: 600,
+  padding: "0.15rem 0.5rem",
+  borderRadius: "9999px",
+  background: "#7c3aed22",
+  color: "#a78bfa",
+  marginLeft: "0.5rem",
+  whiteSpace: "nowrap" as const,
+};
+
 function ProjectCard({ project }: { project: Project }) {
   const [hovered, setHovered] = useState(false);
+  const teamName = (project as any).team_name;
   return (
     <Link
       to={`/project/${project.id}`}
@@ -96,7 +108,10 @@ function ProjectCard({ project }: { project: Project }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={styles.cardName}>{project.name}</div>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <div style={styles.cardName}>{project.name}</div>
+        {teamName && <span style={teamBadgeStyle}>{teamName}</span>}
+      </div>
       <div style={styles.cardDesc}>
         {project.description?.slice(0, 100) || "No description"}
       </div>

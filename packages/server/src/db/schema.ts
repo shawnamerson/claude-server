@@ -111,10 +111,36 @@ export function initializeDatabase(db: Database.Database): void {
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS teams (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      owner_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS team_members (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id     TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role        TEXT NOT NULL DEFAULT 'member',
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(team_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS team_invites (
+      id          TEXT PRIMARY KEY,
+      team_id     TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      email       TEXT NOT NULL,
+      invited_by  TEXT NOT NULL REFERENCES users(id),
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_deployments_project ON deployments(project_id);
     CREATE INDEX IF NOT EXISTS idx_logs_deployment ON logs(deployment_id);
     CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_messages(project_id);
     CREATE INDEX IF NOT EXISTS idx_env_vars_project ON env_vars(project_id);
+    CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
   `);
 
   // Migrations for existing databases
@@ -137,6 +163,11 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT");
     db.exec("ALTER TABLE users ADD COLUMN plan_expires_at TEXT");
   }
+  // Teams migration — add team_id to projects
+  if (!projCols.find(c => c.name === "team_id")) {
+    db.exec("ALTER TABLE projects ADD COLUMN team_id TEXT REFERENCES teams(id) ON DELETE SET NULL");
+  }
+
   if (!userCols.find(c => c.name === "email_verified")) {
     db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
     db.exec("ALTER TABLE users ADD COLUMN verification_code TEXT");

@@ -209,7 +209,7 @@ export function requireProjectOwner(req: Request, res: Response, next: NextFunct
   }
 
   const db = getDb();
-  const project = db.prepare("SELECT user_id FROM projects WHERE id = ?").get(projectId) as { user_id: string | null } | undefined;
+  const project = db.prepare("SELECT user_id, team_id FROM projects WHERE id = ?").get(projectId) as { user_id: string | null; team_id: string | null } | undefined;
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -217,12 +217,21 @@ export function requireProjectOwner(req: Request, res: Response, next: NextFunct
   }
 
   // Allow access if project has no owner (legacy) or user is the owner
-  if (project.user_id && project.user_id !== user.id) {
-    res.status(403).json({ error: "Access denied" });
+  if (!project.user_id || project.user_id === user.id) {
+    next();
     return;
   }
 
-  next();
+  // Allow access if the project belongs to a team the user is a member of
+  if (project.team_id) {
+    const membership = db.prepare("SELECT id FROM team_members WHERE team_id = ? AND user_id = ?").get(project.team_id, user.id);
+    if (membership) {
+      next();
+      return;
+    }
+  }
+
+  res.status(403).json({ error: "Access denied" });
 }
 
 // Middleware: require auth + verify user owns the deployment referenced by :id (via its project)
@@ -241,20 +250,30 @@ export function requireDeploymentOwner(req: Request, res: Response, next: NextFu
 
   const db = getDb();
   const dep = db.prepare(
-    "SELECT d.project_id, p.user_id FROM deployments d JOIN projects p ON p.id = d.project_id WHERE d.id = ?"
-  ).get(deploymentId) as { project_id: string; user_id: string | null } | undefined;
+    "SELECT d.project_id, p.user_id, p.team_id FROM deployments d JOIN projects p ON p.id = d.project_id WHERE d.id = ?"
+  ).get(deploymentId) as { project_id: string; user_id: string | null; team_id: string | null } | undefined;
 
   if (!dep) {
     res.status(404).json({ error: "Deployment not found" });
     return;
   }
 
-  if (dep.user_id && dep.user_id !== user.id) {
-    res.status(403).json({ error: "Access denied" });
+  // Allow if no owner (legacy) or user is the owner
+  if (!dep.user_id || dep.user_id === user.id) {
+    next();
     return;
   }
 
-  next();
+  // Allow if project belongs to a team the user is in
+  if (dep.team_id) {
+    const membership = db.prepare("SELECT id FROM team_members WHERE team_id = ? AND user_id = ?").get(dep.team_id, user.id);
+    if (membership) {
+      next();
+      return;
+    }
+  }
+
+  res.status(403).json({ error: "Access denied" });
 }
 
 // Plan limits

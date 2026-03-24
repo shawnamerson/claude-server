@@ -24,13 +24,16 @@ router.get("/", (req: Request, res: Response) => {
   const db = getDb();
   const user = req.user;
 
-  // If authenticated, show only user's projects. Otherwise show unowned projects.
-  const whereClause = user ? "WHERE p.user_id = ?" : "WHERE p.user_id IS NULL";
-  const params = user ? [user.id] : [];
+  // If authenticated, show user's personal projects + team projects. Otherwise show unowned projects.
+  const whereClause = user
+    ? "WHERE (p.user_id = ? OR p.team_id IN (SELECT team_id FROM team_members WHERE user_id = ?))"
+    : "WHERE p.user_id IS NULL";
+  const params = user ? [user.id, user.id] : [];
 
   const projects = db
     .prepare(
       `SELECT p.*,
+        t.name as team_name,
         COALESCE(
           (SELECT d.status FROM deployments d WHERE d.project_id = p.id AND d.status = 'running' LIMIT 1),
           (SELECT d.status FROM deployments d WHERE d.project_id = p.id ORDER BY d.created_at DESC LIMIT 1)
@@ -41,7 +44,9 @@ router.get("/", (req: Request, res: Response) => {
         ) as latest_port,
         (SELECT COUNT(*) FROM deployments d WHERE d.project_id = p.id) as deploy_count,
         (SELECT COUNT(*) FROM deployments d WHERE d.project_id = p.id AND d.created_at >= date('now', 'start of month')) as deploys_this_month
-       FROM projects p ${whereClause} ORDER BY p.updated_at DESC`
+       FROM projects p
+       LEFT JOIN teams t ON t.id = p.team_id
+       ${whereClause} ORDER BY p.updated_at DESC`
     )
     .all(...params);
   res.json(projects);
@@ -69,7 +74,7 @@ router.get("/:id", (req: Request, res: Response) => {
 
 // Create a new project (just name + description, no upload needed)
 router.post("/", (req: Request, res: Response) => {
-  const { name, description } = req.body;
+  const { name, description, teamId } = req.body;
   if (!name) {
     res.status(400).json({ error: "Name is required" });
     return;
@@ -99,9 +104,19 @@ router.post("/", (req: Request, res: Response) => {
   fs.mkdirSync(sourcePath, { recursive: true });
 
   const userId = req.user?.id || null;
+
+  // If teamId provided, verify user is a member of that team
+  if (teamId) {
+    const membership = db.prepare("SELECT id FROM team_members WHERE team_id = ? AND user_id = ?").get(teamId, userId);
+    if (!membership) {
+      res.status(403).json({ error: "You must be a member of the target team" });
+      return;
+    }
+  }
+
   db.prepare(
-    "INSERT INTO projects (id, user_id, name, slug, source_path, description) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(id, userId, name, slug, sourcePath, description || "");
+    "INSERT INTO projects (id, user_id, name, slug, source_path, description, team_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(id, userId, name, slug, sourcePath, description || "", teamId || null);
 
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
   res.status(201).json(project);

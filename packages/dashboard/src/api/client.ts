@@ -113,6 +113,35 @@ export interface QueryResult {
   error?: string;
 }
 
+export interface Team {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+  my_role?: string;
+  member_count?: number;
+}
+
+export interface TeamDetail extends Team {
+  members: TeamMember[];
+  invites: TeamInvite[];
+}
+
+export interface TeamMember {
+  user_id: string;
+  role: string;
+  created_at: string;
+  email: string;
+  name: string;
+}
+
+export interface TeamInvite {
+  id: string;
+  email: string;
+  created_at: string;
+  invited_by_email: string;
+}
+
 export interface DatabaseCreateResult {
   ok: boolean;
   dbName: string;
@@ -222,6 +251,23 @@ export const api = {
   getBillingPlans: () => request<Array<{ id: string; name: string; price: number; deploys: number; projects: number; features: string[] }>>("/billing/plans"),
   subscribe: (planId: string) => request<{ url: string }>("/billing/subscribe", { method: "POST", body: JSON.stringify({ planId }) }),
   cancelSubscription: () => request<{ ok: boolean }>("/billing/cancel", { method: "POST" }),
+
+  // Teams
+  listTeams: () => request<Team[]>("/teams"),
+  getTeam: (teamId: string) => request<TeamDetail>(`/teams/${teamId}`),
+  createTeam: (name: string) => request<Team>("/teams", { method: "POST", body: JSON.stringify({ name }) }),
+  inviteToTeam: (teamId: string, email: string) =>
+    request<{ ok: boolean; id: string }>(`/teams/${teamId}/invite`, { method: "POST", body: JSON.stringify({ email }) }),
+  joinTeam: (teamId: string) =>
+    request<{ ok: boolean }>(`/teams/${teamId}/join`, { method: "POST" }),
+  removeTeamMember: (teamId: string, userId: string) =>
+    request<{ ok: boolean }>(`/teams/${teamId}/members/${userId}`, { method: "DELETE" }),
+  changeTeamRole: (teamId: string, userId: string, role: string) =>
+    request<{ ok: boolean }>(`/teams/${teamId}/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  transferProject: (projectId: string, teamId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/transfer`, { method: "POST", body: JSON.stringify({ teamId }) }),
+  cancelTeamInvite: (teamId: string, inviteId: string) =>
+    request<{ ok: boolean }>(`/teams/${teamId}/invites/${inviteId}`, { method: "DELETE" }),
 
   // Domains
   getDomains: (projectId: string) => request<CustomDomain[]>(`/projects/${projectId}/domains`),
