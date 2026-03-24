@@ -249,6 +249,7 @@ export class DevContainer {
   private container: Dockerode.Container | null = null;
   private workDir: string;
   private sourcePath: string;
+  public memoryOverride: number | null = null;
 
   constructor(sourcePath: string) {
     this.sourcePath = sourcePath;
@@ -271,12 +272,12 @@ export class DevContainer {
     this.container = await docker.createContainer({
       Image: "claude-server/base:latest",
       name: containerName,
-      Cmd: ["sleep", "600"],
+      Cmd: ["sleep", "900"],
       WorkingDir: this.workDir,
       Env: ["NODE_PATH=/app/node_modules"],
       HostConfig: {
         Binds: [`claude-server_app-data:/data:rw`],
-        Memory: 256 * 1024 * 1024,
+        Memory: this.memoryOverride || 256 * 1024 * 1024,
         CpuQuota: 50000,
         CpuPeriod: 100000,
       },
@@ -287,11 +288,12 @@ export class DevContainer {
     await this.container.start();
   }
 
-  async exec(command: string, onLog: (msg: string) => void): Promise<string> {
+  async exec(command: string, onLog: (msg: string) => void, timeoutSecs?: number): Promise<string> {
     await this.ensureRunning();
 
     // Wrap command with timeout to ensure it exits
-    const wrappedCmd = `timeout 12 sh -c ${JSON.stringify(command)} 2>&1; echo "::EXIT_CODE::$?"`;
+    const tout = timeoutSecs || (this.memoryOverride ? 300 : 12); // 5 min for builds, 12s for quick commands
+    const wrappedCmd = `timeout ${tout} sh -c ${JSON.stringify(command)} 2>&1; echo "::EXIT_CODE::$?"`;
 
     const exec = await this.container!.exec({
       Cmd: ["sh", "-c", wrappedCmd],
@@ -304,10 +306,11 @@ export class DevContainer {
 
     let output = "";
     try {
+      const streamTimeout = (tout + 5) * 1000; // a bit longer than command timeout
       output = await Promise.race([
         streamToString(stream),
         new Promise<string>((resolve) =>
-          setTimeout(() => resolve("(command timed out)"), 15000)
+          setTimeout(() => resolve("(command timed out)"), streamTimeout)
         ),
       ]);
     } catch {

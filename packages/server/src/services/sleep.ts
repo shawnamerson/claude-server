@@ -96,10 +96,18 @@ export async function wakeContainer(slug: string): Promise<{ port: number } | nu
 
   try {
     const wakeConfig = detectProjectConfig(dep.source_path);
+
+    // Run build if needed (e.g. Next.js — .next might not exist after sleep)
+    if (wakeConfig.buildCommand && wakeConfig.needsMoreMemory) {
+      const { DevContainer } = await import("../services/generator.js");
+      const bc = new DevContainer(dep.source_path);
+      bc.memoryOverride = 1536 * 1024 * 1024;
+      try { await bc.exec(wakeConfig.buildCommand, () => {}); } finally { await bc.cleanup(); }
+    }
+
     const envVars = getEnvVarsForDeploy(dep.project_id);
     const { containerId, hostPort } = await deployFromVolume(
-      dep.source_path, dep.id, wakeConfig.appPort, wakeConfig.startCommand, envVars, dep.slug,
-      wakeConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
+      dep.source_path, dep.id, wakeConfig.appPort, wakeConfig.startCommand, envVars, dep.slug
     );
 
     db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")

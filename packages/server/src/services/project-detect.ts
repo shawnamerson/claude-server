@@ -2,17 +2,18 @@ import fs from "fs";
 import path from "path";
 
 export interface ProjectConfig {
-  /** Full command to install deps, build, and start */
+  /** Command to install deps and build (runs in dev container before deploy) */
+  buildCommand: string | null;
+  /** Command to start the app (runs in production container) */
   startCommand: string;
   /** The port the app listens on */
   appPort: number;
-  /** Whether this project needs more memory (e.g. Next.js builds) */
+  /** Whether this project needs more memory for building */
   needsMoreMemory?: boolean;
 }
 
 /**
  * Analyze a project directory and determine the right build + start commands.
- * Handles: simple server.js, package.json scripts, monorepos with client builds, ESM, etc.
  */
 export function detectProjectConfig(sourcePath: string): ProjectConfig {
   const pkgPath = path.join(sourcePath, "package.json");
@@ -24,15 +25,12 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
   if (fs.existsSync(pkgPath)) {
     try {
       pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    } catch {
-      // Invalid package.json — fall back to defaults
-    }
+    } catch {}
   }
 
   const scripts = pkg.scripts || {};
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
 
-  // Detect the port from common patterns
   let appPort = 3000;
   if (scripts.start && scripts.start.includes("5000")) appPort = 5000;
   if (scripts.start && scripts.start.includes("8080")) appPort = 8080;
@@ -48,26 +46,17 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     const clientScripts = clientPkg.scripts || {};
     const hasBuild = !!clientScripts.build;
 
-    // Install root deps + client deps + build client + start server
-    const parts = [installCmd];
-    parts.push("cd client && npm install --prefer-offline --no-audit --no-fund 2>/dev/null");
-    if (hasBuild) parts.push("npm run build 2>/dev/null; cd ..");
-    else parts.push("cd ..");
+    const buildParts = [installCmd, "cd client && npm install --prefer-offline --no-audit --no-fund 2>/dev/null"];
+    if (hasBuild) buildParts.push("npm run build; cd ..");
+    else buildParts.push("cd ..");
 
-    // Determine server start
-    if (hasServerDir) {
-      parts.push("node server/index.js");
-    } else if (scripts.server) {
-      parts.push(`npm run server`);
-    } else if (scripts.start) {
-      parts.push("npm start");
-    } else if (hasServerJs) {
-      parts.push("node server.js");
-    } else {
-      parts.push("npm start");
-    }
+    let startCmd = "npm start";
+    if (hasServerDir) startCmd = "node server/index.js";
+    else if (scripts.server) startCmd = "npm run server";
+    else if (scripts.start) startCmd = "npm start";
+    else if (hasServerJs) startCmd = "node server.js";
 
-    return { startCommand: parts.join(" && "), appPort };
+    return { buildCommand: buildParts.join(" && "), startCommand: startCmd, appPort };
   }
 
   // --- Next.js ---
@@ -77,7 +66,8 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
     const buildCmd = scripts.build ? "npm run build" : "npx next build";
     const startCmd = scripts.start || "npx next start";
     return {
-      startCommand: `${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1024 ${buildCmd} && ${startCmd}`,
+      buildCommand: `${installCmd}${prismaCmd} && NODE_OPTIONS=--max-old-space-size=1024 ${buildCmd}`,
+      startCommand: startCmd,
       appPort: 3000,
       needsMoreMemory: true,
     };
@@ -85,49 +75,47 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
 
   // --- Vite / React SPA (no server) ---
   if (deps["vite"] && !hasServerJs && !hasServerDir && !scripts.start?.includes("node")) {
-    const buildCmd = scripts.build ? "npm run build 2>/dev/null" : "npx vite build 2>/dev/null";
-    // Serve with a simple static server
+    const buildCmd = scripts.build ? "npm run build" : "npx vite build";
     return {
-      startCommand: `${installCmd} && ${buildCmd} && npx serve dist -l 3000 -s`,
+      buildCommand: `${installCmd} && ${buildCmd}`,
+      startCommand: "npx serve dist -l 3000 -s",
       appPort: 3000,
     };
   }
 
-  // --- Has package.json with start script ---
+  // --- Has package.json with build + start scripts ---
+  if (scripts.start && scripts.build) {
+    return {
+      buildCommand: `${installCmd} && npm run build`,
+      startCommand: "npm start",
+      appPort,
+    };
+  }
+
+  // --- Has package.json with start script only ---
   if (scripts.start) {
-    const parts = [installCmd];
-    if (scripts.build) parts.push("npm run build 2>/dev/null");
-    parts.push("npm start");
-    return { startCommand: parts.join(" && "), appPort };
+    return {
+      buildCommand: installCmd,
+      startCommand: "npm start",
+      appPort,
+    };
   }
 
   // --- Simple server.js ---
   if (hasServerJs) {
-    return {
-      startCommand: `${installCmd}; node server.js`,
-      appPort: 3000,
-    };
+    return { buildCommand: installCmd, startCommand: "node server.js", appPort: 3000 };
   }
 
   // --- server/index.js ---
   if (hasServerDir) {
-    return {
-      startCommand: `${installCmd}; node server/index.js`,
-      appPort: 3000,
-    };
+    return { buildCommand: installCmd, startCommand: "node server/index.js", appPort: 3000 };
   }
 
   // --- Has index.js ---
   if (fs.existsSync(path.join(sourcePath, "index.js"))) {
-    return {
-      startCommand: `${installCmd}; node index.js`,
-      appPort: 3000,
-    };
+    return { buildCommand: installCmd, startCommand: "node index.js", appPort: 3000 };
   }
 
-  // --- Fallback: try npm start ---
-  return {
-    startCommand: `${installCmd} && npm start`,
-    appPort: 3000,
-  };
+  // --- Fallback ---
+  return { buildCommand: installCmd, startCommand: "npm start", appPort: 3000 };
 }

@@ -205,17 +205,38 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
       db.prepare("UPDATE deployments SET status = 'stopped', stopped_at = datetime('now') WHERE id = ?").run(prevDeployment.id);
     }
 
-    // Deploy directly from volume — no Docker build needed
-    updateStatus(deploymentId, "deploying");
-    addLog(deploymentId, "system", "Starting app...");
-
+    // Detect project config
     const projectConfig = detectProjectConfig(project.source_path);
-    addLog(deploymentId, "system", `Detected start: ${projectConfig.startCommand.slice(0, 100)}`);
+
+    // Build step: run install + build in a dev container before deploying
+    if (projectConfig.buildCommand) {
+      updateStatus(deploymentId, "building");
+      addLog(deploymentId, "system", `Building: ${projectConfig.buildCommand.slice(0, 120)}`);
+
+      const { DevContainer } = await import("../services/generator.js");
+      const buildContainer = new DevContainer(project.source_path);
+      if (projectConfig.needsMoreMemory) {
+        // Override dev container memory for heavy builds
+        (buildContainer as any).memoryOverride = 1536 * 1024 * 1024;
+      }
+      try {
+        const buildOutput = await buildContainer.exec(projectConfig.buildCommand, (msg) => addLog(deploymentId, "system", msg));
+        if (buildOutput.includes("ERR!") || buildOutput.includes("FATAL") || buildOutput.includes("error TS")) {
+          addLog(deploymentId, "system", `Build output: ${buildOutput.slice(-500)}`);
+        }
+      } finally {
+        await buildContainer.cleanup();
+      }
+      addLog(deploymentId, "system", "Build complete");
+    }
+
+    // Deploy: start the production container with just the start command
+    updateStatus(deploymentId, "deploying");
+    addLog(deploymentId, "system", `Starting: ${projectConfig.startCommand}`);
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug,
-      projectConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
+      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug
     );
 
     db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run("claude-server/base:latest", deploymentId);
@@ -319,15 +340,28 @@ async function autoFixAndRedeploy(
       if (oldDep.port) releasePort(oldDep.port);
     }
 
-    // Redeploy from volume — no build needed
+    // Rebuild if needed, then redeploy
+    const fixConfig = detectProjectConfig(project.source_path);
+
+    if (fixConfig.buildCommand) {
+      updateStatus(deploymentId, "building");
+      addLog(deploymentId, "system", "Rebuilding...");
+      const { DevContainer } = await import("../services/generator.js");
+      const buildContainer = new DevContainer(project.source_path);
+      if (fixConfig.needsMoreMemory) (buildContainer as any).memoryOverride = 1536 * 1024 * 1024;
+      try {
+        await buildContainer.exec(fixConfig.buildCommand, (msg) => addLog(deploymentId, "system", msg));
+      } finally {
+        await buildContainer.cleanup();
+      }
+    }
+
     updateStatus(deploymentId, "deploying");
     addLog(deploymentId, "system", "Starting fixed app...");
-    const fixConfig = detectProjectConfig(project.source_path);
 
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId: newId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug,
-      fixConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
+      project.source_path, deploymentId, fixConfig.appPort, fixConfig.startCommand, envVars, project.slug
     );
 
     updateStatus(deploymentId, "running", { container_id: newId, port: hostPort, docker_image_id: "claude-server/base:latest" });
@@ -501,10 +535,18 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
 
   try {
     const restartConfig = detectProjectConfig(project.source_path);
+
+    // Run build if needed (e.g. Next.js)
+    if (restartConfig.buildCommand && restartConfig.needsMoreMemory) {
+      const { DevContainer } = await import("../services/generator.js");
+      const bc = new DevContainer(project.source_path);
+      bc.memoryOverride = 1536 * 1024 * 1024;
+      try { await bc.exec(restartConfig.buildCommand, () => {}); } finally { await bc.cleanup(); }
+    }
+
     const envVars = getEnvVarsForDeploy(project.id);
     const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deployment.id, restartConfig.appPort, restartConfig.startCommand, envVars, project.slug,
-      restartConfig.needsMoreMemory ? { memoryMb: 1536 } : undefined
+      project.source_path, deployment.id, restartConfig.appPort, restartConfig.startCommand, envVars, project.slug
     );
 
     db.prepare("UPDATE deployments SET status = 'running', container_id = ?, port = ?, stopped_at = NULL WHERE id = ?")
