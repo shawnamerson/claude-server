@@ -174,4 +174,10 @@ export function initializeDatabase(db: Database.Database): void {
     // Mark existing users as verified
     db.exec("UPDATE users SET email_verified = 1 WHERE email_verified = 0");
   }
+
+  // GitHub token migration — support private repos
+  const ghCols = db.prepare("PRAGMA table_info(github_repos)").all() as Array<{ name: string }>;
+  if (!ghCols.find(c => c.name === "github_token")) {
+    db.exec("ALTER TABLE github_repos ADD COLUMN github_token TEXT");
+  }
 }

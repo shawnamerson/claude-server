@@ -221,10 +221,10 @@ export const api = {
 
   // GitHub
   getGitHub: (projectId: string) => request<GitHubConnection | null>(`/projects/${projectId}/github`),
-  connectGitHub: (projectId: string, repoUrl: string, branch?: string) =>
+  connectGitHub: (projectId: string, repoUrl: string, branch?: string, githubToken?: string) =>
     request<{ ok: boolean; webhookSecret: string; webhookUrl: string }>(`/projects/${projectId}/github`, {
       method: "POST",
-      body: JSON.stringify({ repoUrl, branch }),
+      body: JSON.stringify({ repoUrl, branch, githubToken }),
     }),
   disconnectGitHub: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/github`, { method: "DELETE" }),

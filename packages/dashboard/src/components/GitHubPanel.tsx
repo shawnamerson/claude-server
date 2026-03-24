@@ -78,6 +78,7 @@ export default function GitHubPanel({ projectId, onDeploy }: { projectId: string
   const [connection, setConnection] = useState<GitHubConnection | null>(null);
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("main");
+  const [githubToken, setGithubToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
 
@@ -89,7 +90,7 @@ export default function GitHubPanel({ projectId, onDeploy }: { projectId: string
     if (!repoUrl.trim()) return;
     setLoading(true);
     try {
-      const result = await api.connectGitHub(projectId, repoUrl, branch);
+      const result = await api.connectGitHub(projectId, repoUrl, branch, githubToken || undefined);
       setWebhookSecret(result.webhookSecret);
       setConnection({ repoUrl, branch, webhookUrl: result.webhookUrl });
       setRepoUrl("");
@@ -156,12 +157,24 @@ export default function GitHubPanel({ projectId, onDeploy }: { projectId: string
           onChange={(e) => setBranch(e.target.value)}
           placeholder="main"
         />
+      </div>
+      <div style={styles.label}>Personal Access Token <span style={{ color: "#555" }}>(optional — for private repos)</span></div>
+      <div style={styles.row}>
+        <input
+          style={styles.input}
+          type="password"
+          value={githubToken}
+          onChange={(e) => setGithubToken(e.target.value)}
+          placeholder="ghp_xxxxxxxxxxxx"
+        />
+      </div>
+      <div style={styles.row}>
         <button style={styles.btn} onClick={connect} disabled={loading}>
           {loading ? "Connecting..." : "Connect & Clone"}
         </button>
       </div>
       <div style={styles.hint}>
-        This will clone the repo and set up auto-deploy on push.
+        This will clone the repo and set up auto-deploy on push. For private repos, create a <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style={{ color: "#7c3aed" }}>Personal Access Token</a> with repo scope.
       </div>
     </div>
   );

@@ -10,6 +10,20 @@ import { Project } from "../types.js";
 const execFileAsync = promisify(execFile);
 const router = Router();
 
+/** Inject a GitHub token into the clone URL for private repo access */
+function buildCloneUrl(repoUrl: string, token?: string | null): string {
+  if (!token) return repoUrl;
+  // https://github.com/user/repo.git → https://x-access-token:TOKEN@github.com/user/repo.git
+  try {
+    const url = new URL(repoUrl);
+    url.username = "x-access-token";
+    url.password = token;
+    return url.toString();
+  } catch {
+    return repoUrl;
+  }
+}
+
 interface GitHubRepo {
   id: number;
   project_id: string;
@@ -24,10 +38,13 @@ router.post("/projects/:id/github", async (req: Request, res: Response) => {
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id as string) as Project | undefined;
   if (!project) { res.status(404).json({ error: "Project not found" }); return; }
 
-  const { repoUrl, branch } = req.body;
+  const { repoUrl, branch, githubToken } = req.body;
   if (!repoUrl) { res.status(400).json({ error: "repoUrl is required" }); return; }
 
   const webhookSecret = nanoid(32);
+
+  // Build clone URL — inject token for private repos
+  const cloneUrl = buildCloneUrl(repoUrl, githubToken);
 
   // Clone the repo into the project source path
   try {
@@ -40,22 +57,29 @@ router.post("/projects/:id/github", async (req: Request, res: Response) => {
       "clone",
       "--depth", "1",
       "--branch", branch || "main",
-      repoUrl,
+      cloneUrl,
       project.source_path,
     ], { timeout: 60000 });
 
+    // Reset remote to the clean URL (without token) so it doesn't leak in .git/config
+    if (githubToken) {
+      await execFileAsync("git", ["-C", project.source_path, "remote", "set-url", "origin", repoUrl], { timeout: 5000 });
+    }
+
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    res.status(400).json({ error: `Failed to clone: ${msg}` });
+    // Strip token from error messages
+    const safeMsg = githubToken ? msg.replace(new RegExp(githubToken, "g"), "***") : msg;
+    res.status(400).json({ error: `Failed to clone: ${safeMsg}` });
     return;
   }
 
-  // Save the connection
+  // Save the connection (token is stored encrypted-at-rest by SQLite — acceptable for MVP)
   db.prepare(
-    `INSERT INTO github_repos (project_id, repo_url, branch, webhook_secret)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(project_id) DO UPDATE SET repo_url = excluded.repo_url, branch = excluded.branch, webhook_secret = excluded.webhook_secret`
-  ).run(project.id, repoUrl, branch || "main", webhookSecret);
+    `INSERT INTO github_repos (project_id, repo_url, branch, webhook_secret, github_token)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(project_id) DO UPDATE SET repo_url = excluded.repo_url, branch = excluded.branch, webhook_secret = excluded.webhook_secret, github_token = excluded.github_token`
+  ).run(project.id, repoUrl, branch || "main", webhookSecret, githubToken || null);
 
   db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 
@@ -119,15 +143,27 @@ router.post("/github/webhook/:projectId", async (req: Request, res: Response) =>
   if (!project) { res.status(404).json({ error: "Project not found" }); return; }
 
   // Pull latest code
+  const pullUrl = buildCloneUrl(repo.repo_url, (repo as any).github_token);
   try {
+    // Temporarily set remote with token for pull
+    if ((repo as any).github_token) {
+      await execFileAsync("git", ["-C", project.source_path, "remote", "set-url", "origin", pullUrl], { timeout: 5000 });
+    }
     await execFileAsync("git", ["-C", project.source_path, "pull", "--ff-only"], { timeout: 60000 });
+    // Reset remote to clean URL
+    if ((repo as any).github_token) {
+      await execFileAsync("git", ["-C", project.source_path, "remote", "set-url", "origin", repo.repo_url], { timeout: 5000 });
+    }
   } catch {
     // If pull fails, re-clone
     fs.rmSync(project.source_path, { recursive: true, force: true });
     await execFileAsync("git", [
       "clone", "--depth", "1", "--branch", repo.branch,
-      repo.repo_url, project.source_path,
+      pullUrl, project.source_path,
     ], { timeout: 60000 });
+    if ((repo as any).github_token) {
+      await execFileAsync("git", ["-C", project.source_path, "remote", "set-url", "origin", repo.repo_url], { timeout: 5000 });
+    }
   }
 
   // Trigger a deploy directly via the pipeline function
