@@ -15,6 +15,7 @@ import Privacy from "./pages/Privacy";
 import Admin from "./pages/Admin";
 import TeamSettings from "./pages/TeamSettings";
 import TeamList from "./pages/TeamList";
+import Settings from "./pages/Settings";
 import { useAuth } from "./hooks/useAuth";
 
 const styles = {
@@ -158,6 +159,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
         <Link to="/new" style={styles.navLink}>New Project</Link>
         <Link to="/billing" style={styles.navLink}>Billing</Link>
         <Link to="/teams" style={styles.navLink}>Teams</Link>
+        <Link to="/settings" style={styles.navLink}>Settings</Link>
         {isAdmin && <Link to="/admin" style={{ ...styles.navLink, color: "#f59e0b" }}>Admin</Link>}
         <div style={styles.navRight}>
           {user && (
@@ -249,6 +251,7 @@ export default function App() {
         <Route path="/project/:id" element={<ProjectDetail />} />
         <Route path="/billing" element={<Billing />} />
         <Route path="/teams" element={<TeamList />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/team/:teamId" element={<TeamSettings />} />
         <Route path="/admin" element={isAdmin ? <Admin /> : <ProjectList />} />
         <Route path="*" element={<ProjectList />} />
