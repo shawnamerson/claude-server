@@ -105,12 +105,11 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
     dbContext = "(No database)";
   }
 
-  // Get env vars
-  const envVars = db
-    .prepare("SELECT key, value FROM env_vars WHERE project_id = ?")
-    .all(project.id) as Array<{ key: string; value: string }>;
-  const envContext = envVars.length > 0
-    ? envVars.map((v) => `${v.key}=${v.value}`).join("\n")
+  // Get env vars — show the full set including auto-injected ones
+  const { getEnvVarsForDeploy } = await import("./envvars.js");
+  const allEnvVars = getEnvVarsForDeploy(project.id, project.slug);
+  const envContext = allEnvVars.length > 0
+    ? allEnvVars.map(e => { const [k, ...v] = e.split("="); return `${k}=${k.includes("SECRET") || k.includes("PASSWORD") || k.includes("TOKEN") ? "***" : v.join("=")}`; }).join("\n")
     : "(No environment variables set)";
 
   // Get GitHub connection
