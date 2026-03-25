@@ -77,10 +77,13 @@ app.use(seoRoutes);
 // Auth middleware — attaches user to request if token present
 app.use(authMiddleware);
 
-// Event tracking — after auth so we get user_id
+// Event tracking — after auth so we get user_id, excludes admins
 app.post("/api/analytics/event", (req, res) => {
   const { event, meta } = req.body;
   if (!event) { res.json({ ok: true }); return; }
+  // Skip admin users
+  const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+  if (req.user?.email && adminEmails.includes(req.user.email.toLowerCase())) { res.json({ ok: true }); return; }
   const db = getDb();
   const userId = req.user?.id || null;
   db.prepare("INSERT INTO user_events (user_id, event, meta) VALUES (?, ?, ?)").run(userId, event.slice(0, 100), meta ? JSON.stringify(meta).slice(0, 500) : null);
