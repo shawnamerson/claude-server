@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 function HeroDemo() {
   const [lines, setLines] = useState<Array<{ text: string; style: Record<string, string> }>>([]);
@@ -157,7 +157,38 @@ const responsiveCSS = `
   }
 `;
 
+function getVisitorId(): string {
+  let id = localStorage.getItem("vs_vid");
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem("vs_vid", id); }
+  return id;
+}
+
+function trackLanding(event: string, meta?: string) {
+  if (localStorage.getItem("vs_notrack")) return;
+  fetch("/api/analytics/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: `/landing:${event}`, referrer: meta || "", visitorId: getVisitorId() }),
+  }).catch(() => {});
+}
+
 export default function Landing() {
+  // Track scroll depth
+  useEffect(() => {
+    const sections = ["features", "how", "pricing"];
+    const seen = new Set<string>();
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting && !seen.has(e.target.id)) {
+          seen.add(e.target.id);
+          trackLanding(`scrolled_to_${e.target.id}`);
+        }
+      });
+    }, { threshold: 0.3 });
+    sections.forEach(id => { const el = document.getElementById(id); if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="jv-landing" style={s.page}>
       <style>{responsiveCSS}</style>
@@ -165,11 +196,11 @@ export default function Landing() {
       <nav style={s.nav}>
         <div style={s.logo}>VibeStack</div>
         <div className="jv-nav-links">
-          <a href="#features" style={s.navLink}>Features</a>
-          <a href="#how" style={s.navLink}>How it works</a>
-          <a href="#pricing" style={s.navLink}>Pricing</a>
-          <Link to="/login" style={s.navLink}>Log in</Link>
-          <Link to="/signup" style={s.ctaSmall}>Get started</Link>
+          <a href="#features" style={s.navLink} onClick={() => trackLanding("nav_features")}>Features</a>
+          <a href="#how" style={s.navLink} onClick={() => trackLanding("nav_how")}>How it works</a>
+          <a href="#pricing" style={s.navLink} onClick={() => trackLanding("nav_pricing")}>Pricing</a>
+          <Link to="/login" style={s.navLink} onClick={() => trackLanding("nav_login")}>Log in</Link>
+          <Link to="/signup" style={s.ctaSmall} onClick={() => trackLanding("nav_get_started")}>Get started</Link>
         </div>
       </nav>
 
@@ -198,6 +229,7 @@ export default function Landing() {
             onClick={() => {
               const input = document.getElementById("hero-prompt") as HTMLInputElement;
               const val = input?.value.trim();
+              trackLanding("hero_build_it", val || "(empty)");
               if (val) window.location.href = `/signup?prompt=${encodeURIComponent(val)}`;
               else window.location.href = "/signup";
             }}
@@ -287,7 +319,7 @@ export default function Landing() {
               <div>PostgreSQL database</div>
               <div>Custom subdomain</div>
             </div>
-            <Link to="/signup" style={s.planBtn}>Get started</Link>
+            <Link to="/signup" style={s.planBtn} onClick={() => trackLanding("pricing_free")}>Get started</Link>
           </div>
           <div style={{ ...s.priceCard, borderColor: "#7c3aed", position: "relative" }}>
             <div style={s.popular}>Most popular</div>
@@ -302,7 +334,7 @@ export default function Landing() {
               <div>Custom domains</div>
               <div>Cron jobs</div>
             </div>
-            <Link to="/signup" style={{ ...s.planBtn, background: "#7c3aed" }}>Start Pro</Link>
+            <Link to="/signup" style={{ ...s.planBtn, background: "#7c3aed" }} onClick={() => trackLanding("pricing_pro")}>Start Pro</Link>
           </div>
           <div style={s.priceCard}>
             <div style={s.planName}>Growth</div>
@@ -315,7 +347,7 @@ export default function Landing() {
               <div>Everything in Pro</div>
               <div>Priority support</div>
             </div>
-            <Link to="/signup" style={s.planBtn}>Start Growth</Link>
+            <Link to="/signup" style={s.planBtn} onClick={() => trackLanding("pricing_growth")}>Start Growth</Link>
           </div>
           <div style={s.priceCard}>
             <div style={s.planName}>Team</div>
@@ -328,7 +360,7 @@ export default function Landing() {
               <div>Team collaboration</div>
               <div>Everything in Growth</div>
             </div>
-            <Link to="/signup" style={s.planBtn}>Start Team</Link>
+            <Link to="/signup" style={s.planBtn} onClick={() => trackLanding("pricing_team")}>Start Team</Link>
           </div>
         </div>
       </div>
@@ -337,7 +369,7 @@ export default function Landing() {
       <div style={s.finalCta}>
         <h2 style={s.finalTitle}>Stop configuring. Start shipping.</h2>
         <p style={s.finalSub}>5 free deploys every month. No credit card required.</p>
-        <Link to="/signup" style={s.cta}>Start building free</Link>
+        <Link to="/signup" style={s.cta} onClick={() => trackLanding("final_cta")}>Start building free</Link>
       </div>
 
       <div style={s.footer}>
