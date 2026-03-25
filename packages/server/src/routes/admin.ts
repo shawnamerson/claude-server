@@ -242,6 +242,15 @@ router.get("/users", async (_req: Request, res: Response) => {
       running_containers: number;
     }>;
 
+    // Add estimated chat costs (avg ~7.7 cents per chat from api_usage)
+    const avgChatCost = db.prepare("SELECT COALESCE(AVG(cost_cents), 8) as avg FROM api_usage WHERE source = 'chat'").get() as { avg: number };
+    const chatCostPer = avgChatCost.avg;
+    for (const u of users) {
+      const chatCost = Math.round(u.chats_this_month * chatCostPer);
+      u.api_cost_cents_month += chatCost;
+      u.api_cost_cents_total += chatCost; // approximate — total chats not tracked historically
+    }
+
     // Calculate server cost share weighted by actual memory usage
     const SERVER_COST_CENTS = 999;
     const memoryByUser = new Map<string, number>();
