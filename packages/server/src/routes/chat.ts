@@ -5,7 +5,7 @@ import { readProjectFiles } from "../services/generator.js";
 import { getRecentLogs } from "../services/logger.js";
 import { queryProjectDatabase } from "../services/database.js";
 import { Project, Deployment, ChatMessage } from "../types.js";
-import { canChat } from "./auth.js";
+import { canChat, incrementUsage } from "./auth.js";
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
@@ -152,6 +152,7 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
   }
 
   db.prepare("INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'user', ?)").run(project.id, message);
+  if (user) incrementUsage(user.id, "chats");
 
   // Lightweight context — just overview, Claude uses tools to dig deeper
   const fileList = Object.keys(readProjectFiles(project.source_path));

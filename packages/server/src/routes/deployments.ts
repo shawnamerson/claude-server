@@ -8,7 +8,7 @@ import { deployContainer, deployFromVolume, stopContainer, releasePort, logEmitt
 import { getEnvVarsForDeploy } from "./envvars.js";
 import { config } from "../config.js";
 import { reloadCaddyConfig } from "../services/caddy.js";
-import { canDeploy } from "./auth.js";
+import { canDeploy, incrementUsage } from "./auth.js";
 import { setCurrentDeployment, getDeployUsage } from "../services/claude.js";
 import { createDatabase, getDatabaseInfo } from "../services/database.js";
 import { detectProjectConfig } from "../services/project-detect.js";
@@ -79,6 +79,9 @@ router.post("/projects/:projectId/deploy", async (req: Request, res: Response) =
       return;
     }
   }
+
+  // Track usage (survives project deletion)
+  if (user) incrementUsage(user.id, "deploys");
 
   const deploymentId = nanoid(12);
 

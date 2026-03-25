@@ -393,6 +393,30 @@ export function getPlanLimits(plan: string) {
   return PLAN_LIMITS[plan] || PLAN_LIMITS.free;
 }
 
+// Get current month key (YYYY-MM)
+function currentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Get usage for a user this month
+function getMonthlyUsage(userId: string): { deploys: number; chats: number } {
+  const db = getDb();
+  const month = currentMonth();
+  const row = db.prepare("SELECT deploys, chats FROM monthly_usage WHERE user_id = ? AND month = ?").get(userId, month) as { deploys: number; chats: number } | undefined;
+  return row || { deploys: 0, chats: 0 };
+}
+
+// Increment deploy or chat count for a user
+export function incrementUsage(userId: string, type: "deploys" | "chats"): void {
+  const db = getDb();
+  const month = currentMonth();
+  db.prepare(
+    `INSERT INTO monthly_usage (user_id, month, ${type}) VALUES (?, ?, 1)
+     ON CONFLICT(user_id, month) DO UPDATE SET ${type} = ${type} + 1`
+  ).run(userId, month);
+}
+
 // Check if user can deploy (plan-based + email verification)
 export function canDeploy(userId: string): { allowed: boolean; reason?: string } {
   const db = getDb();
@@ -401,16 +425,9 @@ export function canDeploy(userId: string): { allowed: boolean; reason?: string }
   if (!user.email_verified) return { allowed: false, reason: "Please verify your email before deploying" };
 
   const limits = getPlanLimits(user.plan);
+  const usage = getMonthlyUsage(userId);
 
-  // Count deploys this month
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-  const deploysThisMonth = db.prepare(
-    "SELECT COUNT(*) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id WHERE p.user_id = ? AND d.created_at >= ?"
-  ).get(userId, monthStart.toISOString()) as { cnt: number };
-
-  if (limits.deploys >= 0 && deploysThisMonth.cnt >= limits.deploys) {
+  if (limits.deploys >= 0 && usage.deploys >= limits.deploys) {
     return { allowed: false, reason: `Monthly deploy limit reached (${limits.deploys}). Upgrade your plan for more.` };
   }
 
@@ -445,15 +462,9 @@ export function canChat(userId: string): { allowed: boolean; reason?: string } {
   if (!user) return { allowed: false, reason: "User not found" };
 
   const limits = getPlanLimits(user.plan);
+  const usage = getMonthlyUsage(userId);
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-  const chatsThisMonth = db.prepare(
-    "SELECT COUNT(*) as cnt FROM chat_messages cm JOIN projects p ON p.id = cm.project_id WHERE p.user_id = ? AND cm.role = 'user' AND cm.created_at >= ?"
-  ).get(userId, monthStart.toISOString()) as { cnt: number };
-
-  if (limits.chats >= 0 && chatsThisMonth.cnt >= limits.chats) {
+  if (limits.chats >= 0 && usage.chats >= limits.chats) {
     return { allowed: false, reason: `Monthly chat limit reached (${limits.chats.toLocaleString()}). Upgrade your plan for more.` };
   }
 

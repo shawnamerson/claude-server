@@ -31,30 +31,22 @@ router.get("/billing/status", requireAuth, (req: Request, res: Response) => {
 
   const userData = db.prepare("SELECT plan, stripe_subscription_id, plan_expires_at, credits FROM users WHERE id = ?").get(user.id) as { plan: string; stripe_subscription_id: string | null; plan_expires_at: string | null; credits: number } | undefined;
 
-  // Count deploys this month
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-  const deploysThisMonth = db.prepare(
-    "SELECT COUNT(*) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id WHERE p.user_id = ? AND d.created_at >= ?"
-  ).get(user.id, monthStart.toISOString()) as { cnt: number };
-
   const projectCount = db.prepare("SELECT COUNT(*) as cnt FROM projects WHERE user_id = ?").get(user.id) as { cnt: number };
 
-  const chatsThisMonth = db.prepare(
-    "SELECT COUNT(*) as cnt FROM chat_messages cm JOIN projects p ON p.id = cm.project_id WHERE p.user_id = ? AND cm.role = 'user' AND cm.created_at >= ?"
-  ).get(user.id, monthStart.toISOString()) as { cnt: number };
+  // Use monthly_usage table (survives project deletion)
+  const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const usage = db.prepare("SELECT deploys, chats FROM monthly_usage WHERE user_id = ? AND month = ?").get(user.id, month) as { deploys: number; chats: number } | undefined;
 
   const plan = userData?.plan || "free";
   const limits = getPlanLimits(plan);
 
   res.json({
     plan,
-    deploysThisMonth: deploysThisMonth.cnt,
+    deploysThisMonth: usage?.deploys || 0,
     deployLimit: limits.deploys,
     projectCount: projectCount.cnt,
     projectLimit: limits.projects,
-    chatsThisMonth: chatsThisMonth.cnt,
+    chatsThisMonth: usage?.chats || 0,
     chatLimit: limits.chats,
     hasSubscription: !!userData?.stripe_subscription_id,
   });

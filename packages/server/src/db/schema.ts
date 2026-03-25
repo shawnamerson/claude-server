@@ -249,6 +249,18 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec("ALTER TABLE users ADD COLUMN reset_code_expires TEXT");
   }
 
+  // Monthly usage tracking (survives project deletion)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS monthly_usage (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      month       TEXT NOT NULL,
+      deploys     INTEGER NOT NULL DEFAULT 0,
+      chats       INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(user_id, month)
+    );
+  `);
+
   // Static site deploy migration
   const depCols2 = db.prepare("PRAGMA table_info(deployments)").all() as Array<{ name: string }>;
   if (!depCols2.find(c => c.name === "deploy_type")) {
