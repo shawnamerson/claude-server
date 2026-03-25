@@ -60,6 +60,27 @@ app.use("/api/projects/*/cron/*/trigger", cronTriggerLimiter);
 app.use("/api/github/webhook", webhookLimiter);
 app.use("/api", apiLimiter);
 
+// Bot detection — block IPs that probe attack paths
+const blockedIPs = new Set<string>();
+const suspiciousHits = new Map<string, number>();
+const ATTACK_PATHS = /^\/(\.env|\.git|wp-admin|wp-login|phpinfo|phpmyadmin|admin\.php|xmlrpc|cgi-bin|actuator|\.aws|\.ssh|config\.json|credentials|debug|telescope|_profiler|elmah)/i;
+
+app.use((req, res, next) => {
+  const ip = req.ip || req.socket.remoteAddress || "";
+  if (blockedIPs.has(ip)) { res.status(403).end(); return; }
+  if (ATTACK_PATHS.test(req.path)) {
+    const hits = (suspiciousHits.get(ip) || 0) + 1;
+    suspiciousHits.set(ip, hits);
+    if (hits >= 3) {
+      blockedIPs.add(ip);
+      console.log(`Blocked bot IP: ${ip} (${hits} attack path hits)`);
+    }
+    res.status(404).end();
+    return;
+  }
+  next();
+});
+
 // Analytics tracking — before auth, lightweight
 app.post("/api/analytics/track", (req, res) => {
   const { path: pagePath, referrer, visitorId } = req.body;
