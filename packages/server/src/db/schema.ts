@@ -241,4 +241,11 @@ export function initializeDatabase(db: Database.Database): void {
   if (!ghCols.find(c => c.name === "github_token")) {
     db.exec("ALTER TABLE github_repos ADD COLUMN github_token TEXT");
   }
+
+  // Password reset migration
+  const userCols2 = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  if (!userCols2.find(c => c.name === "reset_code")) {
+    db.exec("ALTER TABLE users ADD COLUMN reset_code TEXT");
+    db.exec("ALTER TABLE users ADD COLUMN reset_code_expires TEXT");
+  }
 }

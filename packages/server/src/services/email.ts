@@ -89,6 +89,39 @@ export async function sendTeamInviteEmail(to: string, teamName: string, invitedB
   }
 }
 
+export async function sendPasswordResetEmail(to: string, code: string): Promise<boolean> {
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — password reset email not sent. Code:", code);
+    return false;
+  }
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: "Reset your VibeStack password",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 24px; font-weight: 700; color: #7c3aed; margin: 0;">VibeStack</h1>
+          </div>
+          <div style="background: #f9fafb; border-radius: 12px; padding: 32px; text-align: center;">
+            <p style="font-size: 16px; color: #333; margin: 0 0 8px;">Your password reset code is:</p>
+            <div style="font-size: 36px; font-weight: 700; letter-spacing: 6px; color: #1a1a2e; margin: 16px 0;">${code}</div>
+            <p style="font-size: 14px; color: #888; margin: 16px 0 0;">This code expires in 15 minutes.</p>
+          </div>
+          <p style="font-size: 12px; color: #aaa; text-align: center; margin-top: 24px;">If you didn't request a password reset, ignore this email.</p>
+        </div>
+      `,
+    });
+    console.log(`Password reset email sent to ${to}`);
+    return true;
+  } catch (err) {
+    console.error("Failed to send password reset email:", err instanceof Error ? err.message : String(err));
+    return false;
+  }
+}
+
 export async function sendWelcomeEmail(to: string): Promise<boolean> {
   if (!resend) return false;
 

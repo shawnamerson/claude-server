@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/client.js";
-import { sendVerificationEmail, sendWelcomeEmail, notifyNewSignup } from "../services/email.js";
+import { sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail, notifyNewSignup } from "../services/email.js";
 import "../types.js";
 
 const router = Router();
@@ -174,6 +174,51 @@ router.delete("/auth/github-token", (req: Request, res: Response) => {
   if (!user) { res.status(401).json({ error: "Authentication required" }); return; }
   const db = getDb();
   db.prepare("UPDATE users SET github_token = NULL WHERE id = ?").run(user.id);
+  res.json({ ok: true });
+});
+
+// Forgot password — send reset code
+router.post("/auth/forgot-password", async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email) { res.status(400).json({ error: "Email is required" }); return; }
+
+  const db = getDb();
+  const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email.toLowerCase().trim()) as { id: string } | undefined;
+
+  // Always return success to avoid email enumeration
+  if (!user) { res.json({ ok: true }); return; }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+  db.prepare("UPDATE users SET reset_code = ?, reset_code_expires = ? WHERE id = ?").run(code, expires, user.id);
+
+  await sendPasswordResetEmail(email.toLowerCase().trim(), code);
+  res.json({ ok: true });
+});
+
+// Reset password — verify code and set new password
+router.post("/auth/reset-password", async (req: Request, res: Response) => {
+  const { email, code, password } = req.body;
+  if (!email || !code || !password) { res.status(400).json({ error: "Email, code, and new password are required" }); return; }
+  if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
+
+  const db = getDb();
+  const user = db.prepare("SELECT id, reset_code, reset_code_expires FROM users WHERE email = ?")
+    .get(email.toLowerCase().trim()) as { id: string; reset_code: string | null; reset_code_expires: string | null } | undefined;
+
+  if (!user || !user.reset_code || user.reset_code !== code) {
+    res.status(400).json({ error: "Invalid or expired reset code" });
+    return;
+  }
+
+  if (user.reset_code_expires && new Date(user.reset_code_expires) < new Date()) {
+    res.status(400).json({ error: "Reset code has expired. Please request a new one." });
+    return;
+  }
+
+  const hashed = await bcrypt.hash(password, 10);
+  db.prepare("UPDATE users SET password = ?, reset_code = NULL, reset_code_expires = NULL WHERE id = ?").run(hashed, user.id);
+
   res.json({ ok: true });
 });
 
