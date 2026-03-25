@@ -45,7 +45,7 @@ export default function Signup({ onSignup }: { onSignup: (email: string, passwor
     <div style={s.page}>
       <div style={s.card}>
         <Link to="/" style={{ ...s.logo, textDecoration: "none", display: "block" }}>VibeStack</Link>
-        <div style={s.subtitle}>Start building for free <span style={s.badge}>3 free deploys</span></div>
+        <div style={s.subtitle}>Start building for free <span style={s.badge}>5 free deploys/month</span></div>
         <form onSubmit={handleSubmit} style={s.form}>
           <div>
             <label style={s.label}>Email</label>
