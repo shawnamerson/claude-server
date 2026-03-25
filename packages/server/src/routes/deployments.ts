@@ -289,13 +289,27 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
         if (!existingKeys.has(key)) buildEnv.push(p);
       }
       buildContainer.extraEnv = buildEnv;
+      let buildFailed = false;
       try {
-        const buildOutput = await buildContainer.exec(projectConfig.buildCommand, (msg) => addLog(deploymentId, "system", msg));
+        const buildTimeout = projectConfig.needsMoreMemory ? 600 : 300; // 10 min for heavy builds, 5 min for normal
+        const buildOutput = await buildContainer.exec(projectConfig.buildCommand, (msg) => {
+          addLog(deploymentId, "system", msg);
+          if (msg.includes("Exit code:")) {
+            const code = parseInt(msg.match(/Exit code: (\d+)/)?.[1] || "0");
+            if (code !== 0) buildFailed = true;
+          }
+        }, buildTimeout);
         if (buildOutput.includes("ERR!") || buildOutput.includes("FATAL") || buildOutput.includes("error TS")) {
           addLog(deploymentId, "system", `Build output: ${buildOutput.slice(-500)}`);
+          buildFailed = true;
         }
       } finally {
         await buildContainer.cleanup();
+      }
+      if (buildFailed) {
+        addLog(deploymentId, "system", "Build failed — sending to Claude for fix");
+        // Fall through to auto-fix by throwing
+        throw new Error("Build failed");
       }
       addLog(deploymentId, "system", "Build complete");
     }
@@ -396,7 +410,7 @@ async function autoFixAndRedeploy(
     "SELECT message FROM logs WHERE deployment_id = ? AND stream IN ('stderr', 'system') ORDER BY id DESC LIMIT 20"
   ).all(deploymentId) as Array<{ message: string }>;
   const recentErrorText = recentErrors.map(l => l.message).join("\n");
-  const isCodeError = /ModuleNotFoundError|ImportError|SyntaxError|NameError|TypeError|Cannot find module|require\(\) of ES Module|require is not defined|ReferenceError/.test(recentErrorText);
+  const isCodeError = /ModuleNotFoundError|ImportError|SyntaxError|NameError|TypeError|Cannot find module|require\(\) of ES Module|require is not defined|ReferenceError|ENOENT/.test(recentErrorText);
 
   // If the build succeeded AND the error is NOT a code issue, just restart with more memory
   if (buildSucceeded.has(deploymentId) && !isCodeError) {
