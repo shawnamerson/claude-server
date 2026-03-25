@@ -136,7 +136,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
   const navLocation = useLocation();
   useEffect(() => { setMobileMenuOpen(false); }, [navLocation.pathname]);
   return (
-    <div style={styles.app}>
+    <div style={styles.app} className="vs-app">
       <style>{`
         *, *::before, *::after { box-sizing: border-box; }
         html, body, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; }
@@ -169,6 +169,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
           .vs-mobile-menu { display: none; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.75rem; background: #0d0d14; border-bottom: 1px solid #1a1a2e; }
           .vs-mobile-menu.open { display: flex; }
           .vs-mobile-menu a, .vs-mobile-menu button { display: block; padding: 0.5rem 0; color: #888; text-decoration: none; font-size: 0.9rem; background: none; border: none; text-align: left; cursor: pointer; font-family: inherit; }
+          .vs-app { overflow: auto !important; height: auto !important; min-height: 100vh !important; }
           .vs-main { overflow: auto !important; }
           .vs-project-detail { flex-direction: column !important; }
           .vs-project-sidebar { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: 50vh !important; }
