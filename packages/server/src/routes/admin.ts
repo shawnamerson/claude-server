@@ -311,7 +311,7 @@ router.get("/users", async (_req: Request, res: Response) => {
 router.post("/users/:id/plan", (req: Request, res: Response) => {
   try {
     const { plan } = req.body;
-    const validPlans = ["free", "pro", "growth", "team"];
+    const validPlans = ["free", "starter", "pro", "business"];
     if (!validPlans.includes(plan)) {
       res.status(400).json({ error: "Invalid plan. Must be one of: " + validPlans.join(", ") });
       return;

@@ -57,9 +57,9 @@ const COLORS = {
 
 const PLAN_COLORS: Record<string, string> = {
   free: "#6b7280",
-  pro: "#3b82f6",
-  growth: "#10b981",
-  team: "#f59e0b",
+  starter: "#3b82f6",
+  pro: "#10b981",
+  business: "#f59e0b",
 };
 
 function getHeaders(): Record<string, string> {
@@ -205,7 +205,7 @@ export default function Admin() {
         {/* Plan breakdown */}
         {stats && (
           <div style={{ display: "flex", gap: "0.75rem", marginBottom: "2rem", flexWrap: "wrap" }}>
-            {["free", "pro", "growth", "team"].map((plan) => (
+            {["free", "starter", "pro", "business"].map((plan) => (
               <span
                 key={plan}
                 style={{
@@ -266,9 +266,9 @@ export default function Admin() {
                         }}
                       >
                         <option value="free">free</option>
+                        <option value="starter">starter</option>
                         <option value="pro">pro</option>
-                        <option value="growth">growth</option>
-                        <option value="team">team</option>
+                        <option value="business">business</option>
                       </select>
                     </td>
                     <td style={{ padding: "0.6rem 0.5rem", color: u.email_verified ? "#10b981" : "#ef4444" }}>

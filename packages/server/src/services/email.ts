@@ -153,7 +153,7 @@ export async function sendWelcomeEmail(to: string): Promise<boolean> {
             <a href="https://vibestack.build/projects" style="display: inline-block; padding: 12px 32px; background: #7c3aed; color: #fff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600;">Start building</a>
           </div>
           <p style="font-size: 14px; color: #888; line-height: 1.5; margin-bottom: 8px;">
-            Your free plan includes 1 project, 20 deploys, and 1,000 chats per month. Need more? <a href="https://vibestack.build/billing" style="color: #7c3aed; text-decoration: none;">Upgrade anytime</a>.
+            Your free plan includes 1 project, 10 deploys, and 50 AI chats per month. Need more? <a href="https://vibestack.build/billing" style="color: #7c3aed; text-decoration: none;">Upgrade anytime</a>.
           </p>
           <p style="font-size: 14px; color: #888; line-height: 1.5;">
             Questions? Just reply to this email or reach us at <a href="mailto:hello@vibestack.build" style="color: #7c3aed; text-decoration: none;">hello@vibestack.build</a>.

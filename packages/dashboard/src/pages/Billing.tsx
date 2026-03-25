@@ -98,7 +98,7 @@ export default function Billing() {
       <div style={s.grid}>
         {plans.map(plan => {
           const isCurrent = status?.plan === plan.id;
-          const planRank: Record<string, number> = { free: 0, pro: 1, growth: 2, team: 3 };
+          const planRank: Record<string, number> = { free: 0, starter: 1, pro: 2, business: 3 };
           const currentRank = planRank[status?.plan] ?? 0;
           const thisRank = planRank[plan.id] ?? 0;
           const isUpgrade = thisRank > currentRank;

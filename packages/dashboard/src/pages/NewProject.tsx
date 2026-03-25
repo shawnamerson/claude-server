@@ -127,7 +127,7 @@ export default function NewProject() {
             You've used {limitInfo?.projectCount} of {limitInfo?.projectLimit} projects on the Free plan.
           </div>
           <div style={{ fontSize: "0.9rem", color: "#888", marginBottom: "1.5rem" }}>
-            Upgrade to Pro for unlimited projects.
+            Upgrade your plan for more projects.
           </div>
           <Link to="/billing" style={{ display: "inline-block", padding: "0.75rem 2rem", background: "#7c3aed", color: "#fff", borderRadius: "0.5rem", textDecoration: "none", fontSize: "1rem", fontWeight: 600 }}>
             Upgrade plan
