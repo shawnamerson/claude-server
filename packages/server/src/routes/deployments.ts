@@ -109,7 +109,7 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     const log = (msg: string) => addLog(deploymentId, "system", msg);
 
     let result!: Awaited<ReturnType<typeof generateProject>>;
-    const maxRetries = 3;
+    const maxRetries = 5;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         if (hasExistingFiles && prompt) {

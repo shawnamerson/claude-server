@@ -132,14 +132,30 @@ export async function claudeAgentLoop(
   for (let turn = 0; turn < maxTurns; turn++) {
     console.log(`Agent turn ${turn + 1}/${maxTurns}`);
 
-    const stream = client.messages.stream({
-      model: FAST_MODEL,
-      max_tokens: 32000,
-      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-      messages,
-      tools,
-    });
-    const response = await stream.finalMessage();
+    let response!: Anthropic.Message;
+    for (let retry = 0; retry < 5; retry++) {
+      try {
+        const stream = client.messages.stream({
+          model: FAST_MODEL,
+          max_tokens: 32000,
+          system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+          messages,
+          tools,
+        });
+        response = await stream.finalMessage();
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isTransient = /overloaded|rate.?limit|529|503|timeout|ECONNRESET|socket hang up/i.test(msg);
+        if (isTransient && retry < 4) {
+          const wait = (retry + 1) * 3;
+          console.log(`API overloaded, retrying in ${wait}s (attempt ${retry + 2}/5)...`);
+          await new Promise(r => setTimeout(r, wait * 1000));
+          continue;
+        }
+        throw err;
+      }
+    }
 
     trackUsage(currentDeploymentId, response);
     console.log(`Agent response: stop_reason=${response.stop_reason}, blocks=${response.content.map(b => b.type).join(",")}`);
