@@ -79,8 +79,10 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
   }
   await execPostgresSQL(`GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUser};`);
   await execPostgresSQL(`ALTER DATABASE ${dbName} OWNER TO ${dbUser};`);
-  // Set connection limit per user to prevent abuse
+  // Hardening: connection limit, query timeout, idle timeout
   await execPostgresSQL(`ALTER USER ${dbUser} CONNECTION LIMIT 20;`);
+  await execPostgresSQL(`ALTER USER ${dbUser} SET statement_timeout = '30s';`);
+  await execPostgresSQL(`ALTER USER ${dbUser} SET idle_in_transaction_session_timeout = '60s';`);
 
   const connectionString = `postgresql://${dbUser}:${dbPassword}@${SHARED_DB_CONTAINER}:5432/${dbName}`;
 
