@@ -338,7 +338,7 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     if (isStatic) {
       // Static site — serve via Caddy, no container needed
       updateStatus(deploymentId, "deploying");
-      addLog(deploymentId, "system", "Static site — serving via Caddy (no container)");
+      addLog(deploymentId, "system", "Publishing your app...");
 
       db.prepare("UPDATE deployments SET deploy_type = 'static', static_dir = ? WHERE id = ?")
         .run(projectConfig.staticDir || ".", deploymentId);
