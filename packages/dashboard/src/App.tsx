@@ -17,6 +17,7 @@ import TeamSettings from "./pages/TeamSettings";
 import TeamList from "./pages/TeamList";
 import Settings from "./pages/Settings";
 import { useAuth } from "./hooks/useAuth";
+import { useAnalytics } from "./hooks/useAnalytics";
 
 const styles = {
   app: {
@@ -182,6 +183,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
 
 export default function App() {
   const { user, loading, login, signup, logout, token, refreshUser } = useAuth();
+  useAnalytics();
   const isAdmin = useAdminCheck(token);
   const location = useLocation();
   const navigate = useNavigate();

@@ -156,6 +156,16 @@ router.get("/stats", async (_req: Request, res: Response) => {
         monthInputTokens: apiTokensThisMonth.input,
         monthOutputTokens: apiTokensThisMonth.output,
       },
+      analytics: (() => {
+        const pvToday = (db.prepare("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= ?").get(todayStr) as { cnt: number }).cnt;
+        const pvMonth = (db.prepare("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= ?").get(monthStr) as { cnt: number }).cnt;
+        const uvToday = (db.prepare("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_views WHERE created_at >= ?").get(todayStr) as { cnt: number }).cnt;
+        const uvMonth = (db.prepare("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_views WHERE created_at >= ?").get(monthStr) as { cnt: number }).cnt;
+        const topPages = db.prepare("SELECT path, COUNT(*) as views FROM page_views WHERE created_at >= ? GROUP BY path ORDER BY views DESC LIMIT 10").all(monthStr) as Array<{ path: string; views: number }>;
+        const topReferrers = db.prepare("SELECT referrer, COUNT(*) as cnt FROM page_views WHERE created_at >= ? AND referrer != '' AND referrer IS NOT NULL GROUP BY referrer ORDER BY cnt DESC LIMIT 10").all(monthStr) as Array<{ referrer: string; cnt: number }>;
+        const dailyViews = db.prepare("SELECT date(created_at) as day, COUNT(*) as views, COUNT(DISTINCT visitor_id) as visitors FROM page_views WHERE created_at >= ? GROUP BY date(created_at) ORDER BY day DESC LIMIT 30").all(monthStr) as Array<{ day: string; views: number; visitors: number }>;
+        return { pvToday, pvMonth, uvToday, uvMonth, topPages, topReferrers, dailyViews };
+      })(),
     });
   } catch (err) {
     console.error("Admin stats error:", err);

@@ -165,6 +165,18 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_cron_jobs_project ON cron_jobs(project_id);
     CREATE INDEX IF NOT EXISTS idx_cron_logs_job ON cron_logs(cron_job_id);
 
+    CREATE TABLE IF NOT EXISTS page_views (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      path        TEXT NOT NULL,
+      referrer    TEXT,
+      visitor_id  TEXT NOT NULL,
+      user_agent  TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at);
+    CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON page_views(visitor_id);
+
     CREATE TABLE IF NOT EXISTS api_usage (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
       input_tokens    INTEGER NOT NULL DEFAULT 0,

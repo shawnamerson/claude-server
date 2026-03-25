@@ -8,6 +8,12 @@ interface Stats {
   containersRunning: number;
   mrr: number;
   apiCosts: { todayCents: number; monthCents: number; monthInputTokens: number; monthOutputTokens: number };
+  analytics: {
+    pvToday: number; pvMonth: number; uvToday: number; uvMonth: number;
+    topPages: Array<{ path: string; views: number }>;
+    topReferrers: Array<{ referrer: string; cnt: number }>;
+    dailyViews: Array<{ day: string; views: number; visitors: number }>;
+  };
 }
 
 interface AdminUser {
@@ -275,6 +281,63 @@ export default function Admin() {
             </table>
           </div>
         </div>
+
+        {/* Analytics */}
+        {stats && stats.analytics && (
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: "0.75rem", marginBottom: "2rem", overflow: "hidden" }}>
+            <div style={{ padding: "1rem 1.25rem", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600, fontSize: "0.95rem" }}>
+              Analytics
+            </div>
+            <div style={{ padding: "1rem 1.25rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+                <div><div style={{ color: COLORS.textMuted, fontSize: "0.75rem" }}>Views Today</div><div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{stats.analytics.pvToday}</div></div>
+                <div><div style={{ color: COLORS.textMuted, fontSize: "0.75rem" }}>Visitors Today</div><div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{stats.analytics.uvToday}</div></div>
+                <div><div style={{ color: COLORS.textMuted, fontSize: "0.75rem" }}>Views This Month</div><div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{stats.analytics.pvMonth}</div></div>
+                <div><div style={{ color: COLORS.textMuted, fontSize: "0.75rem" }}>Visitors This Month</div><div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{stats.analytics.uvMonth}</div></div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+                {/* Daily chart */}
+                <div>
+                  <div style={{ fontSize: "0.8rem", color: COLORS.textMuted, marginBottom: "0.5rem" }}>Daily Views (last 30 days)</div>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "80px" }}>
+                    {[...stats.analytics.dailyViews].reverse().map((d, i) => {
+                      const max = Math.max(...stats.analytics.dailyViews.map(x => x.views), 1);
+                      return (
+                        <div key={i} title={`${d.day}: ${d.views} views, ${d.visitors} visitors`} style={{
+                          flex: 1, background: "#7c3aed", borderRadius: "2px 2px 0 0", minHeight: "2px",
+                          height: `${(d.views / max) * 100}%`,
+                        }} />
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Top pages + referrers */}
+                <div>
+                  <div style={{ fontSize: "0.8rem", color: COLORS.textMuted, marginBottom: "0.5rem" }}>Top Pages</div>
+                  {stats.analytics.topPages.slice(0, 5).map((p, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.15rem 0", color: "#bbb" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.path}</span>
+                      <span style={{ color: COLORS.textMuted, marginLeft: "0.5rem", flexShrink: 0 }}>{p.views}</span>
+                    </div>
+                  ))}
+                  {stats.analytics.topReferrers.length > 0 && (
+                    <>
+                      <div style={{ fontSize: "0.8rem", color: COLORS.textMuted, marginTop: "0.75rem", marginBottom: "0.5rem" }}>Top Referrers</div>
+                      {stats.analytics.topReferrers.slice(0, 5).map((r, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.15rem 0", color: "#bbb" }}>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.referrer}</span>
+                          <span style={{ color: COLORS.textMuted, marginLeft: "0.5rem", flexShrink: 0 }}>{r.cnt}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Recent Deployments */}
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: "0.75rem", overflow: "hidden" }}>
