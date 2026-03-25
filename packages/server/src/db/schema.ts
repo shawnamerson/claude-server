@@ -177,6 +177,18 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at);
     CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON page_views(visitor_id);
 
+    CREATE TABLE IF NOT EXISTS user_events (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     TEXT,
+      event       TEXT NOT NULL,
+      meta        TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_events_created ON user_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_user_events_user ON user_events(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_events_event ON user_events(event);
+
     CREATE TABLE IF NOT EXISTS api_usage (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
       input_tokens    INTEGER NOT NULL DEFAULT 0,

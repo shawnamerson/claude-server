@@ -156,6 +156,11 @@ router.get("/stats", async (_req: Request, res: Response) => {
         monthInputTokens: apiTokensThisMonth.input,
         monthOutputTokens: apiTokensThisMonth.output,
       },
+      events: (() => {
+        const eventCounts = db.prepare("SELECT event, COUNT(*) as cnt FROM user_events WHERE created_at >= ? GROUP BY event ORDER BY cnt DESC LIMIT 20").all(monthStr) as Array<{ event: string; cnt: number }>;
+        const recentEvents = db.prepare("SELECT e.event, e.meta, e.created_at, u.email FROM user_events e LEFT JOIN users u ON u.id = e.user_id ORDER BY e.id DESC LIMIT 20").all() as Array<{ event: string; meta: string | null; created_at: string; email: string | null }>;
+        return { counts: eventCounts, recent: recentEvents };
+      })(),
       funnel: (() => {
         const landed = (db.prepare("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_views WHERE path = '/' AND created_at >= ?").get(monthStr) as { cnt: number }).cnt;
         const viewedSignup = (db.prepare("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_views WHERE path = '/signup' AND created_at >= ?").get(monthStr) as { cnt: number }).cnt;

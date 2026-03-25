@@ -18,6 +18,7 @@ import TeamList from "./pages/TeamList";
 import Settings from "./pages/Settings";
 import { useAuth } from "./hooks/useAuth";
 import { useAnalytics } from "./hooks/useAnalytics";
+import { track } from "./hooks/useTrack";
 
 const styles = {
   app: {
@@ -224,6 +225,7 @@ export default function App() {
         <Route path="/signup" element={
           <Signup onSignup={async (email, password, name) => {
             await signup(email, password, name);
+            track("signed_up");
             const params = new URLSearchParams(window.location.search);
             const prompt = params.get("prompt");
             if (prompt) {

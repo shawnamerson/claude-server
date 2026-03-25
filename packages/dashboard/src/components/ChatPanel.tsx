@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api, ChatMsg } from "../api/client";
 import { getSSEToken } from "../hooks/useSSE";
+import { track } from "../hooks/useTrack";
 
 interface LogLine {
   stream: string;
@@ -247,6 +248,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     setMessages(prev => [...prev, userMsg]);
     setHasSuggestion(false);
     setChatStreaming(true);
+    track("chat_sent", { projectId });
 
     let assistantText = "";
     try {
@@ -322,6 +324,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     const text = prompt || input.trim() || (hasSuggestion ? "Apply the changes you suggested" : "");
     if (!text || deployingLocal || chatStreaming) return;
     setDeployingLocal(true);
+    track("apply_deploy_clicked", { projectId });
     if (!prompt) {
       setInput("");
       setHasSuggestion(false);

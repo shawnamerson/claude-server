@@ -8,6 +8,10 @@ interface Stats {
   containersRunning: number;
   mrr: number;
   apiCosts: { todayCents: number; monthCents: number; monthInputTokens: number; monthOutputTokens: number };
+  events: {
+    counts: Array<{ event: string; cnt: number }>;
+    recent: Array<{ event: string; meta: string | null; created_at: string; email: string | null }>;
+  };
   funnel: Array<{ step: string; count: number }>;
   analytics: {
     pvToday: number; pvMonth: number; uvToday: number; uvMonth: number;
@@ -312,6 +316,38 @@ export default function Admin() {
                   );
                 });
               })()}
+            </div>
+          </div>
+        )}
+
+        {/* User Events */}
+        {stats && stats.events && (
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: "0.75rem", marginBottom: "2rem", overflow: "hidden" }}>
+            <div style={{ padding: "1rem 1.25rem", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600, fontSize: "0.95rem" }}>
+              User Events
+            </div>
+            <div style={{ padding: "1rem 1.25rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+              <div>
+                <div style={{ fontSize: "0.8rem", color: COLORS.textMuted, marginBottom: "0.5rem" }}>Event Counts (this month)</div>
+                {stats.events.counts.map((e, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", color: "#bbb" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.75rem" }}>{e.event}</span>
+                    <span style={{ color: COLORS.textMuted }}>{e.cnt}</span>
+                  </div>
+                ))}
+                {stats.events.counts.length === 0 && <div style={{ color: "#555", fontSize: "0.8rem" }}>No events yet</div>}
+              </div>
+              <div>
+                <div style={{ fontSize: "0.8rem", color: COLORS.textMuted, marginBottom: "0.5rem" }}>Recent Events</div>
+                {stats.events.recent.slice(0, 10).map((e, i) => (
+                  <div key={i} style={{ fontSize: "0.75rem", padding: "0.15rem 0", color: "#888", fontFamily: "'JetBrains Mono', monospace" }}>
+                    <span style={{ color: "#bbb" }}>{e.event}</span>
+                    {e.email && <span style={{ color: "#555" }}> {e.email.split("@")[0]}</span>}
+                    <span style={{ color: "#444" }}> {new Date(e.created_at + "Z").toLocaleTimeString()}</span>
+                  </div>
+                ))}
+                {stats.events.recent.length === 0 && <div style={{ color: "#555", fontSize: "0.8rem" }}>No events yet</div>}
+              </div>
             </div>
           </div>
         )}

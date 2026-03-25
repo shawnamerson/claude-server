@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../hooks/useAuth";
+import { track } from "../hooks/useTrack";
 
 const styles = {
   container: { maxWidth: "600px", padding: "0.5rem 1.5rem" },
@@ -63,6 +64,7 @@ export default function NewProject() {
       if (status.projectLimit > 0 && status.projectCount >= status.projectLimit) {
         setLimitReached(true);
         setLimitInfo(status);
+        track("project_limit_reached", { count: status.projectCount, limit: status.projectLimit });
       }
     }).catch(() => {});
   }, []);
@@ -71,9 +73,12 @@ export default function NewProject() {
     e.preventDefault();
     if (!name.trim()) return;
     setLoading(true);
+    track("create_project_clicked", { hasDescription: !!description.trim() });
     try {
       const project = await api.createProject(name, description);
+      track("project_created", { slug: project.slug });
       if (description.trim()) {
+        track("first_deploy_started", { slug: project.slug });
         const dep = await api.deploy(project.id, description);
         navigate(`/project/${project.id}?dep=${dep.id}`);
       } else {
@@ -81,6 +86,7 @@ export default function NewProject() {
       }
       return;
     } catch (err) {
+      track("create_project_error", { error: err instanceof Error ? err.message : "unknown" });
       showError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
       setLoading(false);

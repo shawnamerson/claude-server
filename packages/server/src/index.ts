@@ -77,6 +77,16 @@ app.use(seoRoutes);
 // Auth middleware — attaches user to request if token present
 app.use(authMiddleware);
 
+// Event tracking — after auth so we get user_id
+app.post("/api/analytics/event", (req, res) => {
+  const { event, meta } = req.body;
+  if (!event) { res.json({ ok: true }); return; }
+  const db = getDb();
+  const userId = req.user?.id || null;
+  db.prepare("INSERT INTO user_events (user_id, event, meta) VALUES (?, ?, ?)").run(userId, event.slice(0, 100), meta ? JSON.stringify(meta).slice(0, 500) : null);
+  res.json({ ok: true });
+});
+
 // API routes — public
 app.use("/api", authRoutes);
 app.use("/api", billingRoutes);
