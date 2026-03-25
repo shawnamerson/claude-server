@@ -14,7 +14,7 @@ interface ProjectDatabase {
 }
 
 const BACKUP_DIR = process.env.BACKUP_DIR || "/app/data/backups";
-const SHARED_DB_CONTAINER = "claude-server-db";
+const SHARED_DB_CONTAINER = process.env.POSTGRES_CONTAINER || "claude-server-claude-server-db-1";
 
 export async function backupAllDatabases(): Promise<void> {
   const db = getDb();

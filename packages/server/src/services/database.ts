@@ -6,7 +6,10 @@ import { config } from "../config.js";
 
 const docker = new Dockerode();
 
-const SHARED_DB_CONTAINER = "claude-server-db";
+// Docker container name (for exec commands)
+const SHARED_DB_CONTAINER = process.env.POSTGRES_CONTAINER || "claude-server-claude-server-db-1";
+// Docker DNS hostname on claude-server-network (for DATABASE_URL in app containers)
+const SHARED_DB_HOST = "claude-server-db";
 
 interface ProjectDatabase {
   id: number;
@@ -50,9 +53,9 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
   // Check if database already exists
   const existing = db.prepare("SELECT * FROM project_databases WHERE project_id = ?").get(projectId) as ProjectDatabase | undefined;
   if (existing && existing.status === "running") {
-    const connStr = `postgresql://${existing.db_user}:${existing.db_password}@${SHARED_DB_CONTAINER}:5432/${existing.db_name}`;
+    const connStr = `postgresql://${existing.db_user}:${existing.db_password}@${SHARED_DB_HOST}:5432/${existing.db_name}`;
     return {
-      host: SHARED_DB_CONTAINER,
+      host: SHARED_DB_HOST,
       port: 5432,
       dbName: existing.db_name,
       user: existing.db_user,
@@ -84,17 +87,17 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
   await execPostgresSQL(`ALTER USER ${dbUser} SET statement_timeout = '30s';`);
   await execPostgresSQL(`ALTER USER ${dbUser} SET idle_in_transaction_session_timeout = '60s';`);
 
-  const connectionString = `postgresql://${dbUser}:${dbPassword}@${SHARED_DB_CONTAINER}:5432/${dbName}`;
+  const connectionString = `postgresql://${dbUser}:${dbPassword}@${SHARED_DB_HOST}:5432/${dbName}`;
 
   // Save to database
   if (existing) {
     db.prepare(
       `UPDATE project_databases SET container_id = NULL, container_name = ?, db_name = ?, db_user = ?, db_password = ?, port = 5432, status = 'running' WHERE project_id = ?`
-    ).run(SHARED_DB_CONTAINER, dbName, dbUser, dbPassword, projectId);
+    ).run(SHARED_DB_HOST, dbName, dbUser, dbPassword, projectId);
   } else {
     db.prepare(
       `INSERT INTO project_databases (project_id, container_id, container_name, db_name, db_user, db_password, port, status) VALUES (?, NULL, ?, ?, ?, ?, 5432, 'running')`
-    ).run(projectId, SHARED_DB_CONTAINER, dbName, dbUser, dbPassword);
+    ).run(projectId, SHARED_DB_HOST, dbName, dbUser, dbPassword);
   }
 
   // Auto-set DATABASE_URL env var for the project (encrypted)
