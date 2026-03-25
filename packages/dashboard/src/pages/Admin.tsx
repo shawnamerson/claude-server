@@ -100,6 +100,7 @@ export default function Admin() {
   const [deployments, setDeployments] = useState<AdminDeployment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -140,12 +141,11 @@ export default function Admin() {
       const statsRes = await fetch("/api/admin/stats", { headers: getHeaders() });
       if (statsRes.ok) setStats(await statsRes.json());
     } catch {
-      alert("Failed to change plan");
+      setError("Failed to change plan");
     }
   };
 
-  const deleteUser = async (userId: string, email: string) => {
-    if (!confirm(`Delete user ${email}? This will remove all their projects and deployments.`)) return;
+  const deleteUser = async (userId: string) => {
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: "DELETE",
@@ -153,11 +153,12 @@ export default function Admin() {
       });
       if (!res.ok) throw new Error("Failed");
       setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setConfirmDelete(null);
       // Refresh stats
       const statsRes = await fetch("/api/admin/stats", { headers: getHeaders() });
       if (statsRes.ok) setStats(await statsRes.json());
     } catch {
-      alert("Failed to delete user");
+      setError("Failed to delete user"); setConfirmDelete(null);
     }
   };
 
@@ -282,8 +283,20 @@ export default function Admin() {
                     <td style={{ padding: "0.6rem 0.5rem", fontWeight: 600, color: u.total_cost_cents_month > 0 ? "#ef4444" : COLORS.textMuted }}>${(u.total_cost_cents_month / 100).toFixed(2)}</td>
                     <td style={{ padding: "0.6rem 0.5rem", color: COLORS.textMuted }}>{timeAgo(u.created_at)}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>
+                      {confirmDelete === u.id ? (
+                        <span style={{ display: "flex", gap: "0.3rem" }}>
+                          <button
+                            onClick={() => deleteUser(u.id)}
+                            style={{ background: "#ef4444", border: "none", color: "#fff", padding: "0.2rem 0.5rem", borderRadius: "0.35rem", cursor: "pointer", fontSize: "0.7rem", fontWeight: 600 }}
+                          >Confirm</button>
+                          <button
+                            onClick={() => setConfirmDelete(null)}
+                            style={{ background: "none", border: "1px solid #555", color: "#888", padding: "0.2rem 0.5rem", borderRadius: "0.35rem", cursor: "pointer", fontSize: "0.7rem" }}
+                          >Cancel</button>
+                        </span>
+                      ) : (
                       <button
-                        onClick={() => deleteUser(u.id, u.email)}
+                        onClick={() => setConfirmDelete(u.id)}
                         style={{
                           background: "none",
                           border: "1px solid #ef444444",
@@ -296,6 +309,7 @@ export default function Admin() {
                       >
                         Delete
                       </button>
+                      )}
                     </td>
                   </tr>
                 ))}
