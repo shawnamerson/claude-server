@@ -18,6 +18,12 @@ export function useAnalytics() {
 
   useEffect(() => {
     const path = location.pathname;
+    // Save first landing page for signup attribution
+    if (!sessionStorage.getItem("vs_landing")) {
+      sessionStorage.setItem("vs_landing", path);
+      if (document.referrer) sessionStorage.setItem("vs_referrer", document.referrer);
+    }
+
     // Don't track the same page twice in a row
     if (path === lastPath.current) return;
     lastPath.current = path;

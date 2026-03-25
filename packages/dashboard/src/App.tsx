@@ -225,7 +225,7 @@ export default function App() {
         <Route path="/signup" element={
           <Signup onSignup={async (email, password, name) => {
             await signup(email, password, name);
-            track("signed_up");
+            track("signed_up", { referrer: document.referrer || "(direct)", landingPage: sessionStorage.getItem("vs_landing") || "/" });
             const params = new URLSearchParams(window.location.search);
             const prompt = params.get("prompt");
             if (prompt) {
