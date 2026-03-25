@@ -11,6 +11,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy-data:/data
       - caddy-config:/config
+      - app-data:/srv/data:ro
     environment:
       - DOMAIN=${DOMAIN}
     networks:

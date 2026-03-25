@@ -12,6 +12,10 @@ export interface ProjectConfig {
   needsMoreMemory?: boolean;
   /** Runtime environment */
   runtime?: "node" | "python";
+  /** Deploy type — static sites served by Caddy, container apps run in Docker */
+  deployType?: "static" | "container";
+  /** Directory to serve for static sites (relative to project root) */
+  staticDir?: string;
 }
 
 /**
@@ -96,6 +100,8 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
       buildCommand: `${installCmd} && ${buildCmd}`,
       startCommand: "npx serve dist -l 3000 -s",
       appPort: 3000,
+      deployType: "static",
+      staticDir: "dist",
     };
   }
 
@@ -139,6 +145,8 @@ export function detectProjectConfig(sourcePath: string): ProjectConfig {
       buildCommand: null,
       startCommand: "npx serve . -l 3000 -s",
       appPort: 3000,
+      deployType: "static",
+      staticDir: ".",
     };
   }
 

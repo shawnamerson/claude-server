@@ -21,20 +21,20 @@ export function generateCaddyfile(): string {
   const db = getDb();
   const domain = config.domain;
 
-  // Get all running deployments with their ports
+  // Get all running deployments
   const deployments = db.prepare(`
-    SELECT d.project_id, d.port, p.slug
+    SELECT d.project_id, d.port, d.deploy_type, d.static_dir, p.slug
     FROM deployments d
     JOIN projects p ON p.id = d.project_id
-    WHERE d.status = 'running' AND d.port IS NOT NULL
+    WHERE d.status = 'running' AND (d.port IS NOT NULL OR d.deploy_type = 'static')
     ORDER BY d.created_at DESC
-  `).all() as Array<{ project_id: string; port: number; slug: string }>;
+  `).all() as Array<{ project_id: string; port: number | null; deploy_type: string; static_dir: string | null; slug: string }>;
 
   // Dedupe — only latest running deployment per project
-  const projectPorts = new Map<string, { port: number; slug: string }>();
+  const projectRoutes = new Map<string, { port: number | null; slug: string; deployType: string; staticDir: string | null; projectId: string }>();
   for (const dep of deployments) {
-    if (!projectPorts.has(dep.project_id)) {
-      projectPorts.set(dep.project_id, { port: dep.port, slug: dep.slug });
+    if (!projectRoutes.has(dep.project_id)) {
+      projectRoutes.set(dep.project_id, { port: dep.port, slug: dep.slug, deployType: dep.deploy_type, staticDir: dep.static_dir, projectId: dep.project_id });
     }
   }
 
@@ -58,40 +58,52 @@ export function generateCaddyfile(): string {
   caddyfile += `    redir https://${domain}{uri} permanent\n`;
   caddyfile += `}\n\n`;
 
-  // Subdomain routing: slug.domain -> container port via host
-  // Strip framing restrictions so apps render in the dashboard preview iframe
-  for (const [_projectId, { port, slug }] of projectPorts) {
+  // Common headers to strip framing restrictions for dashboard preview iframe
+  const frameHeaders = [
+    `    header -X-Frame-Options`,
+    `    header -Content-Security-Policy`,
+    `    header -Cross-Origin-Opener-Policy`,
+    `    header -Cross-Origin-Resource-Policy`,
+    `    header -Cross-Origin-Embedder-Policy`,
+    `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"`,
+  ].join("\n");
+
+  // Subdomain routing
+  for (const [_projectId, { port, slug, deployType, staticDir, projectId }] of projectRoutes) {
     if (!isSafeHostname(slug)) {
       console.warn(`Skipping unsafe slug in Caddyfile: ${slug}`);
       continue;
     }
     caddyfile += `${slug}.${domain} {\n`;
-    caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${port}\n`;
-    caddyfile += `    header -X-Frame-Options\n`;
-    caddyfile += `    header -Content-Security-Policy\n`;
-    caddyfile += `    header -Cross-Origin-Opener-Policy\n`;
-    caddyfile += `    header -Cross-Origin-Resource-Policy\n`;
-    caddyfile += `    header -Cross-Origin-Embedder-Policy\n`;
-    caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
+    if (deployType === "static" && staticDir) {
+      // Serve files directly from project directory — no container needed
+      caddyfile += `    root * /srv/data/projects/${projectId}/${staticDir}\n`;
+      caddyfile += `    try_files {path} /index.html\n`;
+      caddyfile += `    file_server\n`;
+    } else if (port) {
+      caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${port}\n`;
+    }
+    caddyfile += `${frameHeaders}\n`;
     caddyfile += `}\n\n`;
   }
 
   // Custom domain routing
   for (const cd of customDomains) {
-    const mapping = projectPorts.get(cd.project_id);
+    const mapping = projectRoutes.get(cd.project_id);
     if (mapping) {
       if (!isSafeHostname(cd.domain)) {
         console.warn(`Skipping unsafe custom domain in Caddyfile: ${cd.domain}`);
         continue;
       }
       caddyfile += `${cd.domain} {\n`;
-      caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${mapping.port}\n`;
-      caddyfile += `    header -X-Frame-Options\n`;
-      caddyfile += `    header -Content-Security-Policy\n`;
-      caddyfile += `    header -Cross-Origin-Opener-Policy\n`;
-      caddyfile += `    header -Cross-Origin-Resource-Policy\n`;
-      caddyfile += `    header -Cross-Origin-Embedder-Policy\n`;
-      caddyfile += `    header Content-Security-Policy "frame-ancestors 'self' ${domain} *.${domain}"\n`;
+      if (mapping.deployType === "static" && mapping.staticDir) {
+        caddyfile += `    root * /srv/data/projects/${mapping.projectId}/${mapping.staticDir}\n`;
+        caddyfile += `    try_files {path} /index.html\n`;
+        caddyfile += `    file_server\n`;
+      } else if (mapping.port) {
+        caddyfile += `    reverse_proxy ${CONTAINER_HOST}:${mapping.port}\n`;
+      }
+      caddyfile += `${frameHeaders}\n`;
       caddyfile += `}\n\n`;
 
       // Auto-redirect www variant to bare domain

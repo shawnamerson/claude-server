@@ -298,9 +298,9 @@ async function start() {
     console.log(`Auto-resuming ${toResume.length} interrupted deployment(s), failed ${toFail.length} superseded`);
   }
 
-  // Check "running" deployments whose containers are gone
+  // Check "running" deployments whose containers are gone (skip static sites — they have no container)
   const running = db.prepare(
-    "SELECT id, container_id FROM deployments WHERE status = 'running' AND container_id IS NOT NULL"
+    "SELECT id, container_id FROM deployments WHERE status = 'running' AND container_id IS NOT NULL AND (deploy_type IS NULL OR deploy_type != 'static')"
   ).all() as Array<{ id: string; container_id: string }>;
   for (const dep of running) {
     try {

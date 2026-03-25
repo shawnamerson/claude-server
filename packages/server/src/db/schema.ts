@@ -248,4 +248,11 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec("ALTER TABLE users ADD COLUMN reset_code TEXT");
     db.exec("ALTER TABLE users ADD COLUMN reset_code_expires TEXT");
   }
+
+  // Static site deploy migration
+  const depCols2 = db.prepare("PRAGMA table_info(deployments)").all() as Array<{ name: string }>;
+  if (!depCols2.find(c => c.name === "deploy_type")) {
+    db.exec("ALTER TABLE deployments ADD COLUMN deploy_type TEXT NOT NULL DEFAULT 'container'");
+    db.exec("ALTER TABLE deployments ADD COLUMN static_dir TEXT");
+  }
 }

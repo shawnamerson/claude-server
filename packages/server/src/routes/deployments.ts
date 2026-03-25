@@ -333,25 +333,41 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     // Mark build as succeeded — auto-fix will restart instead of rewriting code
     buildSucceeded.add(deploymentId);
 
-    // Deploy: start the production container with just the start command
-    updateStatus(deploymentId, "deploying");
-    addLog(deploymentId, "system", `Starting: ${projectConfig.startCommand}`);
+    const isStatic = projectConfig.deployType === "static";
 
-    const envVars = getEnvVarsForDeploy(project.id, project.slug);
-    const { containerId, hostPort } = await deployFromVolume(
-      project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug,
-      projectConfig.needsMoreMemory ? { memoryMb: 1024 } : undefined
-    );
+    if (isStatic) {
+      // Static site — serve via Caddy, no container needed
+      updateStatus(deploymentId, "deploying");
+      addLog(deploymentId, "system", "Static site — serving via Caddy (no container)");
 
-    db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run("claude-server/base:latest", deploymentId);
+      db.prepare("UPDATE deployments SET deploy_type = 'static', static_dir = ? WHERE id = ?")
+        .run(projectConfig.staticDir || ".", deploymentId);
 
-    updateStatus(deploymentId, "running", {
-      container_id: containerId,
-      port: hostPort,
-    });
+      updateStatus(deploymentId, "running");
 
-    addLog(deploymentId, "system", `Deployed successfully! Running on port ${hostPort}`);
-    addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
+      addLog(deploymentId, "system", `Deployed successfully!`);
+      addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
+    } else {
+      // Container app — deploy in Docker as before
+      updateStatus(deploymentId, "deploying");
+      addLog(deploymentId, "system", `Starting: ${projectConfig.startCommand}`);
+
+      const envVars = getEnvVarsForDeploy(project.id, project.slug);
+      const { containerId, hostPort } = await deployFromVolume(
+        project.source_path, deploymentId, projectConfig.appPort, projectConfig.startCommand, envVars, project.slug,
+        projectConfig.needsMoreMemory ? { memoryMb: 1024 } : undefined
+      );
+
+      db.prepare("UPDATE deployments SET docker_image_id = ? WHERE id = ?").run("claude-server/base:latest", deploymentId);
+
+      updateStatus(deploymentId, "running", {
+        container_id: containerId,
+        port: hostPort,
+      });
+
+      addLog(deploymentId, "system", `Deployed successfully! Running on port ${hostPort}`);
+      addLog(deploymentId, "system", `Live at: ${project.slug}.${config.domain}`);
+    }
 
     // Save and log total API usage for this deploy
     const usage = getDeployUsage(deploymentId);
@@ -369,11 +385,16 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     // Update project timestamp
     db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 
-    // Monitor container health — auto-fix if it crashes
-    monitorContainer(project, deploymentId, containerId).catch((err) => {
-      console.error("Monitor error:", err);
-      addLog(deploymentId, "system", `Monitor error: ${err instanceof Error ? err.message : String(err)}`);
-    });
+    // Monitor container health — auto-fix if it crashes (skip for static sites)
+    if (!isStatic) {
+      const dep = db.prepare("SELECT container_id FROM deployments WHERE id = ?").get(deploymentId) as { container_id: string } | undefined;
+      if (dep?.container_id) {
+        monitorContainer(project, deploymentId, dep.container_id).catch((err) => {
+          console.error("Monitor error:", err);
+          addLog(deploymentId, "system", `Monitor error: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      }
+    }
   } catch (err) {
     setCurrentDeployment(null);
     let message = err instanceof Error ? err.message : String(err);
@@ -670,6 +691,14 @@ router.post("/deployments/:id/start", async (req: Request, res: Response) => {
   const deployment = db.prepare("SELECT * FROM deployments WHERE id = ?").get(req.params.id) as Deployment | undefined;
   if (!deployment) {
     res.status(404).json({ error: "Deployment not found" });
+    return;
+  }
+
+  // Static sites just need a status change + Caddy reload
+  if ((deployment as any).deploy_type === "static") {
+    db.prepare("UPDATE deployments SET status = 'running', stopped_at = NULL WHERE id = ?").run(deployment.id);
+    reloadCaddyConfig().catch((err) => console.warn("Caddy reload failed:", err));
+    res.json({ ok: true });
     return;
   }
 
