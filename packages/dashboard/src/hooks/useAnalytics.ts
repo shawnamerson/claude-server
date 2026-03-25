@@ -22,9 +22,10 @@ export function useAnalytics() {
     if (path === lastPath.current) return;
     lastPath.current = path;
 
-    // Don't track admin pages or logged-in users (they're you, not visitors)
+    // Don't track admin pages, logged-in users, or DNT
     if (path.startsWith("/admin")) return;
     if ((window as any).__authToken) return;
+    if (navigator.doNotTrack === "1" || (navigator as any).globalPrivacyControl) return;
 
     try {
       fetch("/api/analytics/track", {
