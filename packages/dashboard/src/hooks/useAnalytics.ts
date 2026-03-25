@@ -22,11 +22,14 @@ export function useAnalytics() {
     if (path === lastPath.current) return;
     lastPath.current = path;
 
-    // Don't track admin pages, logged-in users, DNT, or ?notrack
+    // Sticky notrack — once set, persists forever
+    if (window.location.search.includes("notrack")) localStorage.setItem("vs_notrack", "1");
+    if (localStorage.getItem("vs_notrack")) return;
+
+    // Don't track admin pages, logged-in users, or DNT
     if (path.startsWith("/admin")) return;
     if ((window as any).__authToken) return;
     if (navigator.doNotTrack === "1" || (navigator as any).globalPrivacyControl) return;
-    if (window.location.search.includes("notrack")) return;
 
     try {
       fetch("/api/analytics/track", {
