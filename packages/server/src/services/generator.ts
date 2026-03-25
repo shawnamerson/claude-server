@@ -340,7 +340,7 @@ export class DevContainer {
       Env: ["NODE_PATH=/app/node_modules", "NEXT_TELEMETRY_DISABLED=1", ...this.extraEnv],
       HostConfig: {
         Binds: [`claude-server_app-data:/data:rw`],
-        Memory: this.memoryOverride || 256 * 1024 * 1024,
+        Memory: this.memoryOverride || 512 * 1024 * 1024,
         CpuQuota: 50000,
         CpuPeriod: 100000,
         Dns: ["8.8.8.8", "1.1.1.1"],
