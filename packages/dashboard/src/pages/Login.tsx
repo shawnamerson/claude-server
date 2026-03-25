@@ -104,11 +104,11 @@ export default function Login({ onLogin }: { onLogin: (email: string, password: 
             <form onSubmit={handleLogin} style={s.form}>
               <div>
                 <label style={s.label}>Email</label>
-                <input style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required autoFocus />
+                <input style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required autoFocus autoComplete="email" />
               </div>
               <div>
                 <label style={s.label}>Password</label>
-                <input style={s.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required />
+                <input style={s.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required autoComplete="current-password" />
               </div>
               <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>
                 {loading ? "Signing in..." : "Sign in"}
@@ -145,11 +145,11 @@ export default function Login({ onLogin }: { onLogin: (email: string, password: 
             <form onSubmit={handleReset} style={s.form}>
               <div>
                 <label style={s.label}>6-digit code</label>
-                <input style={s.input} type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" required autoFocus maxLength={6} />
+                <input style={s.input} type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" required autoFocus maxLength={6} autoComplete="one-time-code" />
               </div>
               <div>
                 <label style={s.label}>New password</label>
-                <input style={s.input} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" required />
+                <input style={s.input} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" required autoComplete="new-password" />
               </div>
               <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>
                 {loading ? "Resetting..." : "Reset password"}
