@@ -220,6 +220,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setLastFinishedDepId(deploymentId);
       activityRef.current = [];
       setActivity([]);
+      setHasSuggestion(false); // Clear — deploy is done, no pending suggestion
       // Don't overwrite messages if chat is actively streaming
       if (!chatStreaming) {
         api.getChatHistory(projectId).then(setMessages);
@@ -391,10 +392,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         )}
         {messages.map((msg, idx) => {
           const isLast = idx === messages.length - 1;
-          const looksActionable = hasSuggestion || (msg.content && (
+          const isSummary = /^(Added|Fixed|Updated|Implemented|Created|Removed|Refactored|Applied|Deployed|Built) /i.test(msg.content?.trim() || "");
+          const looksActionable = !isSummary && (hasSuggestion || (msg.content && (
             (/```/.test(msg.content) && /here'?s the (updated|fixed|new|modified)|replace .* with|change .* to|update .* to|I('ll| will| can) (update|fix|change|modify|replace|add|remove)|here'?s (what|how) (to|I'd) (fix|change|update)|the fix is/i.test(msg.content)) ||
             /should I apply|want me to (apply|make|implement|add|fix|update)|shall I (apply|make|implement)|would you like me to (apply|make|implement)/i.test(msg.content)
-          ));
+          )));
           const showDeployBtn = msg.role === "assistant" && isLast && looksActionable && !deploying && !chatStreaming && !!msg.content && !msg.content.startsWith("__UPGRADE__");
           const isEmpty = !msg.content && msg.role === "assistant";
           const isUpgrade = msg.content?.startsWith("__UPGRADE__");
