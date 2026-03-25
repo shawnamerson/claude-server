@@ -250,26 +250,8 @@ export default function Admin() {
                 {users.map((u) => (
                   <tr key={u.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                     <td style={{ padding: "0.6rem 1rem", maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</td>
-                    <td style={{ padding: "0.6rem 0.5rem" }}>
-                      <select
-                        value={u.plan || "free"}
-                        onChange={(e) => changePlan(u.id, e.target.value)}
-                        style={{
-                          background: "#1a1a2e",
-                          color: PLAN_COLORS[u.plan || "free"],
-                          border: `1px solid ${COLORS.border}`,
-                          borderRadius: "0.35rem",
-                          padding: "0.2rem 0.4rem",
-                          fontSize: "0.8rem",
-                          cursor: "pointer",
-                          outline: "none",
-                        }}
-                      >
-                        <option value="free">free</option>
-                        <option value="starter">starter</option>
-                        <option value="pro">pro</option>
-                        <option value="business">business</option>
-                      </select>
+                    <td style={{ padding: "0.6rem 0.5rem", color: PLAN_COLORS[u.plan || "free"], fontSize: "0.8rem", fontWeight: 600 }}>
+                      {u.plan || "free"}
                     </td>
                     <td style={{ padding: "0.6rem 0.5rem", color: u.email_verified ? "#10b981" : "#ef4444" }}>
                       {u.email_verified ? "Yes" : "No"}
