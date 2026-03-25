@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, Project } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
 
@@ -126,9 +126,14 @@ function ProjectCard({ project }: { project: Project }) {
 export default function ProjectList() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    api.listProjects().then(setProjects).finally(() => setLoading(false));
+    api.listProjects().then(p => {
+      setProjects(p);
+      // First-time users with no projects — send them to create one
+      if (p.length === 0) navigate("/new", { replace: true });
+    }).finally(() => setLoading(false));
     // Poll for status updates every 5 seconds
     const interval = setInterval(() => {
       api.listProjects().then(setProjects);

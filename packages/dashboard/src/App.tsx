@@ -228,11 +228,8 @@ export default function App() {
             track("signed_up", { referrer: document.referrer || "(direct)", landingPage: sessionStorage.getItem("vs_landing") || "/" });
             const params = new URLSearchParams(window.location.search);
             const prompt = params.get("prompt");
-            if (prompt) {
-              navigate(`/new?prompt=${encodeURIComponent(prompt)}`);
-            } else {
-              navigate("/projects");
-            }
+            // Always send new users to create their first project
+            navigate(prompt ? `/new?prompt=${encodeURIComponent(prompt)}` : "/new");
           }} />
         } />
       </Routes>
