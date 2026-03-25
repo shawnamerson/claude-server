@@ -360,8 +360,19 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     });
   } catch (err) {
     setCurrentDeployment(null);
-    const message = err instanceof Error ? err.message : String(err);
+    let message = err instanceof Error ? err.message : String(err);
     console.error("Pipeline failed:", err);
+
+    // Parse API error JSON into friendly messages
+    try {
+      const parsed = JSON.parse(message);
+      if (parsed?.error?.type === "overloaded_error") {
+        message = "Claude is temporarily overloaded. Please try again in a moment.";
+      } else if (parsed?.error?.message) {
+        message = parsed.error.message;
+      }
+    } catch {}
+
     addLog(deploymentId, "system", `Deployment failed: ${message}`);
     updateStatus(deploymentId, "failed", { error: message });
 
