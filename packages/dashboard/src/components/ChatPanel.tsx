@@ -307,10 +307,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setMessages(prev => [...prev, { id: Date.now() + 2, project_id: projectId, role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Chat failed"}`, created_at: new Date().toISOString() }]);
     } finally {
       setChatStreaming(false);
-      // Show Apply & Deploy only when Claude suggests actual code changes (code block required)
+      // Show Apply & Deploy only when Claude proposes a code change (not just explains code)
       const hasCodeBlock = /```/.test(assistantText);
+      const proposesChange = /here'?s the (updated|fixed|new|modified)|replace .* with|change .* to|update .* to|I('ll| will| can) (update|fix|change|modify|replace|add|remove)|here'?s (what|how) (to|I'd) (fix|change|update)|the fix is/i.test(assistantText);
       const asksToApply = /should I apply|want me to (apply|make|implement|add|fix|update)|shall I (apply|make|implement)|would you like me to (apply|make|implement)/i.test(assistantText);
-      setHasSuggestion(hasCodeBlock || asksToApply);
+      setHasSuggestion((hasCodeBlock && proposesChange) || asksToApply);
       // Sync with DB to get proper message IDs
       api.getChatHistory(projectId).then(setMessages);
     }
@@ -391,7 +392,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         {messages.map((msg, idx) => {
           const isLast = idx === messages.length - 1;
           const looksActionable = hasSuggestion || (msg.content && (
-            /```/.test(msg.content) ||
+            (/```/.test(msg.content) && /here'?s the (updated|fixed|new|modified)|replace .* with|change .* to|update .* to|I('ll| will| can) (update|fix|change|modify|replace|add|remove)|here'?s (what|how) (to|I'd) (fix|change|update)|the fix is/i.test(msg.content)) ||
             /should I apply|want me to (apply|make|implement|add|fix|update)|shall I (apply|make|implement)|would you like me to (apply|make|implement)/i.test(msg.content)
           ));
           const showDeployBtn = msg.role === "assistant" && isLast && looksActionable && !deploying && !chatStreaming && !!msg.content && !msg.content.startsWith("__UPGRADE__");
