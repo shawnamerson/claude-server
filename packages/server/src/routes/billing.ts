@@ -7,8 +7,8 @@ import "../types.js";
 const router = Router();
 
 const PLANS = [
-  { id: "free", name: "Free", price: 0, deploys: 3, projects: 1, chats: 50, features: ["1 project", "3 deploys/month", "50 AI chats/month", "PostgreSQL database", "Custom subdomain"] },
-  { id: "pro", name: "Pro", price: 4900, deploys: 50, projects: 5, chats: 2000, features: ["5 projects", "50 deploys/month", "2,000 AI chats/month", "GitHub import", "Custom domains", "Cron jobs"] },
+  { id: "free", name: "Free", price: 0, deploys: 10, projects: 1, chats: 50, features: ["1 project", "10 deploys/month", "50 AI chats/month", "PostgreSQL database", "Custom subdomain"] },
+  { id: "pro", name: "Pro", price: 1900, deploys: 20, projects: 5, chats: 200, features: ["5 projects", "20 deploys/month", "200 AI chats/month", "GitHub import", "Custom domains", "Cron jobs"] },
   { id: "growth", name: "Growth", price: 9900, deploys: 200, projects: 20, chats: 10000, features: ["20 projects", "200 deploys/month", "10,000 AI chats/month", "Everything in Pro", "Priority support"] },
   { id: "team", name: "Team", price: 19900, deploys: 1000, projects: -1, chats: -1, features: ["Unlimited projects", "1,000 deploys/month", "Unlimited AI chats", "Team collaboration", "Everything in Growth"] },
 ];

@@ -314,7 +314,7 @@ export default function Landing() {
             <div style={s.planPrice}>$0</div>
             <div style={s.planPer}>forever</div>
             <div style={s.planFeatures}>
-              <div>3 deploys / month</div>
+              <div>10 deploys / month</div>
               <div>1 project</div>
               <div>50 AI chats</div>
               <div>PostgreSQL database</div>
@@ -325,12 +325,12 @@ export default function Landing() {
           <div style={{ ...s.priceCard, borderColor: "#7c3aed", position: "relative" }}>
             <div style={s.popular}>Most popular</div>
             <div style={{ ...s.planName, color: "#a78bfa" }}>Pro</div>
-            <div style={s.planPrice}>$49<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
+            <div style={s.planPrice}>$19<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
             <div style={s.planPer}>per month</div>
             <div style={s.planFeatures}>
-              <div>50 deploys / month</div>
+              <div>20 deploys / month</div>
               <div>5 projects</div>
-              <div>2,000 AI chats</div>
+              <div>200 AI chats</div>
               <div>GitHub import</div>
               <div>Custom domains</div>
               <div>Cron jobs</div>
