@@ -264,10 +264,12 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
       )
       .get(project.id, deploymentId) as Deployment | undefined;
 
-    if (prevDeployment?.container_id) {
-      addLog(deploymentId, "system", "Stopping previous deployment...");
-      await stopContainer(prevDeployment.container_id);
-      if (prevDeployment.port) releasePort(prevDeployment.port);
+    if (prevDeployment) {
+      if (prevDeployment.container_id) {
+        addLog(deploymentId, "system", "Stopping previous deployment...");
+        await stopContainer(prevDeployment.container_id);
+        if (prevDeployment.port) releasePort(prevDeployment.port);
+      }
       db.prepare("UPDATE deployments SET status = 'stopped', stopped_at = datetime('now') WHERE id = ?").run(prevDeployment.id);
     }
 
