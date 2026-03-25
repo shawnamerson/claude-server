@@ -2,8 +2,11 @@ import Dockerode from "dockerode";
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { encrypt } from "./encrypt.js";
+import { config } from "../config.js";
 
 const docker = new Dockerode();
+
+const SHARED_DB_CONTAINER = "claude-server-db";
 
 interface ProjectDatabase {
   id: number;
@@ -17,20 +20,21 @@ interface ProjectDatabase {
   status: string;
 }
 
-// Find an available port for Postgres (starting at 15432)
-const usedDbPorts = new Set<number>();
-
-async function findAvailableDbPort(): Promise<number> {
-  let port = 15432;
-  while (usedDbPorts.has(port)) {
-    port++;
-  }
-  usedDbPorts.add(port);
-  return port;
-}
-
 function generatePassword(): string {
   return crypto.randomBytes(16).toString("hex");
+}
+
+// Execute SQL against the shared Postgres via Docker exec
+async function execPostgresSQL(sql: string, user?: string, dbName?: string): Promise<string> {
+  const container = docker.getContainer(SHARED_DB_CONTAINER);
+  const cmd = ["psql", "-U", user || config.postgresUser, "-d", dbName || "vibestack", "-t", "-A", "-c", sql];
+  const exec = await container.exec({
+    Cmd: cmd,
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const stream = await exec.start({});
+  return streamToString(stream);
 }
 
 export async function createDatabase(projectId: string, projectSlug: string): Promise<{
@@ -46,10 +50,10 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
   // Check if database already exists
   const existing = db.prepare("SELECT * FROM project_databases WHERE project_id = ?").get(projectId) as ProjectDatabase | undefined;
   if (existing && existing.status === "running") {
-    const connStr = `postgresql://${existing.db_user}:${existing.db_password}@${existing.container_name}:5432/${existing.db_name}`;
+    const connStr = `postgresql://${existing.db_user}:${existing.db_password}@${SHARED_DB_CONTAINER}:5432/${existing.db_name}`;
     return {
-      host: existing.container_name,
-      port: existing.port,
+      host: SHARED_DB_CONTAINER,
+      port: 5432,
       dbName: existing.db_name,
       user: existing.db_user,
       password: existing.db_password,
@@ -58,95 +62,48 @@ export async function createDatabase(projectId: string, projectSlug: string): Pr
   }
 
   const dbName = projectSlug.replace(/-/g, "_");
-  const dbUser = "app";
+  const dbUser = projectSlug.replace(/-/g, "_") + "_user";
   const dbPassword = generatePassword();
-  const hostPort = await findAvailableDbPort();
-  const containerName = `claude-server-db-${projectSlug}`;
 
-  // Remove stale container with same name if it exists
+  // Create database and user in the shared Postgres instance
   try {
-    const stale = docker.getContainer(containerName);
-    await stale.stop({ t: 2 }).catch(() => {});
-    await stale.remove({ force: true });
-    console.log(`Removed stale database container: ${containerName}`);
+    await execPostgresSQL(`CREATE DATABASE ${dbName};`);
   } catch {
-    // Container doesn't exist — that's fine
+    // Database may already exist from a previous attempt
   }
-
-  // Pull postgres image if needed
   try {
-    await docker.getImage("postgres:16-alpine").inspect();
+    await execPostgresSQL(`CREATE USER ${dbUser} WITH PASSWORD '${dbPassword}';`);
   } catch {
-    console.log("Pulling postgres:16-alpine...");
-    const stream = await docker.pull("postgres:16-alpine");
-    await new Promise<void>((resolve, reject) => {
-      docker.modem.followProgress(stream, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    // User may already exist — update password
+    await execPostgresSQL(`ALTER USER ${dbUser} WITH PASSWORD '${dbPassword}';`);
   }
+  await execPostgresSQL(`GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUser};`);
+  await execPostgresSQL(`ALTER DATABASE ${dbName} OWNER TO ${dbUser};`);
+  // Set connection limit per user to prevent abuse
+  await execPostgresSQL(`ALTER USER ${dbUser} CONNECTION LIMIT 20;`);
 
-  // Create project-specific network if it doesn't exist
-  const networkName = `claude-project-${projectSlug}`;
-  try {
-    await docker.getNetwork(networkName).inspect();
-  } catch {
-    await docker.createNetwork({ Name: networkName, Driver: "bridge" });
-  }
-
-  // Create and start the Postgres container on the project's isolated network
-  const container = await docker.createContainer({
-    Image: "postgres:16-alpine",
-    name: containerName,
-    Env: [
-      `POSTGRES_DB=${dbName}`,
-      `POSTGRES_USER=${dbUser}`,
-      `POSTGRES_PASSWORD=${dbPassword}`,
-    ],
-    ExposedPorts: { "5432/tcp": {} },
-    HostConfig: {
-      PortBindings: {
-        "5432/tcp": [{ HostPort: String(hostPort) }],
-      },
-      RestartPolicy: { Name: "unless-stopped" },
-      Memory: 256 * 1024 * 1024, // 256MB limit
-    },
-    Labels: {
-      "claude-server": "true",
-      "claude-server.database": projectId,
-    },
-    NetworkingConfig: {
-      EndpointsConfig: {
-        [networkName]: {}, // Only accessible from this project's containers
-        "claude-server-network": {}, // Also on main network for schema viewer/query runner
-      },
-    },
-  });
-
-  await container.start();
+  const connectionString = `postgresql://${dbUser}:${dbPassword}@${SHARED_DB_CONTAINER}:5432/${dbName}`;
 
   // Save to database
   if (existing) {
     db.prepare(
-      `UPDATE project_databases SET container_id = ?, container_name = ?, db_name = ?, db_user = ?, db_password = ?, port = ?, status = 'running' WHERE project_id = ?`
-    ).run(container.id, containerName, dbName, dbUser, dbPassword, hostPort, projectId);
+      `UPDATE project_databases SET container_id = NULL, container_name = ?, db_name = ?, db_user = ?, db_password = ?, port = 5432, status = 'running' WHERE project_id = ?`
+    ).run(SHARED_DB_CONTAINER, dbName, dbUser, dbPassword, projectId);
   } else {
     db.prepare(
-      `INSERT INTO project_databases (project_id, container_id, container_name, db_name, db_user, db_password, port, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'running')`
-    ).run(projectId, container.id, containerName, dbName, dbUser, dbPassword, hostPort);
+      `INSERT INTO project_databases (project_id, container_id, container_name, db_name, db_user, db_password, port, status) VALUES (?, NULL, ?, ?, ?, ?, 5432, 'running')`
+    ).run(projectId, SHARED_DB_CONTAINER, dbName, dbUser, dbPassword);
   }
 
   // Auto-set DATABASE_URL env var for the project (encrypted)
-  const connectionString = `postgresql://${dbUser}:${dbPassword}@${containerName}:5432/${dbName}`;
   db.prepare(
     `INSERT INTO env_vars (project_id, key, value) VALUES (?, 'DATABASE_URL', ?)
      ON CONFLICT(project_id, key) DO UPDATE SET value = excluded.value`
   ).run(projectId, encrypt(connectionString));
 
   return {
-    host: containerName,
-    port: hostPort,
+    host: SHARED_DB_CONTAINER,
+    port: 5432,
     dbName,
     user: dbUser,
     password: dbPassword,
@@ -159,24 +116,15 @@ export async function deleteDatabase(projectId: string): Promise<void> {
   const existing = db.prepare("SELECT * FROM project_databases WHERE project_id = ?").get(projectId) as ProjectDatabase | undefined;
   if (!existing) return;
 
-  // Stop and remove the container
-  if (existing.container_id) {
-    try {
-      const container = docker.getContainer(existing.container_id);
-      await container.stop({ t: 5 });
-      await container.remove({ force: true });
-    } catch {
-      // Container may already be gone
-      try {
-        const container = docker.getContainer(existing.container_name);
-        await container.remove({ force: true });
-      } catch {
-        // Ignore
-      }
-    }
+  // Drop database and user from shared Postgres
+  try {
+    // Terminate active connections first
+    await execPostgresSQL(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${existing.db_name}' AND pid <> pg_backend_pid();`);
+    await execPostgresSQL(`DROP DATABASE IF EXISTS ${existing.db_name};`);
+    await execPostgresSQL(`DROP USER IF EXISTS ${existing.db_user};`);
+  } catch (err) {
+    console.warn(`Failed to drop database ${existing.db_name}:`, err instanceof Error ? err.message : String(err));
   }
-
-  usedDbPorts.delete(existing.port);
 
   // Remove from database
   db.prepare("DELETE FROM project_databases WHERE project_id = ?").run(projectId);
@@ -226,7 +174,7 @@ export async function getDatabaseSchema(projectId: string): Promise<TableSchema[
   const info = getDatabaseInfo(projectId);
   if (!info || info.status !== "running") return [];
 
-  const container = docker.getContainer(info.container_name);
+  const container = docker.getContainer(SHARED_DB_CONTAINER);
 
   // Get columns for all tables
   const colsExec = await container.exec({
@@ -293,7 +241,7 @@ export async function executeQuery(projectId: string, sql: string): Promise<{
     return { columns: [], rows: [], rowCount: 0, error: "Database not running" };
   }
 
-  // Block dangerous statements — only allow SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, ALTER TABLE
+  // Block dangerous statements
   const normalized = sql.trim().toUpperCase();
   const blocked = [
     "DROP DATABASE", "DROP ROLE", "DROP USER", "DROP SCHEMA",
@@ -309,17 +257,16 @@ export async function executeQuery(projectId: string, sql: string): Promise<{
     }
   }
 
-  // Block multiple statements (semicolons outside of string literals)
+  // Block multiple statements
   const statementsOutsideStrings = sql.replace(/'[^']*'/g, "").replace(/"[^"]*"/g, "");
   const statementCount = statementsOutsideStrings.split(";").filter(s => s.trim().length > 0).length;
   if (statementCount > 1) {
     return { columns: [], rows: [], rowCount: 0, error: "Only single statements are allowed" };
   }
 
-  const container = docker.getContainer(info.container_name);
+  const container = docker.getContainer(SHARED_DB_CONTAINER);
 
   try {
-    // Use CSV format for reliable parsing
     const exec = await container.exec({
       Cmd: ["psql", "-U", info.db_user, "-d", info.db_name, "-c", sql, "--csv"],
       AttachStdout: true,
@@ -332,13 +279,11 @@ export async function executeQuery(projectId: string, sql: string): Promise<{
       return { columns: [], rows: [], rowCount: 0 };
     }
 
-    // Check for error messages from psql
     if (output.includes("ERROR:")) {
       const errorLine = output.split("\n").find(l => l.includes("ERROR:"));
       return { columns: [], rows: [], rowCount: 0, error: errorLine || "Query failed" };
     }
 
-    // Parse CSV output
     const lines = output.trim().split("\n");
     if (lines.length === 0) {
       return { columns: [], rows: [], rowCount: 0 };
@@ -396,25 +341,4 @@ function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
     stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8").trim()));
     stream.on("error", reject);
   });
-}
-
-// Initialize: track existing database container ports
-export async function initializeDbPortTracking() {
-  try {
-    const containers = await docker.listContainers({
-      all: true,
-      filters: { label: ["claude-server.database"] },
-    });
-    for (const container of containers) {
-      if (container.Ports) {
-        for (const port of container.Ports) {
-          if (port.PublicPort) {
-            usedDbPorts.add(port.PublicPort);
-          }
-        }
-      }
-    }
-  } catch {
-    // Docker might not be available
-  }
 }

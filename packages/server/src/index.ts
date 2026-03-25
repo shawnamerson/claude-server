@@ -19,7 +19,7 @@ import authRoutes, { authMiddleware, requireProjectOwner, requireDeploymentOwner
 import billingRoutes from "./routes/billing.js";
 import teamRoutes from "./routes/teams.js";
 import adminRoutes, { isAdmin } from "./routes/admin.js";
-import { initializeDbPortTracking } from "./services/database.js";
+// Database port tracking removed — using shared Postgres now
 import { reloadCaddyConfig } from "./services/caddy.js";
 import { cleanupOrphanedDevContainers } from "./services/generator.js";
 import { backupAllDatabases } from "./services/backups.js";
@@ -236,7 +236,6 @@ async function start() {
 
   // Track existing container ports and clean up orphans
   await initializePortTracking();
-  await initializeDbPortTracking();
   await cleanupOrphanedDevContainers();
   await cleanupStoppedContainers();
   await cleanupOrphanedContainers();

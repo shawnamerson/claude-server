@@ -2,9 +2,10 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Load .env from project root (two levels up from packages/server)
+// Load env from project root — try .env.production first, then .env
 const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname2, "..", "..", "..");
+dotenv.config({ path: path.join(rootDir, ".env.production") });
 dotenv.config({ path: path.join(rootDir, ".env") });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,4 +30,7 @@ export const config = {
   dockerHostIp: process.env.DOCKER_HOST_IP || "172.17.0.1",
   maxUploadSize: 100 * 1024 * 1024, // 100MB
   maxBuildRetries: 3,
+  postgresHost: process.env.POSTGRES_HOST || "claude-server-db",
+  postgresUser: process.env.POSTGRES_USER || "vibestack",
+  postgresPassword: process.env.POSTGRES_PASSWORD || "",
 };

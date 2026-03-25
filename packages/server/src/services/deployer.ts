@@ -148,6 +148,7 @@ async function _createAndStartContainer(
     NetworkingConfig: {
       EndpointsConfig: {
         [networkName]: {},
+        "claude-server-network": {}, // Reach shared Postgres
       },
     },
   });
@@ -307,30 +308,6 @@ export async function cleanupOrphanedContainers() {
           }
         } catch (err) {
           console.warn(`Failed to remove orphaned container ${c.Id.slice(0, 12)}:`, err instanceof Error ? err.message : String(err));
-        }
-      }
-    }
-
-    // Check for orphaned database containers
-    const dbContainers = await docker.listContainers({
-      all: true,
-      filters: { label: ["claude-server=true", "claude-server.database"] },
-    });
-
-    for (const c of dbContainers) {
-      const projectId = c.Labels["claude-server.database"];
-      if (!projectId) continue;
-
-      const project = db.prepare("SELECT id FROM projects WHERE id = ?").get(projectId);
-      if (!project) {
-        console.log(`Removing orphaned DB container: ${c.Names[0]} (project ${projectId} not in DB)`);
-        try {
-          const container = docker.getContainer(c.Id);
-          await container.stop({ t: 5 }).catch(() => {});
-          await container.remove({ force: true });
-          removed++;
-        } catch (err) {
-          console.warn(`Failed to remove orphaned DB container ${c.Id.slice(0, 12)}:`, err instanceof Error ? err.message : String(err));
         }
       }
     }

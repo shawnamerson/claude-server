@@ -14,6 +14,7 @@ interface ProjectDatabase {
 }
 
 const BACKUP_DIR = process.env.BACKUP_DIR || "/app/data/backups";
+const SHARED_DB_CONTAINER = "claude-server-db";
 
 export async function backupAllDatabases(): Promise<void> {
   const db = getDb();
@@ -35,7 +36,8 @@ export async function backupAllDatabases(): Promise<void> {
 
   for (const dbInfo of databases) {
     try {
-      const container = docker.getContainer(dbInfo.container_name);
+      // Always use the shared Postgres container
+      const container = docker.getContainer(SHARED_DB_CONTAINER);
 
       // Run pg_dump inside the container
       const exec = await container.exec({
