@@ -396,7 +396,7 @@ async function autoFixAndRedeploy(
     "SELECT message FROM logs WHERE deployment_id = ? AND stream IN ('stderr', 'system') ORDER BY id DESC LIMIT 20"
   ).all(deploymentId) as Array<{ message: string }>;
   const recentErrorText = recentErrors.map(l => l.message).join("\n");
-  const isCodeError = /ModuleNotFoundError|ImportError|SyntaxError|NameError|TypeError|Cannot find module|require\(\) of ES Module/.test(recentErrorText);
+  const isCodeError = /ModuleNotFoundError|ImportError|SyntaxError|NameError|TypeError|Cannot find module|require\(\) of ES Module|require is not defined|ReferenceError/.test(recentErrorText);
 
   // If the build succeeded AND the error is NOT a code issue, just restart with more memory
   if (buildSucceeded.has(deploymentId) && !isCodeError) {
