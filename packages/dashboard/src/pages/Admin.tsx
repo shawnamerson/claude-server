@@ -32,6 +32,9 @@ interface AdminUser {
   chats_this_month: number;
   api_cost_cents_month: number;
   api_cost_cents_total: number;
+  running_containers: number;
+  server_cost_cents_month: number;
+  total_cost_cents_month: number;
 }
 
 interface AdminDeployment {
@@ -233,8 +236,10 @@ export default function Admin() {
                   <th style={{ padding: "0.6rem 0.5rem" }}>Projects</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Deploys</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Chats</th>
-                  <th style={{ padding: "0.6rem 0.5rem" }}>Cost/mo</th>
-                  <th style={{ padding: "0.6rem 0.5rem" }}>Cost total</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>Containers</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>API cost</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>Server cost</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>Total/mo</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Joined</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Actions</th>
                 </tr>
@@ -270,8 +275,10 @@ export default function Admin() {
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.project_count}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.deploys_this_month}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.chats_this_month}</td>
+                    <td style={{ padding: "0.6rem 0.5rem" }}>{u.running_containers}</td>
                     <td style={{ padding: "0.6rem 0.5rem", color: u.api_cost_cents_month > 0 ? "#f59e0b" : COLORS.textMuted }}>${(u.api_cost_cents_month / 100).toFixed(2)}</td>
-                    <td style={{ padding: "0.6rem 0.5rem", color: u.api_cost_cents_total > 0 ? "#f59e0b" : COLORS.textMuted }}>${(u.api_cost_cents_total / 100).toFixed(2)}</td>
+                    <td style={{ padding: "0.6rem 0.5rem", color: u.server_cost_cents_month > 0 ? "#f59e0b" : COLORS.textMuted }}>${(u.server_cost_cents_month / 100).toFixed(2)}</td>
+                    <td style={{ padding: "0.6rem 0.5rem", fontWeight: 600, color: u.total_cost_cents_month > 0 ? "#ef4444" : COLORS.textMuted }}>${(u.total_cost_cents_month / 100).toFixed(2)}</td>
                     <td style={{ padding: "0.6rem 0.5rem", color: COLORS.textMuted }}>{timeAgo(u.created_at)}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>
                       <button

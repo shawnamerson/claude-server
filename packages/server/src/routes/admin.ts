@@ -216,12 +216,15 @@ router.get("/users", (_req: Request, res: Response) => {
         (SELECT COUNT(*) FROM projects WHERE user_id = u.id) as project_count,
         COALESCE((SELECT deploys FROM monthly_usage WHERE user_id = u.id AND month = ?), 0) as deploys_this_month,
         COALESCE((SELECT chats FROM monthly_usage WHERE user_id = u.id AND month = ?), 0) as chats_this_month,
-        COALESCE((SELECT SUM(d.cost_cents) FROM deployments d
-          JOIN projects p ON d.project_id = p.id
-          WHERE p.user_id = u.id AND d.created_at >= ?), 0) as api_cost_cents_month,
-        COALESCE((SELECT SUM(d.cost_cents) FROM deployments d
-          JOIN projects p ON d.project_id = p.id
-          WHERE p.user_id = u.id), 0) as api_cost_cents_total
+        COALESCE((SELECT SUM(d2.cost_cents) FROM deployments d2
+          JOIN projects p2 ON d2.project_id = p2.id
+          WHERE p2.user_id = u.id AND d2.created_at >= ?), 0) as api_cost_cents_month,
+        COALESCE((SELECT SUM(d3.cost_cents) FROM deployments d3
+          JOIN projects p3 ON d3.project_id = p3.id
+          WHERE p3.user_id = u.id), 0) as api_cost_cents_total,
+        (SELECT COUNT(*) FROM deployments d4
+          JOIN projects p4 ON d4.project_id = p4.id
+          WHERE p4.user_id = u.id AND d4.status = 'running' AND d4.container_id IS NOT NULL) as running_containers
       FROM users u
       ${adminFilter}
       ORDER BY u.created_at DESC
@@ -236,9 +239,22 @@ router.get("/users", (_req: Request, res: Response) => {
       chats_this_month: number;
       api_cost_cents_month: number;
       api_cost_cents_total: number;
+      running_containers: number;
     }>;
 
-    res.json(users);
+    // Calculate server cost share per user based on running containers
+    // Server cost: $19.99/mo split across all running containers (static sites = $0)
+    const SERVER_COST_CENTS = 1999;
+    const totalContainers = users.reduce((sum, u) => sum + u.running_containers, 0) || 1;
+    const costPerContainer = SERVER_COST_CENTS / totalContainers;
+
+    const usersWithCost = users.map(u => ({
+      ...u,
+      server_cost_cents_month: Math.round(u.running_containers * costPerContainer),
+      total_cost_cents_month: u.api_cost_cents_month + Math.round(u.running_containers * costPerContainer),
+    }));
+
+    res.json(usersWithCost);
   } catch (err) {
     console.error("Admin users error:", err);
     res.status(500).json({ error: "Failed to fetch users" });
