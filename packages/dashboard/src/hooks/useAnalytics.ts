@@ -22,8 +22,9 @@ export function useAnalytics() {
     if (path === lastPath.current) return;
     lastPath.current = path;
 
-    // Don't track admin pages
+    // Don't track admin pages or logged-in users (they're you, not visitors)
     if (path.startsWith("/admin")) return;
+    if ((window as any).__authToken) return;
 
     try {
       fetch("/api/analytics/track", {
