@@ -185,9 +185,9 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
       `}</style>
       <nav style={styles.nav} className="vs-nav">
         <Link to="/" style={styles.logo}>VibeStack</Link>
-        <div className="vs-nav-links">
+        <div className="vs-nav-links" style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}>
           <Link to="/projects" style={styles.navLink}>Projects</Link>
-          <Link to="/new" style={styles.navLink}>New</Link>
+          <Link to="/new" style={styles.navLink}>New Project</Link>
           <Link to="/billing" style={styles.navLink}>Billing</Link>
           <Link to="/teams" style={styles.navLink}>Teams</Link>
           <Link to="/settings" style={styles.navLink}>Settings</Link>
