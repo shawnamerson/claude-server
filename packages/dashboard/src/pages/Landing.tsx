@@ -152,7 +152,8 @@ const responsiveCSS = `
     .jv-comp-grid { grid-template-columns: 1fr; }
     .jv-pricing-grid { grid-template-columns: 1fr 1fr; }
     @media (max-width: 500px) { .jv-pricing-grid { grid-template-columns: 1fr; } }
-    .jv-nav-links a:not(:last-child) { display: none; }
+    .jv-nav-links a { display: none; }
+    .jv-nav-links a:nth-last-child(-n+2) { display: inline; }
     .jv-title { font-size: 2rem; }
   }
 `;
