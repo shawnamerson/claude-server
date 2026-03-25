@@ -331,6 +331,7 @@ export default function Landing() {
               <div>20 deploys / month</div>
               <div>1 project</div>
               <div>100 AI chats</div>
+              <div>PostgreSQL database</div>
               <div>GitHub import</div>
               <div>Custom domains</div>
               <div>Cron jobs</div>
