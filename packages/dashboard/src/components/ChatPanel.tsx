@@ -306,12 +306,10 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setMessages(prev => [...prev, { id: Date.now() + 2, project_id: projectId, role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Chat failed"}`, created_at: new Date().toISOString() }]);
     } finally {
       setChatStreaming(false);
-      // Show Apply & Deploy only when Claude suggests actual code changes
+      // Show Apply & Deploy only when Claude suggests actual code changes (code block required)
       const hasCodeBlock = /```/.test(assistantText);
-      const mentionsFiles = /\b(server\.js|index\.(js|ts|html)|package\.json|style\.css|app\.(js|ts)|\.env)\b/.test(assistantText);
-      const suggestsAction = /\b(fix|change|modify|update|replace|add|remove|install|create|delete|rename|move|refactor|rewrite|apply|implement)\b/i.test(assistantText);
-      const asksToApply = /should I apply|want me to|shall I|I can (apply|make|implement|add|fix|update)/i.test(assistantText);
-      setHasSuggestion(hasCodeBlock || mentionsFiles || asksToApply || (suggestsAction && mentionsFiles));
+      const asksToApply = /should I apply|want me to (apply|make|implement|add|fix|update)|shall I (apply|make|implement)|would you like me to (apply|make|implement)/i.test(assistantText);
+      setHasSuggestion(hasCodeBlock || asksToApply);
       // Sync with DB to get proper message IDs
       api.getChatHistory(projectId).then(setMessages);
     }
@@ -393,9 +391,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
           const isLast = idx === messages.length - 1;
           const looksActionable = hasSuggestion || (msg.content && (
             /```/.test(msg.content) ||
-            /\b(server\.js|index\.(js|ts|html)|package\.json|style\.css|app\.(js|ts)|\.env)\b/.test(msg.content) ||
-            /should I apply|want me to|shall I|I can (apply|make|implement|add|fix|update)|would you like me to/i.test(msg.content) ||
-            /\b(fix|change|modify|update|add|remove|implement|apply)\b/i.test(msg.content)
+            /should I apply|want me to (apply|make|implement|add|fix|update)|shall I (apply|make|implement)|would you like me to (apply|make|implement)/i.test(msg.content)
           ));
           const showDeployBtn = msg.role === "assistant" && isLast && looksActionable && !deploying && !chatStreaming && !!msg.content && !msg.content.startsWith("__UPGRADE__");
           const isEmpty = !msg.content && msg.role === "assistant";
