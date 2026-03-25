@@ -22,10 +22,9 @@ import { track } from "./hooks/useTrack";
 
 const styles = {
   app: {
-    height: "100vh",
+    minHeight: "100vh",
     display: "flex",
     flexDirection: "column" as const,
-    overflow: "hidden",
   },
   nav: {
     display: "flex",
@@ -159,6 +158,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 
         /* Mobile responsive */
+        .vs-app { height: 100vh; overflow: hidden; }
         .vs-hamburger { display: none; background: none; border: none; color: #888; font-size: 1.4rem; cursor: pointer; padding: 0.2rem; line-height: 1; }
         .vs-mobile-menu { display: none; }
         @media (max-width: 768px) {
