@@ -203,6 +203,7 @@ router.get("/users", (_req: Request, res: Response) => {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
     const monthStr = monthStart.toISOString();
+    const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
     const adminEmails = getAdminEmails();
     const adminFilter = adminEmails.length > 0
@@ -213,11 +214,18 @@ router.get("/users", (_req: Request, res: Response) => {
       SELECT
         u.id, u.email, u.plan, u.email_verified, u.created_at,
         (SELECT COUNT(*) FROM projects WHERE user_id = u.id) as project_count,
-        (SELECT COUNT(*) FROM deployments d JOIN projects p ON p.id = d.project_id WHERE p.user_id = u.id AND d.created_at >= ?) as deploys_this_month
+        COALESCE((SELECT deploys FROM monthly_usage WHERE user_id = u.id AND month = ?), 0) as deploys_this_month,
+        COALESCE((SELECT chats FROM monthly_usage WHERE user_id = u.id AND month = ?), 0) as chats_this_month,
+        COALESCE((SELECT SUM(d.cost_cents) FROM deployments d
+          JOIN projects p ON d.project_id = p.id
+          WHERE p.user_id = u.id AND d.created_at >= ?), 0) as api_cost_cents_month,
+        COALESCE((SELECT SUM(d.cost_cents) FROM deployments d
+          JOIN projects p ON d.project_id = p.id
+          WHERE p.user_id = u.id), 0) as api_cost_cents_total
       FROM users u
       ${adminFilter}
       ORDER BY u.created_at DESC
-    `).all(monthStr, ...adminEmails) as Array<{
+    `).all(currentMonth, currentMonth, monthStr, ...adminEmails) as Array<{
       id: string;
       email: string;
       plan: string;
@@ -225,6 +233,9 @@ router.get("/users", (_req: Request, res: Response) => {
       created_at: string;
       project_count: number;
       deploys_this_month: number;
+      chats_this_month: number;
+      api_cost_cents_month: number;
+      api_cost_cents_total: number;
     }>;
 
     res.json(users);

@@ -29,6 +29,9 @@ interface AdminUser {
   created_at: string;
   project_count: number;
   deploys_this_month: number;
+  chats_this_month: number;
+  api_cost_cents_month: number;
+  api_cost_cents_total: number;
 }
 
 interface AdminDeployment {
@@ -228,7 +231,10 @@ export default function Admin() {
                   <th style={{ padding: "0.6rem 0.5rem" }}>Plan</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Verified</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Projects</th>
-                  <th style={{ padding: "0.6rem 0.5rem" }}>Deploys/mo</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>Deploys</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>Chats</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>Cost/mo</th>
+                  <th style={{ padding: "0.6rem 0.5rem" }}>Cost total</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Joined</th>
                   <th style={{ padding: "0.6rem 0.5rem" }}>Actions</th>
                 </tr>
@@ -263,6 +269,9 @@ export default function Admin() {
                     </td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.project_count}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.deploys_this_month}</td>
+                    <td style={{ padding: "0.6rem 0.5rem" }}>{u.chats_this_month}</td>
+                    <td style={{ padding: "0.6rem 0.5rem", color: u.api_cost_cents_month > 0 ? "#f59e0b" : COLORS.textMuted }}>${(u.api_cost_cents_month / 100).toFixed(2)}</td>
+                    <td style={{ padding: "0.6rem 0.5rem", color: u.api_cost_cents_total > 0 ? "#f59e0b" : COLORS.textMuted }}>${(u.api_cost_cents_total / 100).toFixed(2)}</td>
                     <td style={{ padding: "0.6rem 0.5rem", color: COLORS.textMuted }}>{timeAgo(u.created_at)}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>
                       <button
