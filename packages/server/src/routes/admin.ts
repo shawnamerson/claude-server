@@ -244,7 +244,7 @@ router.get("/users", (_req: Request, res: Response) => {
 
     // Calculate server cost share per user based on running containers
     // Server cost: $19.99/mo split across all running containers (static sites = $0)
-    const SERVER_COST_CENTS = 1999;
+    const SERVER_COST_CENTS = 999;
     const totalContainers = users.reduce((sum, u) => sum + u.running_containers, 0) || 1;
     const costPerContainer = SERVER_COST_CENTS / totalContainers;
 
