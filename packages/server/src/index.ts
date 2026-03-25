@@ -85,6 +85,10 @@ app.use((req, res, next) => {
 app.post("/api/analytics/track", (req, res) => {
   const { path: pagePath, referrer, visitorId } = req.body;
   if (!pagePath || !visitorId) { res.json({ ok: true }); return; }
+  // Skip bots and non-SPA paths (real users only visit React routes)
+  if (/\.(php|asp|jsp|cgi|xml|sql|bak|env|git)$/i.test(pagePath)) { res.json({ ok: true }); return; }
+  const ua = (req.headers["user-agent"] || "").toLowerCase();
+  if (/bot|crawl|spider|scrape|curl|wget|python|go-http|headless/i.test(ua)) { res.json({ ok: true }); return; }
   const db = getDb();
   db.prepare("INSERT INTO page_views (path, referrer, visitor_id, user_agent) VALUES (?, ?, ?, ?)").run(
     pagePath.slice(0, 500), (referrer || "").slice(0, 500), visitorId.slice(0, 64), (req.headers["user-agent"] || "").slice(0, 300)
