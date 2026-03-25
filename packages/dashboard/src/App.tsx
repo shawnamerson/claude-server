@@ -154,19 +154,41 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
         @keyframes slideInLeft { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+          .vs-nav { flex-wrap: wrap; gap: 0.5rem !important; padding: 0.5rem 0.75rem !important; }
+          .vs-nav-links { display: flex; gap: 0.75rem; overflow-x: auto; white-space: nowrap; flex: 1; min-width: 0; scrollbar-width: none; }
+          .vs-nav-links::-webkit-scrollbar { display: none; }
+          .vs-nav-right { width: 100%; justify-content: flex-end; }
+          .vs-nav-right .vs-email { display: none; }
+          .vs-main { overflow: auto !important; }
+          .vs-project-detail { flex-direction: column !important; }
+          .vs-project-sidebar { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: 50vh !important; }
+          .vs-project-main { flex: 1 !important; min-height: 40vh !important; }
+          .vs-project-tabs { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap !important; }
+          .vs-project-tabs::-webkit-scrollbar { display: none; }
+          .vs-project-tabs button { flex-shrink: 0; font-size: 0.75rem !important; padding: 0.35rem 0.5rem !important; }
+          .vs-admin-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+        @media (max-width: 480px) {
+          .vs-admin-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
-      <nav style={styles.nav}>
+      <nav style={styles.nav} className="vs-nav">
         <Link to="/" style={styles.logo}>VibeStack</Link>
-        <Link to="/projects" style={styles.navLink}>Projects</Link>
-        <Link to="/new" style={styles.navLink}>New Project</Link>
-        <Link to="/billing" style={styles.navLink}>Billing</Link>
-        <Link to="/teams" style={styles.navLink}>Teams</Link>
-        <Link to="/settings" style={styles.navLink}>Settings</Link>
-        {isAdmin && <Link to="/admin" style={{ ...styles.navLink, color: "#f59e0b" }}>Admin</Link>}
-        <div style={styles.navRight}>
+        <div className="vs-nav-links">
+          <Link to="/projects" style={styles.navLink}>Projects</Link>
+          <Link to="/new" style={styles.navLink}>New</Link>
+          <Link to="/billing" style={styles.navLink}>Billing</Link>
+          <Link to="/teams" style={styles.navLink}>Teams</Link>
+          <Link to="/settings" style={styles.navLink}>Settings</Link>
+          {isAdmin && <Link to="/admin" style={{ ...styles.navLink, color: "#f59e0b" }}>Admin</Link>}
+        </div>
+        <div style={styles.navRight} className="vs-nav-right">
           {user && (
             <>
-              <span style={{ fontSize: "0.8rem", color: "#888" }}>{user.email}</span>
+              <span className="vs-email" style={{ fontSize: "0.8rem", color: "#888" }}>{user.email}</span>
               <button style={styles.logoutBtn} onClick={onLogout}>Logout</button>
             </>
           )}
@@ -175,7 +197,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
       {user && !user.email_verified && (
         <VerifyBanner onVerified={onRefresh} />
       )}
-      <main style={styles.main}>
+      <main style={styles.main} className="vs-main">
         {children}
       </main>
     </div>

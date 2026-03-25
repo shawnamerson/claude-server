@@ -185,7 +185,7 @@ export default function Admin() {
 
         {/* Stats Cards */}
         {stats && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
+          <div className="vs-admin-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "1rem", marginBottom: "2rem" }}>
             <StatCard label="Total Users" value={stats.users.total} sub={`+${stats.users.signupsToday} today, +${stats.users.signupsThisWeek} this week`} />
             <StatCard label="Active Projects" value={stats.projects.active} sub={`${stats.projects.total} total`} />
             <StatCard label="Deploys Today" value={stats.deployments.today} sub={`${stats.deployments.thisMonth} this month, ${stats.deployments.total} total`} />

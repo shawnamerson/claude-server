@@ -356,9 +356,9 @@ export default function ProjectDetail() {
   if (!project) return <div style={{ padding: "2rem", color: "#666" }}>Loading...</div>;
 
   return (
-    <div style={styles.page}>
+    <div style={styles.page} className="vs-project-detail">
       {/* Left sidebar */}
-      <div style={styles.sidebar}>
+      <div style={styles.sidebar} className="vs-project-sidebar">
         {/* Header */}
         <div style={styles.sidebarHeader}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
@@ -377,7 +377,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Tabs */}
-        <div style={styles.tabs}>
+        <div style={styles.tabs} className="vs-project-tabs">
           {(["chat", "logs", "files", "env", "database", "domains", "github", "cron"] as SideTab[]).map((tab) => (
             <button key={tab} style={styles.tab(sideTab === tab)} onClick={() => setSideTab(tab)}>
               {{ chat: "Chat", logs: "Logs", files: "Files", env: "Env", database: "DB", domains: "Domains", github: "Git", cron: "Cron" }[tab]}
@@ -408,7 +408,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Main area — Preview or File Editor */}
-      <div style={styles.main}>
+      <div style={styles.main} className="vs-project-main">
         {sideTab === "files" ? (
           <FileViewer projectId={project.id} />
         ) : (
