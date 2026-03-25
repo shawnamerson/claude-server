@@ -22,9 +22,10 @@ import { track } from "./hooks/useTrack";
 
 const styles = {
   app: {
-    minHeight: "100vh",
+    height: "100vh",
     display: "flex",
     flexDirection: "column" as const,
+    overflow: "hidden",
   },
   nav: {
     display: "flex",
@@ -158,7 +159,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 
         /* Mobile responsive */
-        .vs-app { height: 100vh; overflow: hidden; }
+        /* desktop default handled by inline styles */
         .vs-hamburger { display: none; background: none; border: none; color: #888; font-size: 1.4rem; cursor: pointer; padding: 0.2rem; line-height: 1; }
         .vs-mobile-menu { display: none; }
         @media (max-width: 768px) {
@@ -169,7 +170,7 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
           .vs-mobile-menu { display: none; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.75rem; background: #0d0d14; border-bottom: 1px solid #1a1a2e; }
           .vs-mobile-menu.open { display: flex; }
           .vs-mobile-menu a, .vs-mobile-menu button { display: block; padding: 0.5rem 0; color: #888; text-decoration: none; font-size: 0.9rem; background: none; border: none; text-align: left; cursor: pointer; font-family: inherit; }
-          .vs-app { overflow: auto !important; height: auto !important; min-height: 100vh !important; }
+          .vs-app { overflow: auto !important; overflow-x: hidden !important; height: auto !important; min-height: 100vh !important; }
           .vs-main { overflow: auto !important; }
           .vs-project-detail { flex-direction: column !important; }
           .vs-project-sidebar { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: 50vh !important; }
