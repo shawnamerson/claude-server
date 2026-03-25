@@ -5,6 +5,15 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../hooks/useAuth";
 import { track } from "../hooks/useTrack";
 
+const templates = [
+  { name: "portfolio-site", label: "Portfolio Site", description: "A modern personal portfolio website with sections for about me, projects, skills, and contact. Dark theme with smooth animations." },
+  { name: "restaurant-menu", label: "Restaurant Menu", description: "A restaurant website with a beautiful menu page, photo gallery, hours & location, and an online reservation form." },
+  { name: "todo-app", label: "Todo App", description: "A productivity app with task lists, due dates, priority levels, drag-and-drop reordering, and local storage persistence." },
+  { name: "blog", label: "Blog", description: "A clean, minimal blog with markdown support, post categories, a search bar, and responsive reading layout." },
+  { name: "landing-page", label: "SaaS Landing Page", description: "A conversion-optimized SaaS landing page with hero section, feature grid, pricing table, testimonials, and email signup." },
+  { name: "budget-tracker", label: "Budget Tracker", description: "A personal finance app to track income and expenses, with charts, category breakdowns, and monthly summaries." },
+];
+
 const styles = {
   container: { width: "90%", maxWidth: "900px", padding: "4rem 2rem", margin: "0 auto", boxSizing: "border-box" as const },
   title: { fontSize: "2.2rem", fontWeight: 700, marginBottom: "2.5rem" },
@@ -131,6 +140,38 @@ export default function NewProject() {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>New Project</h1>
+
+      {!description && (
+        <div style={{ marginBottom: "2rem" }}>
+          <div style={{ fontSize: "0.95rem", color: "#888", marginBottom: "0.75rem" }}>Start from a template</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.75rem" }}>
+            {templates.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => { setName(t.name); setDescription(t.description); track("template_selected", { template: t.name }); }}
+                style={{
+                  padding: "0.85rem 1rem",
+                  background: "#12121a",
+                  border: "1px solid #1e1e30",
+                  borderRadius: "0.5rem",
+                  color: "#e0e0e0",
+                  fontSize: "0.95rem",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "border-color 0.15s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#7c3aed")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1e1e30")}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: "0.8rem", color: "#555", marginTop: "0.6rem" }}>Or describe your own idea below</div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} style={styles.form}>
         <div>
           <div style={styles.label}>Project Name</div>
