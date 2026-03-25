@@ -6,7 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { track } from "../hooks/useTrack";
 
 const styles = {
-  container: { maxWidth: "600px", padding: "0.5rem 1.5rem" },
+  container: { maxWidth: "600px", padding: "2rem 1.5rem", margin: "0 auto" },
   title: { fontSize: "1.5rem", fontWeight: 600, marginBottom: "1.5rem" },
   form: { display: "flex", flexDirection: "column" as const, gap: "1rem" },
   label: { fontSize: "0.85rem", color: "#aaa", marginBottom: "0.25rem" },
