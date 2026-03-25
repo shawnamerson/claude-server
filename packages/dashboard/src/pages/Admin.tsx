@@ -33,6 +33,7 @@ interface AdminUser {
   api_cost_cents_month: number;
   api_cost_cents_total: number;
   running_containers: number;
+  memory_mb: number;
   server_cost_cents_month: number;
   total_cost_cents_month: number;
 }
@@ -275,7 +276,7 @@ export default function Admin() {
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.project_count}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.deploys_this_month}</td>
                     <td style={{ padding: "0.6rem 0.5rem" }}>{u.chats_this_month}</td>
-                    <td style={{ padding: "0.6rem 0.5rem" }}>{u.running_containers}</td>
+                    <td style={{ padding: "0.6rem 0.5rem" }}>{u.running_containers}{u.memory_mb > 0 ? ` (${u.memory_mb}MB)` : ""}</td>
                     <td style={{ padding: "0.6rem 0.5rem", color: u.api_cost_cents_month > 0 ? "#f59e0b" : COLORS.textMuted }}>${(u.api_cost_cents_month / 100).toFixed(2)}</td>
                     <td style={{ padding: "0.6rem 0.5rem", color: u.server_cost_cents_month > 0 ? "#f59e0b" : COLORS.textMuted }}>${(u.server_cost_cents_month / 100).toFixed(2)}</td>
                     <td style={{ padding: "0.6rem 0.5rem", fontWeight: 600, color: u.total_cost_cents_month > 0 ? "#ef4444" : COLORS.textMuted }}>${(u.total_cost_cents_month / 100).toFixed(2)}</td>

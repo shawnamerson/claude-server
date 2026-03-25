@@ -195,7 +195,7 @@ router.get("/stats", async (_req: Request, res: Response) => {
 });
 
 // GET /users — list all users
-router.get("/users", (_req: Request, res: Response) => {
+router.get("/users", async (_req: Request, res: Response) => {
   try {
     const db = getDb();
 
@@ -242,17 +242,54 @@ router.get("/users", (_req: Request, res: Response) => {
       running_containers: number;
     }>;
 
-    // Calculate server cost share per user based on running containers
-    // Server cost: $19.99/mo split across all running containers (static sites = $0)
+    // Calculate server cost share weighted by actual memory usage
     const SERVER_COST_CENTS = 999;
-    const totalContainers = users.reduce((sum, u) => sum + u.running_containers, 0) || 1;
-    const costPerContainer = SERVER_COST_CENTS / totalContainers;
+    const memoryByUser = new Map<string, number>();
 
-    const usersWithCost = users.map(u => ({
-      ...u,
-      server_cost_cents_month: Math.round(u.running_containers * costPerContainer),
-      total_cost_cents_month: u.api_cost_cents_month + Math.round(u.running_containers * costPerContainer),
-    }));
+    try {
+      const Dockerode = (await import("dockerode")).default;
+      const docker = new Dockerode();
+
+      // Get memory usage for all running app containers
+      const containers = await docker.listContainers({
+        filters: { label: ["claude-server=true", "claude-server.deployment"] },
+      });
+
+      for (const c of containers) {
+        const depId = c.Labels["claude-server.deployment"];
+        if (!depId) continue;
+
+        // Look up which user owns this deployment
+        const dep = db.prepare(
+          "SELECT p.user_id FROM deployments d JOIN projects p ON d.project_id = p.id WHERE d.id = ?"
+        ).get(depId) as { user_id: string } | undefined;
+        if (!dep) continue;
+
+        try {
+          const stats = await docker.getContainer(c.Id).stats({ stream: false });
+          const memBytes = stats.memory_stats?.usage || 0;
+          memoryByUser.set(dep.user_id, (memoryByUser.get(dep.user_id) || 0) + memBytes);
+        } catch {
+          // Container may have stopped between list and stats
+        }
+      }
+    } catch {
+      // Docker not available — fall back to even split
+    }
+
+    const totalMemory = Array.from(memoryByUser.values()).reduce((sum, m) => sum + m, 0) || 1;
+
+    const usersWithCost = users.map(u => {
+      const userMemory = memoryByUser.get(u.id) || 0;
+      const memoryShare = userMemory / totalMemory;
+      const serverCost = u.running_containers > 0 ? Math.round(memoryShare * SERVER_COST_CENTS) : 0;
+      return {
+        ...u,
+        memory_mb: Math.round(userMemory / 1024 / 1024),
+        server_cost_cents_month: serverCost,
+        total_cost_cents_month: u.api_cost_cents_month + serverCost,
+      };
+    });
 
     res.json(usersWithCost);
   } catch (err) {
