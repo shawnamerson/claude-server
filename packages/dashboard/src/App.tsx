@@ -225,7 +225,13 @@ export default function App() {
         <Route path="/signup" element={
           <Signup onSignup={async (email, password, name) => {
             await signup(email, password, name);
-            track("signed_up", { referrer: document.referrer || "(direct)", landingPage: sessionStorage.getItem("vs_landing") || "/" });
+            track("signed_up", {
+              referrer: document.referrer || "(direct)",
+              landingPage: sessionStorage.getItem("vs_landing") || "/",
+              utm_source: sessionStorage.getItem("vs_utm_source") || "",
+              utm_medium: sessionStorage.getItem("vs_utm_medium") || "",
+              utm_campaign: sessionStorage.getItem("vs_utm_campaign") || "",
+            });
             const params = new URLSearchParams(window.location.search);
             const prompt = params.get("prompt");
             // Always send new users to create their first project

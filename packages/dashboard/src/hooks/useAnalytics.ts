@@ -18,10 +18,17 @@ export function useAnalytics() {
 
   useEffect(() => {
     const path = location.pathname;
-    // Save first landing page for signup attribution
+    // Save first landing page + UTM params for signup attribution
     if (!sessionStorage.getItem("vs_landing")) {
       sessionStorage.setItem("vs_landing", path);
       if (document.referrer) sessionStorage.setItem("vs_referrer", document.referrer);
+      const params = new URLSearchParams(window.location.search);
+      const utm_source = params.get("utm_source");
+      const utm_medium = params.get("utm_medium");
+      const utm_campaign = params.get("utm_campaign");
+      if (utm_source) sessionStorage.setItem("vs_utm_source", utm_source);
+      if (utm_medium) sessionStorage.setItem("vs_utm_medium", utm_medium);
+      if (utm_campaign) sessionStorage.setItem("vs_utm_campaign", utm_campaign);
     }
 
     // Don't track the same page twice in a row
