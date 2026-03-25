@@ -383,10 +383,10 @@ export function requireDeploymentOwner(req: Request, res: Response, next: NextFu
 
 // Plan limits
 const PLAN_LIMITS: Record<string, { deploys: number; projects: number; chats: number }> = {
-  free:   { deploys: 10,   projects: 1,  chats: 50 },
-  pro:    { deploys: 20,   projects: 1,  chats: 200 },
-  growth: { deploys: 100,  projects: 10, chats: 500 },
-  team:   { deploys: 200,  projects: -1, chats: 1000 }, // -1 = unlimited
+  free:     { deploys: 10,  projects: 1,  chats: 50 },
+  starter:  { deploys: 20,  projects: 1,  chats: 100 },
+  pro:      { deploys: 40,  projects: 3,  chats: 150 },
+  business: { deploys: 50,  projects: 10, chats: 250 }, // -1 = unlimited
 };
 
 export function getPlanLimits(plan: string) {

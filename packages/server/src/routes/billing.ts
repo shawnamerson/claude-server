@@ -8,9 +8,9 @@ const router = Router();
 
 const PLANS = [
   { id: "free", name: "Free", price: 0, deploys: 10, projects: 1, chats: 50, features: ["1 project", "10 deploys/month", "50 AI chats/month", "PostgreSQL database", "Custom subdomain"] },
-  { id: "pro", name: "Pro", price: 1900, deploys: 20, projects: 1, chats: 200, features: ["1 project", "20 deploys/month", "200 AI chats/month", "GitHub import", "Custom domains", "Cron jobs"] },
-  { id: "growth", name: "Growth", price: 9900, deploys: 100, projects: 10, chats: 500, features: ["10 projects", "100 deploys/month", "500 AI chats/month", "Everything in Pro", "Priority support"] },
-  { id: "team", name: "Team", price: 19900, deploys: 200, projects: -1, chats: 1000, features: ["Unlimited projects", "200 deploys/month", "1,000 AI chats/month", "Team collaboration", "Everything in Growth"] },
+  { id: "starter", name: "Starter", price: 2900, deploys: 20, projects: 1, chats: 100, features: ["1 project", "20 deploys/month", "100 AI chats/month", "GitHub import", "Custom domains", "Cron jobs"] },
+  { id: "pro", name: "Pro", price: 7900, deploys: 40, projects: 3, chats: 150, features: ["3 projects", "40 deploys/month", "150 AI chats/month", "Everything in Starter", "Priority support"] },
+  { id: "business", name: "Business", price: 14900, deploys: 50, projects: 10, chats: 250, features: ["10 projects", "50 deploys/month", "250 AI chats/month", "Everything in Pro", "Dedicated support"] },
 ];
 
 function getStripe(): Stripe | null {

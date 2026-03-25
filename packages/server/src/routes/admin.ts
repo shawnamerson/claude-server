@@ -7,9 +7,9 @@ const router = Router();
 // Plan prices in cents (matching billing.ts)
 const PLAN_PRICES: Record<string, number> = {
   free: 0,
-  pro: 1900,
-  growth: 3900,
-  team: 7900,
+  starter: 2900,
+  pro: 7900,
+  business: 14900,
 };
 
 // Admin auth middleware — checks ADMIN_EMAILS env var

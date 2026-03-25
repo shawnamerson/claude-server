@@ -324,44 +324,44 @@ export default function Landing() {
           </div>
           <div style={{ ...s.priceCard, borderColor: "#7c3aed", position: "relative" }}>
             <div style={s.popular}>Most popular</div>
-            <div style={{ ...s.planName, color: "#a78bfa" }}>Pro</div>
-            <div style={s.planPrice}>$19<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
+            <div style={{ ...s.planName, color: "#a78bfa" }}>Starter</div>
+            <div style={s.planPrice}>$29<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
             <div style={s.planPer}>per month</div>
             <div style={s.planFeatures}>
               <div>20 deploys / month</div>
               <div>1 project</div>
-              <div>200 AI chats</div>
+              <div>100 AI chats</div>
               <div>GitHub import</div>
               <div>Custom domains</div>
               <div>Cron jobs</div>
             </div>
-            <Link to="/signup" style={{ ...s.planBtn, background: "#7c3aed" }} onClick={() => trackLanding("pricing_pro")}>Start Pro</Link>
+            <Link to="/signup" style={{ ...s.planBtn, background: "#7c3aed" }} onClick={() => trackLanding("pricing_starter")}>Start Starter</Link>
           </div>
           <div style={s.priceCard}>
-            <div style={s.planName}>Growth</div>
-            <div style={s.planPrice}>$99<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
+            <div style={s.planName}>Pro</div>
+            <div style={s.planPrice}>$79<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
             <div style={s.planPer}>per month</div>
             <div style={s.planFeatures}>
-              <div>100 deploys / month</div>
-              <div>10 projects</div>
-              <div>500 AI chats</div>
-              <div>Everything in Pro</div>
+              <div>40 deploys / month</div>
+              <div>3 projects</div>
+              <div>150 AI chats</div>
+              <div>Everything in Starter</div>
               <div>Priority support</div>
             </div>
-            <Link to="/signup" style={s.planBtn} onClick={() => trackLanding("pricing_growth")}>Start Growth</Link>
+            <Link to="/signup" style={s.planBtn} onClick={() => trackLanding("pricing_pro")}>Start Pro</Link>
           </div>
           <div style={s.priceCard}>
-            <div style={s.planName}>Team</div>
-            <div style={s.planPrice}>$199<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
+            <div style={s.planName}>Business</div>
+            <div style={s.planPrice}>$149<span style={{ fontSize: "1rem", color: "#888" }}>/mo</span></div>
             <div style={s.planPer}>per month</div>
             <div style={s.planFeatures}>
-              <div>200 deploys / month</div>
-              <div>Unlimited projects</div>
-              <div>1,000 AI chats</div>
-              <div>Team collaboration</div>
-              <div>Everything in Growth</div>
+              <div>50 deploys / month</div>
+              <div>10 projects</div>
+              <div>250 AI chats</div>
+              <div>Everything in Pro</div>
+              <div>Dedicated support</div>
             </div>
-            <Link to="/signup" style={s.planBtn} onClick={() => trackLanding("pricing_team")}>Start Team</Link>
+            <Link to="/signup" style={s.planBtn} onClick={() => trackLanding("pricing_business")}>Start Business</Link>
           </div>
         </div>
       </div>
