@@ -132,6 +132,9 @@ function useAdminCheck(token: string | null) {
 }
 
 function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: React.ReactNode; user: any; onLogout: () => void; onRefresh: () => void; isAdmin: boolean }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navLocation = useLocation();
+  useEffect(() => { setMobileMenuOpen(false); }, [navLocation.pathname]);
   return (
     <div style={styles.app}>
       <style>{`
@@ -156,12 +159,16 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 
         /* Mobile responsive */
+        .vs-hamburger { display: none; background: none; border: none; color: #888; font-size: 1.4rem; cursor: pointer; padding: 0.2rem; line-height: 1; }
+        .vs-mobile-menu { display: none; }
         @media (max-width: 768px) {
-          .vs-nav { flex-wrap: wrap; gap: 0.5rem !important; padding: 0.5rem 0.75rem !important; }
-          .vs-nav-links { display: flex; gap: 0.75rem; overflow-x: auto; white-space: nowrap; flex: 1; min-width: 0; scrollbar-width: none; }
-          .vs-nav-links::-webkit-scrollbar { display: none; }
-          .vs-nav-right { width: 100%; justify-content: flex-end; }
-          .vs-nav-right .vs-email { display: none; }
+          .vs-hamburger { display: block; margin-left: auto; }
+          .vs-nav { flex-wrap: nowrap; gap: 0.5rem !important; padding: 0.5rem 0.75rem !important; }
+          .vs-nav-links { display: none !important; }
+          .vs-nav-right { display: none !important; }
+          .vs-mobile-menu { display: none; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.75rem; background: #0d0d14; border-bottom: 1px solid #1a1a2e; }
+          .vs-mobile-menu.open { display: flex; }
+          .vs-mobile-menu a, .vs-mobile-menu button { display: block; padding: 0.5rem 0; color: #888; text-decoration: none; font-size: 0.9rem; background: none; border: none; text-align: left; cursor: pointer; font-family: inherit; }
           .vs-main { overflow: auto !important; }
           .vs-project-detail { flex-direction: column !important; }
           .vs-project-sidebar { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: 50vh !important; }
@@ -193,7 +200,17 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
             </>
           )}
         </div>
+        <button className="vs-hamburger" onClick={() => setMobileMenuOpen(v => !v)}>{mobileMenuOpen ? "\u2715" : "\u2630"}</button>
       </nav>
+      <div className={`vs-mobile-menu ${mobileMenuOpen ? "open" : ""}`}>
+        <Link to="/projects">Projects</Link>
+        <Link to="/new">New Project</Link>
+        <Link to="/billing">Billing</Link>
+        <Link to="/teams">Teams</Link>
+        <Link to="/settings">Settings</Link>
+        {isAdmin && <Link to="/admin" style={{ color: "#f59e0b" }}>Admin</Link>}
+        {user && <button onClick={onLogout} style={{ color: "#666" }}>Logout ({user.email})</button>}
+      </div>
       {user && !user.email_verified && (
         <VerifyBanner onVerified={onRefresh} />
       )}
