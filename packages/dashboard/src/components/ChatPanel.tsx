@@ -498,7 +498,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
 
 const s = {
   container: { display: "flex", flexDirection: "column" as const, flex: 1, minHeight: 0, overflow: "hidden" },
-  messages: { flex: 1, minHeight: 0, overflowY: "auto" as const, overflowX: "hidden" as const, padding: "0.75rem", display: "flex", flexDirection: "column" as const, gap: "0.5rem" },
+  messages: { flex: 1, minHeight: 0, overflow: "auto", padding: "0.75rem", display: "flex", flexDirection: "column" as const, gap: "0.5rem" },
   userMsg: { alignSelf: "flex-end" as const, background: "#7c3aed", color: "#fff", padding: "0.5rem 0.75rem", borderRadius: "0.75rem 0.75rem 0.25rem 0.75rem", maxWidth: "85%", fontSize: "0.85rem", whiteSpace: "pre-wrap" as const, wordBreak: "break-word" as const, overflowWrap: "anywhere" as const, animation: "slideInRight 0.2s ease" },
   assistantMsg: { alignSelf: "flex-start" as const, background: "#1a1a2e", color: "#e0e0e0", padding: "0.5rem 0.75rem", borderRadius: "0.75rem 0.75rem 0.75rem 0.25rem", maxWidth: "90%", fontSize: "0.85rem", whiteSpace: "pre-wrap" as const, wordBreak: "break-word" as const, overflowWrap: "anywhere" as const, overflow: "hidden" as const, animation: "slideInLeft 0.2s ease" },
   inputArea: { display: "flex", gap: "0.5rem", padding: "0.5rem 0.75rem", borderTop: "1px solid #1e1e30", background: "#0d0d14", alignItems: "center" },
