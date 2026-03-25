@@ -108,31 +108,47 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
     const hasExistingFiles = Object.keys(existingFiles).length > 0;
     const log = (msg: string) => addLog(deploymentId, "system", msg);
 
-    let result;
-    if (hasExistingFiles && prompt) {
-      // Check if this is a GitHub repo that needs adaptation
-      const adaptPrompt = getAdaptationPrompt(project.source_path);
-      const effectivePrompt = adaptPrompt
-        ? `${adaptPrompt}\n\nUser's deploy message: ${prompt}`
-        : prompt;
+    let result!: Awaited<ReturnType<typeof generateProject>>;
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (hasExistingFiles && prompt) {
+          // Check if this is a GitHub repo that needs adaptation
+          const adaptPrompt = getAdaptationPrompt(project.source_path);
+          const effectivePrompt = adaptPrompt
+            ? `${adaptPrompt}\n\nUser's deploy message: ${prompt}`
+            : prompt;
 
-      if (adaptPrompt) {
-        addLog(deploymentId, "system", `Adapting project for single-service deployment...`);
-      } else {
-        addLog(deploymentId, "system", `Modifying project (${Object.keys(existingFiles).length} existing files)...`);
-      }
+          if (adaptPrompt) {
+            addLog(deploymentId, "system", `Adapting project for single-service deployment...`);
+          } else {
+            addLog(deploymentId, "system", `Modifying project (${Object.keys(existingFiles).length} existing files)...`);
+          }
 
-      const chatHistory = db
-        .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
-        .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
-      result = await modifyProject(project.source_path, chatHistory, effectivePrompt, log);
-    } else {
-      const description = prompt || project.description;
-      if (!description) {
-        throw new Error("No description provided. Tell Claude what to build.");
+          const chatHistory = db
+            .prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at ASC")
+            .all(project.id) as Array<{ role: "user" | "assistant"; content: string }>;
+          result = await modifyProject(project.source_path, chatHistory, effectivePrompt, log);
+        } else {
+          const description = prompt || project.description;
+          if (!description) {
+            throw new Error("No description provided. Tell Claude what to build.");
+          }
+          if (attempt === 1) addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
+          result = await generateProject(project.source_path, description, log);
+        }
+        break; // Success — exit retry loop
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isTransient = /overloaded|rate.?limit|529|503|timeout|ECONNRESET|socket hang up/i.test(msg);
+        if (isTransient && attempt < maxRetries) {
+          const waitSec = attempt * 5;
+          addLog(deploymentId, "system", `Claude is busy — retrying in ${waitSec}s (attempt ${attempt + 1}/${maxRetries})...`);
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+          continue;
+        }
+        throw err; // Non-transient or out of retries
       }
-      addLog(deploymentId, "system", `Project: ${description.slice(0, 200)}`);
-      result = await generateProject(project.source_path, description, log);
     }
 
     addLog(deploymentId, "system", `Project ready — ${result.files.length} files`);
