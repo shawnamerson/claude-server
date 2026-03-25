@@ -156,6 +156,22 @@ router.get("/stats", async (_req: Request, res: Response) => {
         monthInputTokens: apiTokensThisMonth.input,
         monthOutputTokens: apiTokensThisMonth.output,
       },
+      funnel: (() => {
+        const landed = (db.prepare("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_views WHERE path = '/' AND created_at >= ?").get(monthStr) as { cnt: number }).cnt;
+        const viewedSignup = (db.prepare("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_views WHERE path = '/signup' AND created_at >= ?").get(monthStr) as { cnt: number }).cnt;
+        const signedUp = (db.prepare(`SELECT COUNT(*) as cnt FROM users WHERE created_at >= ? ${adminEmails.length ? `AND email NOT IN (${adminEmails.map(() => "?").join(",")})` : ""}`).get(monthStr, ...adminEmails) as { cnt: number }).cnt;
+        const createdProject = (db.prepare(`SELECT COUNT(DISTINCT p.user_id) as cnt FROM projects p JOIN users u ON u.id = p.user_id WHERE p.created_at >= ? ${adminEmails.length ? `AND u.email NOT IN (${adminEmails.map(() => "?").join(",")})` : ""}`).get(monthStr, ...adminEmails) as { cnt: number }).cnt;
+        const deployed = (db.prepare(`SELECT COUNT(DISTINCT p.user_id) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id JOIN users u ON u.id = p.user_id WHERE d.created_at >= ? ${adminEmails.length ? `AND u.email NOT IN (${adminEmails.map(() => "?").join(",")})` : ""}`).get(monthStr, ...adminEmails) as { cnt: number }).cnt;
+        const successfulDeploy = (db.prepare(`SELECT COUNT(DISTINCT p.user_id) as cnt FROM deployments d JOIN projects p ON p.id = d.project_id JOIN users u ON u.id = p.user_id WHERE d.status = 'running' AND d.created_at >= ? ${adminEmails.length ? `AND u.email NOT IN (${adminEmails.map(() => "?").join(",")})` : ""}`).get(monthStr, ...adminEmails) as { cnt: number }).cnt;
+        return [
+          { step: "Landed", count: landed },
+          { step: "Viewed Signup", count: viewedSignup },
+          { step: "Signed Up", count: signedUp },
+          { step: "Created Project", count: createdProject },
+          { step: "Deployed", count: deployed },
+          { step: "Live App", count: successfulDeploy },
+        ];
+      })(),
       analytics: (() => {
         const pvToday = (db.prepare("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= ?").get(todayStr) as { cnt: number }).cnt;
         const pvMonth = (db.prepare("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= ?").get(monthStr) as { cnt: number }).cnt;

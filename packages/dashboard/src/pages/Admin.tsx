@@ -8,6 +8,7 @@ interface Stats {
   containersRunning: number;
   mrr: number;
   apiCosts: { todayCents: number; monthCents: number; monthInputTokens: number; monthOutputTokens: number };
+  funnel: Array<{ step: string; count: number }>;
   analytics: {
     pvToday: number; pvMonth: number; uvToday: number; uvMonth: number;
     topPages: Array<{ path: string; views: number }>;
@@ -281,6 +282,39 @@ export default function Admin() {
             </table>
           </div>
         </div>
+
+        {/* Conversion Funnel */}
+        {stats && stats.funnel && (
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: "0.75rem", marginBottom: "2rem", overflow: "hidden" }}>
+            <div style={{ padding: "1rem 1.25rem", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600, fontSize: "0.95rem" }}>
+              Conversion Funnel <span style={{ color: COLORS.textMuted, fontWeight: 400, fontSize: "0.8rem" }}>(this month)</span>
+            </div>
+            <div style={{ padding: "1rem 1.25rem" }}>
+              {(() => {
+                const max = Math.max(...stats.funnel.map(f => f.count), 1);
+                return stats.funnel.map((step, i) => {
+                  const prev = i > 0 ? stats.funnel[i - 1].count : step.count;
+                  const rate = prev > 0 ? Math.round((step.count / prev) * 100) : 0;
+                  const width = Math.max((step.count / max) * 100, 3);
+                  return (
+                    <div key={i} style={{ marginBottom: "0.5rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "0.2rem" }}>
+                        <span style={{ color: "#ccc" }}>{step.step}</span>
+                        <span style={{ color: COLORS.textMuted }}>
+                          {step.count}
+                          {i > 0 && <span style={{ color: rate >= 50 ? "#34d399" : rate >= 20 ? "#f59e0b" : "#f87171", marginLeft: "0.5rem" }}>{rate}%</span>}
+                        </span>
+                      </div>
+                      <div style={{ height: "20px", background: "#1a1a2e", borderRadius: "4px", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${width}%`, background: `linear-gradient(90deg, #7c3aed, ${i === stats.funnel.length - 1 ? "#34d399" : "#a78bfa"})`, borderRadius: "4px", transition: "width 0.5s" }} />
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
 
         {/* Analytics */}
         {stats && stats.analytics && (
