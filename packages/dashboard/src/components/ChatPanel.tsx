@@ -366,7 +366,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
 
   return (
     <div style={s.container}>
-      <div ref={messagesRef} style={s.messages}>
+      <div ref={messagesRef} style={s.messages} className="vs-chat-messages">
         {messages.length === 0 && !isActive && (
           <div style={s.emptyState}>
             <div style={s.emptyIcon}>

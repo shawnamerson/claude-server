@@ -170,13 +170,12 @@ function AppShell({ children, user, onLogout, onRefresh, isAdmin }: { children: 
           .vs-mobile-menu { display: none; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.75rem; background: #0d0d14; border-bottom: 1px solid #1a1a2e; }
           .vs-mobile-menu.open { display: flex; }
           .vs-mobile-menu a, .vs-mobile-menu button { display: block; padding: 0.5rem 0; color: #888; text-decoration: none; font-size: 0.9rem; background: none; border: none; text-align: left; cursor: pointer; font-family: inherit; }
-          .vs-app:has(.vs-project-detail) { overflow: hidden !important; height: 100vh !important; }
-          .vs-app:not(:has(.vs-project-detail)) { overflow-y: auto !important; overflow-x: hidden !important; height: auto !important; min-height: 100vh !important; }
-          .vs-app:has(.vs-project-detail) .vs-main { overflow: hidden !important; flex: 1 !important; min-height: 0 !important; }
-          .vs-app:not(:has(.vs-project-detail)) .vs-main { overflow: auto !important; }
-          .vs-project-detail { flex-direction: column !important; flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
-          .vs-project-sidebar { width: 100% !important; max-width: 100% !important; min-width: 0 !important; flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
-          .vs-project-main { flex: 1 !important; min-height: 40vh !important; }
+          .vs-app { overflow-x: hidden !important; }
+          .vs-main { overflow: visible !important; }
+          .vs-project-detail { flex-direction: column !important; height: 100vh !important; overflow: hidden !important; }
+          .vs-project-sidebar { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: 60vh !important; max-height: 60vh !important; overflow: hidden !important; }
+          .vs-project-main { height: 40vh !important; min-height: 40vh !important; flex: none !important; }
+          .vs-chat-messages { overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
           .vs-project-tabs { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap !important; }
           .vs-project-tabs::-webkit-scrollbar { display: none; }
           .vs-project-tabs button { flex-shrink: 0; font-size: 0.75rem !important; padding: 0.35rem 0.5rem !important; }
