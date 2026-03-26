@@ -13,6 +13,12 @@ const PLANS = [
   { id: "business", name: "Business", price: 14900, deploys: 50, projects: 10, chats: 250, features: ["10 projects", "50 deploys/month", "250 AI chats/month", "Everything in Pro", "Dedicated support"] },
 ];
 
+const DEPLOY_PACKS = [
+  { id: "10-deploys", name: "10 Extra Deploys", deploys: 10, price: 1500 },
+  { id: "25-deploys", name: "25 Extra Deploys", deploys: 25, price: 3000 },
+  { id: "50-deploys", name: "50 Extra Deploys", deploys: 50, price: 5000 },
+];
+
 function getStripe(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return null;
@@ -49,7 +55,58 @@ router.get("/billing/status", requireAuth, (req: Request, res: Response) => {
     chatsThisMonth: usage?.chats || 0,
     chatLimit: limits.chats,
     hasSubscription: !!userData?.stripe_subscription_id,
+    credits: userData?.credits || 0,
   });
+});
+
+// Get deploy packs
+router.get("/billing/deploy-packs", (_req: Request, res: Response) => {
+  res.json(DEPLOY_PACKS);
+});
+
+// Buy a deploy pack (one-time Stripe checkout)
+router.post("/billing/buy-deploys", requireAuth, async (req: Request, res: Response) => {
+  const stripe = getStripe();
+  if (!stripe) { res.status(500).json({ error: "Stripe is not configured" }); return; }
+
+  const { packId } = req.body;
+  const pack = DEPLOY_PACKS.find(p => p.id === packId);
+  if (!pack) { res.status(400).json({ error: "Invalid deploy pack" }); return; }
+
+  const user = req.user!;
+  const db = getDb();
+
+  let customerId = (db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(user.id) as { stripe_customer_id: string | null } | undefined)?.stripe_customer_id;
+
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: user.email,
+      metadata: { userId: user.id },
+    });
+    customerId = customer.id;
+    db.prepare("UPDATE users SET stripe_customer_id = ? WHERE id = ?").run(customerId, user.id);
+  }
+
+  const domain = process.env.DOMAIN || "localhost";
+  const protocol = domain === "localhost" ? "http" : "https";
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    mode: "payment",
+    line_items: [{
+      price_data: {
+        currency: "usd",
+        product_data: { name: `VibeStack ${pack.name}` },
+        unit_amount: pack.price,
+      },
+      quantity: 1,
+    }],
+    metadata: { userId: user.id, packId: pack.id, deployCredits: String(pack.deploys) },
+    success_url: `${protocol}://${domain}/billing?purchased=${pack.id}`,
+    cancel_url: `${protocol}://${domain}/billing`,
+  });
+
+  res.json({ url: session.url });
 });
 
 // Create Stripe checkout for subscription
@@ -153,12 +210,22 @@ router.post("/billing/webhook", async (req: Request, res: Response) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.metadata?.userId;
-    const planId = session.metadata?.planId;
 
-    if (userId && planId && session.subscription) {
-      db.prepare("UPDATE users SET plan = ?, stripe_subscription_id = ? WHERE id = ?")
-        .run(planId, session.subscription, userId);
-      console.log(`User ${userId} subscribed to ${planId}`);
+    if (session.mode === "payment" && userId && session.metadata?.deployCredits) {
+      // Deploy pack purchase — credit the user
+      const credits = parseInt(session.metadata.deployCredits, 10);
+      db.prepare("UPDATE users SET credits = credits + ? WHERE id = ?").run(credits, userId);
+      db.prepare("INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, ?, 'purchase', ?)").run(
+        userId, credits, `Purchased ${credits} extra deploys`
+      );
+      console.log(`User ${userId} purchased ${credits} deploy credits`);
+    } else if (session.mode === "subscription") {
+      const planId = session.metadata?.planId;
+      if (userId && planId && session.subscription) {
+        db.prepare("UPDATE users SET plan = ?, stripe_subscription_id = ? WHERE id = ?")
+          .run(planId, session.subscription, userId);
+        console.log(`User ${userId} subscribed to ${planId}`);
+      }
     }
   }
 

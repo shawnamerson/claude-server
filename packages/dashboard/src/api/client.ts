@@ -287,9 +287,11 @@ export const api = {
   verifyEmail: (code: string) => request<{ ok: boolean }>("/auth/verify", { method: "POST", body: JSON.stringify({ code }) }),
 
   // Billing
-  getBillingStatus: () => request<{ plan: string; deploysThisMonth: number; deployLimit: number; projectCount: number; projectLimit: number; hasSubscription: boolean }>("/billing/status"),
+  getBillingStatus: () => request<{ plan: string; deploysThisMonth: number; deployLimit: number; projectCount: number; projectLimit: number; hasSubscription: boolean; credits: number }>("/billing/status"),
   getBillingPlans: () => request<Array<{ id: string; name: string; price: number; deploys: number; projects: number; features: string[] }>>("/billing/plans"),
+  getDeployPacks: () => request<Array<{ id: string; name: string; deploys: number; price: number }>>("/billing/deploy-packs"),
   subscribe: (planId: string) => request<{ url: string }>("/billing/subscribe", { method: "POST", body: JSON.stringify({ planId }) }),
+  buyDeploys: (packId: string) => request<{ url: string }>("/billing/buy-deploys", { method: "POST", body: JSON.stringify({ packId }) }),
   cancelSubscription: () => request<{ ok: boolean }>("/billing/cancel", { method: "POST" }),
 
   // Teams

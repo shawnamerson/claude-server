@@ -27,17 +27,27 @@ export default function Billing() {
   const { showError } = useToast();
   const [status, setStatus] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
+  const [packs, setPacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.getBillingStatus(), api.getBillingPlans()])
-      .then(([s, p]) => { setStatus(s); setPlans(p); })
+    Promise.all([api.getBillingStatus(), api.getBillingPlans(), api.getDeployPacks()])
+      .then(([s, p, dp]) => { setStatus(s); setPlans(p); setPacks(dp); })
       .finally(() => setLoading(false));
   }, []);
 
   const handleSubscribe = async (planId: string) => {
     try {
       const { url } = await api.subscribe(planId);
+      window.location.href = url;
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Failed to start checkout");
+    }
+  };
+
+  const handleBuyDeploys = async (packId: string) => {
+    try {
+      const { url } = await api.buyDeploys(packId);
       window.location.href = url;
     } catch (err) {
       showError(err instanceof Error ? err.message : "Failed to start checkout");
@@ -75,7 +85,7 @@ export default function Billing() {
 
           <div style={s.statusRow}>
             <span style={s.statusLabel}>Deploys</span>
-            <span style={s.statusValue}>{status.deploysThisMonth}{isUnlimitedDeploys ? " / ∞" : ` / ${status.deployLimit}`}</span>
+            <span style={s.statusValue}>{status.deploysThisMonth}{isUnlimitedDeploys ? " / ∞" : ` / ${status.deployLimit}`}{status.credits > 0 ? ` (+${status.credits} extra)` : ""}</span>
           </div>
           {!isUnlimitedDeploys && <div style={s.progressBar}><div style={s.progressFill(deployPct)} /></div>}
 
@@ -94,6 +104,23 @@ export default function Billing() {
           )}
         </div>
       )}
+
+      <div style={{ background: "#12121a", border: "1px solid #1e1e30", borderRadius: "0.75rem", padding: "1.25rem", marginBottom: "1.5rem" }}>
+        <div style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.75rem" }}>Extra Deploys</div>
+        <div style={{ fontSize: "0.85rem", color: "#888", marginBottom: "1rem" }}>Need more deploys this month? Buy a pack — they never expire.</div>
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          {packs.map(pack => (
+            <button
+              key={pack.id}
+              onClick={() => handleBuyDeploys(pack.id)}
+              style={{ flex: 1, padding: "0.75rem", background: "#1a1a2e", border: "1px solid #1e1e30", borderRadius: "0.5rem", cursor: "pointer", color: "#e0e0e0", textAlign: "center" as const }}
+            >
+              <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>{pack.deploys} deploys</div>
+              <div style={{ fontSize: "0.9rem", color: "#a78bfa", fontWeight: 600, marginTop: "0.25rem" }}>${(pack.price / 100).toFixed(0)}</div>
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div style={s.grid}>
         {plans.map(plan => {

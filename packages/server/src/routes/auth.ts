@@ -417,10 +417,10 @@ export function incrementUsage(userId: string, type: "deploys" | "chats"): void 
   ).run(userId, month);
 }
 
-// Check if user can deploy (plan-based + email verification)
-export function canDeploy(userId: string): { allowed: boolean; reason?: string } {
+// Check if user can deploy (plan-based + email verification + credits fallback)
+export function canDeploy(userId: string): { allowed: boolean; reason?: string; usingCredit?: boolean } {
   const db = getDb();
-  const user = db.prepare("SELECT plan, email_verified FROM users WHERE id = ?").get(userId) as { plan: string; email_verified: number } | undefined;
+  const user = db.prepare("SELECT plan, email_verified, credits FROM users WHERE id = ?").get(userId) as { plan: string; email_verified: number; credits: number } | undefined;
   if (!user) return { allowed: false, reason: "User not found" };
   if (!user.email_verified) return { allowed: false, reason: "Please verify your email before deploying" };
 
@@ -428,10 +428,21 @@ export function canDeploy(userId: string): { allowed: boolean; reason?: string }
   const usage = getMonthlyUsage(userId);
 
   if (limits.deploys >= 0 && usage.deploys >= limits.deploys) {
-    return { allowed: false, reason: `Monthly deploy limit reached (${limits.deploys}). Upgrade your plan for more.` };
+    // Plan limit hit — check for prepaid credits
+    if (user.credits > 0) {
+      return { allowed: true, usingCredit: true };
+    }
+    return { allowed: false, reason: `Monthly deploy limit reached (${limits.deploys}). Buy extra deploys or upgrade your plan.` };
   }
 
   return { allowed: true };
+}
+
+// Deduct one deploy credit from user's prepaid balance
+export function deductDeployCredit(userId: string): void {
+  const db = getDb();
+  db.prepare("UPDATE users SET credits = credits - 1 WHERE id = ? AND credits > 0").run(userId);
+  db.prepare("INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, -1, 'deploy', 'Extra deploy')").run(userId);
 }
 
 // Check if user can create a project (plan-based + email verification)
@@ -473,8 +484,7 @@ export function canChat(userId: string): { allowed: boolean; reason?: string } {
 
 // Legacy — keep for backward compat
 export function deductCredit(userId: string, _description: string): boolean {
-  const result = canDeploy(userId);
-  return result.allowed;
+  return canDeploy(userId).allowed;
 }
 
 export function addCredits(userId: string, amount: number, type: string, description: string) {
