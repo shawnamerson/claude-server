@@ -100,7 +100,8 @@ router.post("/projects/:id/upload", upload.single("file"), (req: Request, res: R
   }
 
   fs.mkdirSync(destDir, { recursive: true });
-  fs.renameSync(file.path, destPath);
+  fs.copyFileSync(file.path, destPath);
+  fs.unlinkSync(file.path);
 
   db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(project.id);
 
