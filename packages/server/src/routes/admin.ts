@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { getDb } from "../db/client.js";
+import { getLiveVisitors } from "../services/live-visitors.js";
 import "../types.js";
 
 const router = Router();
@@ -186,6 +187,18 @@ router.get("/stats", async (_req: Request, res: Response) => {
         const topReferrers = db.prepare("SELECT referrer, COUNT(*) as cnt FROM page_views WHERE created_at >= ? AND referrer != '' AND referrer IS NOT NULL GROUP BY referrer ORDER BY cnt DESC LIMIT 10").all(monthStr) as Array<{ referrer: string; cnt: number }>;
         const dailyViews = db.prepare("SELECT date(created_at) as day, COUNT(*) as views, COUNT(DISTINCT visitor_id) as visitors FROM page_views WHERE created_at >= ? GROUP BY date(created_at) ORDER BY day DESC LIMIT 30").all(monthStr) as Array<{ day: string; views: number; visitors: number }>;
         return { pvToday, pvMonth, uvToday, uvMonth, topPages, topReferrers, dailyViews };
+      })(),
+      liveVisitors: (() => {
+        const visitors = getLiveVisitors();
+        const pageCounts: Record<string, number> = {};
+        for (const v of visitors) {
+          pageCounts[v.path] = (pageCounts[v.path] || 0) + 1;
+        }
+        const topPages = Object.entries(pageCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([path, count]) => ({ path, count }));
+        return { total: visitors.length, topPages };
       })(),
     });
   } catch (err) {

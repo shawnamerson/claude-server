@@ -19,6 +19,10 @@ interface Stats {
     topReferrers: Array<{ referrer: string; cnt: number }>;
     dailyViews: Array<{ day: string; views: number; visitors: number }>;
   };
+  liveVisitors: {
+    total: number;
+    topPages: Array<{ path: string; count: number }>;
+  };
 }
 
 interface AdminUser {
@@ -127,6 +131,17 @@ export default function Admin() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-refresh stats every 15s for live visitors
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/admin/stats", { headers: getHeaders() });
+        if (res.ok) setStats(await res.json());
+      } catch { /* ignore */ }
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const changePlan = async (userId: string, plan: string) => {
     try {
@@ -362,6 +377,32 @@ export default function Admin() {
                 {stats.events.recent.length === 0 && <div style={{ color: "#555", fontSize: "0.8rem" }}>No events yet</div>}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Live Visitors */}
+        {stats && stats.liveVisitors && (
+          <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: "0.75rem", marginBottom: "2rem", overflow: "hidden" }}>
+            <div style={{ padding: "1rem 1.25rem", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600, fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: stats.liveVisitors.total > 0 ? "#10b981" : "#6b7280", boxShadow: stats.liveVisitors.total > 0 ? "0 0 6px #10b981" : "none", animation: stats.liveVisitors.total > 0 ? "pulse 2s infinite" : "none" }} />
+              Live Visitors
+              <span style={{ color: stats.liveVisitors.total > 0 ? "#10b981" : COLORS.textMuted, fontWeight: 700, fontSize: "1.1rem", marginLeft: "0.25rem" }}>{stats.liveVisitors.total}</span>
+              <span style={{ color: COLORS.textMuted, fontWeight: 400, fontSize: "0.8rem", marginLeft: "auto" }}>last 5 min, updates every 15s</span>
+            </div>
+            {stats.liveVisitors.total > 0 && (
+              <div style={{ padding: "1rem 1.25rem" }}>
+                {stats.liveVisitors.topPages.map((p, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem", padding: "0.3rem 0", color: "#bbb" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.8rem" }}>{p.path}</span>
+                    <span style={{ background: "#10b98122", color: "#10b981", padding: "0.1rem 0.5rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 }}>{p.count} {p.count === 1 ? "visitor" : "visitors"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {stats.liveVisitors.total === 0 && (
+              <div style={{ padding: "1rem 1.25rem", color: "#555", fontSize: "0.85rem" }}>No active visitors right now</div>
+            )}
+            <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
           </div>
         )}
 
