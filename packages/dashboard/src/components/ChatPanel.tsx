@@ -254,10 +254,24 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     }
   }, [autoSendMessage]);
 
+  // Detect "do it" style confirmations and auto-trigger deploy instead of chat
+  const isConfirmation = (text: string) => /^(do it|yes|go ahead|make it happen|go for it|yes please|yep|yeah|ok do it|ok|sure|please|apply it|apply)\.?!?$/i.test(text.trim());
+
   // Chat: send a message and stream Claude's response (no deploy, free)
   const handleChat = async (overrideMessage?: string) => {
     const text = overrideMessage || input.trim();
     if (!text || deploying || chatStreaming) return;
+
+    // If user confirms a suggestion, trigger deploy instead of another chat round
+    if (hasSuggestion && isConfirmation(text)) {
+      if (!overrideMessage) setInput("");
+      // Get the last assistant message as context for the deploy
+      const lastAssistant = [...messages].reverse().find(m => m.role === "assistant");
+      const deployPrompt = lastAssistant ? lastAssistant.content : text;
+      handleDeploy(deployPrompt);
+      return;
+    }
+
     if (!overrideMessage) setInput("");
 
     const userMsg: ChatMsg = {
@@ -328,11 +342,11 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
       setMessages(prev => [...prev, { id: Date.now() + 2, project_id: projectId, role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Chat failed"}`, created_at: new Date().toISOString() }]);
     } finally {
       setChatStreaming(false);
-      // Show Apply & Deploy only when Claude proposes a code change (not just explains code)
+      // Show Apply & Deploy when Claude suggests changes
+      const proposesChange = /I'?d (update|replace|change|fix|add|remove|modify)|click .?apply/i.test(assistantText);
       const hasCodeBlock = /```/.test(assistantText);
-      const proposesChange = /here'?s the (updated|fixed|new|modified)|replace .* with|change .* to|update .* to|I('ll| will| can) (update|fix|change|modify|replace|add|remove)|here'?s (what|how) (to|I'd) (fix|change|update)|the fix is/i.test(assistantText);
-      const asksToApply = /should I apply|want me to (apply|make|implement|add|fix|update)|shall I (apply|make|implement)|would you like me to (apply|make|implement)/i.test(assistantText);
-      setHasSuggestion((hasCodeBlock && proposesChange) || asksToApply);
+      const asksToApply = /apply .?& .?deploy|want me to (apply|make|implement)|shall I (apply|make)/i.test(assistantText);
+      setHasSuggestion(proposesChange || asksToApply || hasCodeBlock);
       // Sync with DB to get proper message IDs
       api.getChatHistory(projectId).then(setMessages);
     }
