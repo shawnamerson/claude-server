@@ -104,12 +104,37 @@ Structure: Vite React frontend (src/) + Express API server (server.js). The serv
 - Package.json with vite, react, react-dom, @vitejs/plugin-react, express as deps (version "*")
 - src/main.jsx as React entry point, src/App.jsx as main component, src/index.css for styles
 - index.html in root with <div id="root"> and <script type="module" src="/src/main.jsx">
-- vite.config.js: configure proxy so /api requests go to Express during dev
-- server.js: Express server that serves dist/ with express.static, handles API routes, and has SPA fallback
 - Use require() not import in server.js (CommonJS)
 - NEVER use app.get('*', ...) — use app.use((req, res) => ...) for SPA catch-all
 - Package.json scripts: "dev": "vite", "build": "vite build", "start": "node server.js"
 - Include GET /api/health endpoint returning {"status": "ok"}
+
+REQUIRED vite.config.js (copy exactly, don't skip the proxy):
+  import { defineConfig } from 'vite';
+  import react from '@vitejs/plugin-react';
+  export default defineConfig({
+    plugins: [react()],
+    server: { proxy: { '/api': 'http://localhost:3000' } }
+  });
+
+REQUIRED server.js pattern (Express serves dist/ + API + SPA fallback):
+  const express = require('express');
+  const path = require('path');
+  const app = express();
+  app.use(express.json());
+  app.use(express.static(path.join(__dirname, 'dist')));
+  // API routes here (app.get('/api/...'), app.post('/api/...'), etc.)
+  app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+  // SPA fallback — MUST be last
+  app.use((req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
+  app.listen(process.env.PORT || 3000);
+
+REQUIRED src/main.jsx pattern:
+  import React from 'react';
+  import ReactDOM from 'react-dom/client';
+  import App from './App';
+  import './index.css';
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
 ## Option C: Next.js (use when the user asks for Next.js, or when the app needs SSR, complex routing, or is clearly a multi-page content site)
 Structure: Next.js App Router. Use the app/ directory.

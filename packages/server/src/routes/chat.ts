@@ -205,7 +205,7 @@ RULES:
 
   try {
     const client = getClient();
-    let fullResponse = "";
+    let lastTurnText = "";
     const MAX_TURNS = 10;
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -221,11 +221,11 @@ RULES:
 
       // Process response blocks
       const toolUses: Array<{ id: string; name: string; input: any }> = [];
+      let turnText = "";
 
       for (const block of response.content) {
         if (block.type === "text") {
-          fullResponse += block.text;
-          res.write(`data: ${JSON.stringify({ type: "text", content: block.text })}\n\n`);
+          turnText += block.text;
         } else if (block.type === "tool_use") {
           toolUses.push({ id: block.id, name: block.name, input: block.input });
           // Show the user what we're doing
@@ -240,8 +240,18 @@ RULES:
         }
       }
 
-      // No tool calls — Claude is done
-      if (toolUses.length === 0) break;
+      // Only stream text from the final turn (no intermediate thinking)
+      if (toolUses.length === 0) {
+        // Final turn — stream this text to user
+        if (turnText) {
+          res.write(`data: ${JSON.stringify({ type: "text", content: turnText })}\n\n`);
+          lastTurnText = turnText;
+        }
+        break;
+      }
+
+      // Intermediate turn — save text but don't stream it (it's just thinking)
+      lastTurnText = turnText;
 
       // Execute tools and continue
       messages.push({ role: "assistant", content: response.content });
@@ -264,9 +274,9 @@ RULES:
       messages.push({ role: "user", content: results });
     }
 
-    // Save the full text response
-    if (fullResponse) {
-      db.prepare("INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'assistant', ?)").run(project.id, fullResponse);
+    // Save only the final response text
+    if (lastTurnText) {
+      db.prepare("INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'assistant', ?)").run(project.id, lastTurnText);
     }
 
     res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
