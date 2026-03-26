@@ -190,6 +190,7 @@ export default function ProjectDetail() {
   const [selectedDeployment, setSelectedDeployment] = useState<string | null>(searchParams.get("dep"));
   const [sideTab, setSideTab] = useState<SideTab>((searchParams.get("tab") as SideTab) || "chat");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [pendingChatMessage, setPendingChatMessage] = useState<string | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [previewReady, setPreviewReady] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
@@ -388,7 +389,7 @@ export default function ProjectDetail() {
         {/* Tab content */}
         <div style={styles.sidebarContent}>
           {sideTab === "chat" && (
-            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} deploymentId={selectedDeployment} onDeploy={async (prompt) => {
+            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} deploymentId={selectedDeployment} pendingMessage={pendingChatMessage} onPendingMessageConsumed={() => setPendingChatMessage(null)} onDeploy={async (prompt) => {
               if (!id) return;
               const dep = await api.deploy(id, prompt);
               setSelectedDeployment(dep.id);
@@ -410,7 +411,11 @@ export default function ProjectDetail() {
       {/* Main area — Preview or File Editor */}
       <div style={styles.main} className="vs-project-main">
         {sideTab === "files" ? (
-          <FileViewer projectId={project.id} />
+          <FileViewer projectId={project.id} onFilesUploaded={(filenames) => {
+            const names = filenames.map(f => `public/${f}`).join(", ");
+            setPendingChatMessage(`I just uploaded these files: ${names}. Update the app to use them.`);
+            setSideTab("chat");
+          }} />
         ) : (
         <>
         {/* URL bar */}

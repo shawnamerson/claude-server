@@ -144,9 +144,11 @@ interface Props {
   deployStatus?: string;
   onDeploy: (prompt: string) => Promise<void>;
   deploymentId?: string | null;
+  pendingMessage?: string | null;
+  onPendingMessageConsumed?: () => void;
 }
 
-export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy, deploymentId }: Props) {
+export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy, deploymentId, pendingMessage, onPendingMessageConsumed }: Props) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [activity, setActivity] = useState<ActivityItem[]>([]);
@@ -159,6 +161,15 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
   useEffect(() => {
     api.getChatHistory(projectId).then(setMessages);
   }, [projectId]);
+
+  // Auto-send pending message (e.g., after file upload)
+  const [autoSendMessage, setAutoSendMessage] = useState<string | null>(null);
+  useEffect(() => {
+    if (pendingMessage && !chatStreaming && !deploying) {
+      setAutoSendMessage(pendingMessage);
+      onPendingMessageConsumed?.();
+    }
+  }, [pendingMessage]);
 
   // Subscribe to SSE — lock to first deployment ID to avoid reconnecting on re-renders
   const sseDepId = useRef<string | null>(null);
@@ -234,11 +245,20 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
     }
   }, [messages, activity]);
 
+  // Auto-trigger chat for pending messages
+  useEffect(() => {
+    if (autoSendMessage) {
+      const msg = autoSendMessage;
+      setAutoSendMessage(null);
+      handleChat(msg);
+    }
+  }, [autoSendMessage]);
+
   // Chat: send a message and stream Claude's response (no deploy, free)
-  const handleChat = async () => {
-    const text = input.trim();
+  const handleChat = async (overrideMessage?: string) => {
+    const text = overrideMessage || input.trim();
     if (!text || deploying || chatStreaming) return;
-    setInput("");
+    if (!overrideMessage) setInput("");
 
     const userMsg: ChatMsg = {
       id: Date.now(),
@@ -488,7 +508,7 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
         />
         <button
           style={{ ...s.sendBtn, opacity: (isActive || !input.trim()) ? 0.3 : 1 }}
-          onClick={handleChat}
+          onClick={() => handleChat()}
           disabled={isActive || !input.trim()}
         >&#8593;</button>
       </div>

@@ -118,7 +118,7 @@ function TreeNode({
   );
 }
 
-export default function FileViewer({ projectId }: { projectId: string }) {
+export default function FileViewer({ projectId, onFilesUploaded }: { projectId: string; onFilesUploaded?: (filenames: string[]) => void }) {
   const { showError } = useToast();
   const [tree, setTree] = useState<FileNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -159,10 +159,15 @@ export default function FileViewer({ projectId }: { projectId: string }) {
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
+      const uploadedNames: string[] = [];
       for (const file of Array.from(files)) {
         await api.uploadFile(projectId, file, "public");
+        uploadedNames.push(file.name);
       }
       api.getFileTree(projectId).then(setTree);
+      if (onFilesUploaded && uploadedNames.length > 0) {
+        onFilesUploaded(uploadedNames);
+      }
     } catch (err) {
       showError(err instanceof Error ? err.message : "Upload failed");
     } finally {
