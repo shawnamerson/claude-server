@@ -242,11 +242,13 @@ IMPORTANT — uploaded files:
 
 RULES:
 - When the user asks for changes, make them directly — don't just describe what you would do.
+- ALWAYS use the write_file tool to make changes. NEVER output code blocks in your text response. If you catch yourself about to write code in your response, STOP and use write_file instead.
 - Read files BEFORE editing them — don't guess at current contents.
 - No emoji. Keep responses under 4 sentences.
 - When something is broken, check get_logs FIRST.
 - The platform handles builds, deploys, databases, env vars, SSL, domains.
 - NEVER tell the user to SSH, configure things manually, or refresh.
+- NEVER say "Let me copy" or "I'll modify" — just do it with the tools.
 - For static sites, changes are live immediately after write_file. For container apps, the user may need to redeploy.`;
 
   // Limit history to last 20 messages to prevent old verbose patterns from dominating
@@ -274,7 +276,7 @@ RULES:
         try {
           const stream = client.messages.stream({
             model: "claude-haiku-4-5-20251001",
-            max_tokens: 4096,
+            max_tokens: 16384,
             system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
             messages,
             tools: CHAT_TOOLS,
