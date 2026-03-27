@@ -389,7 +389,7 @@ export default function ProjectDetail() {
         {/* Tab content */}
         <div style={styles.sidebarContent}>
           {sideTab === "chat" && (
-            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} deploymentId={selectedDeployment} pendingMessage={pendingChatMessage} onPendingMessageConsumed={() => setPendingChatMessage(null)} onDeploy={async (prompt) => {
+            <ChatPanel projectId={project.id} deploying={isDeploying} deployStatus={currentDep?.status} deploymentId={selectedDeployment} pendingMessage={pendingChatMessage} onPendingMessageConsumed={() => setPendingChatMessage(null)} onFilesChanged={() => { reloadPreview(); refresh(); }} onDeploy={async (prompt) => {
               if (!id) return;
               const dep = await api.deploy(id, prompt);
               setSelectedDeployment(dep.id);

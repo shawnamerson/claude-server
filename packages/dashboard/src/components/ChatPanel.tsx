@@ -146,9 +146,10 @@ interface Props {
   deploymentId?: string | null;
   pendingMessage?: string | null;
   onPendingMessageConsumed?: () => void;
+  onFilesChanged?: (files: string[]) => void;
 }
 
-export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy, deploymentId, pendingMessage, onPendingMessageConsumed }: Props) {
+export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy, deploymentId, pendingMessage, onPendingMessageConsumed, onFilesChanged }: Props) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [activity, setActivity] = useState<ActivityItem[]>([]);
@@ -326,6 +327,9 @@ export default function ChatPanel({ projectId, deploying, deployStatus, onDeploy
                 requestAnimationFrame(() => {
                   if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
                 });
+              } else if (data.type === "files_changed") {
+                // Chat agent edited files — refresh the preview
+                if (onFilesChanged) onFilesChanged(data.files || []);
               } else if (data.type === "status") {
                 // Show tool usage as italic status in the message
                 assistantText += `\n*${data.content}*\n`;

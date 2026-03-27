@@ -36,6 +36,29 @@ const CHAT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "write_file",
+    description: "Create or overwrite a file in the project. Use this to make code changes directly.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: { type: "string", description: "Relative file path (e.g., src/app.js, style.css)" },
+        content: { type: "string", description: "Complete file content" },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
+    name: "delete_file",
+    description: "Delete a file from the project.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: { type: "string", description: "Relative file path to delete" },
+      },
+      required: ["path"],
+    },
+  },
+  {
     name: "list_files",
     description: "List all files in the project directory. Use this to understand the project structure.",
     input_schema: { type: "object" as const, properties: {} },
@@ -71,6 +94,7 @@ const CHAT_TOOLS: Anthropic.Tool[] = [
 function createChatToolHandlers(sourcePath: string, projectId: string) {
   const SKIP = new Set(["node_modules", ".git", "__pycache__", ".venv", ".next", "dist", "pip_packages"]);
   const SKIP_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".lock"]);
+  const changedFiles: string[] = [];
 
   function listFiles(dir: string, prefix = ""): string[] {
     const results: string[] = [];
@@ -88,7 +112,7 @@ function createChatToolHandlers(sourcePath: string, projectId: string) {
     return results;
   }
 
-  return new Map<string, (input: any) => Promise<string>>([
+  const handlers = new Map<string, (input: any) => Promise<string>>([
     ["read_file", async (input: { path: string }) => {
       const resolved = path.resolve(sourcePath, input.path);
       if (!resolved.startsWith(path.resolve(sourcePath))) return "Error: path traversal not allowed";
@@ -96,6 +120,22 @@ function createChatToolHandlers(sourcePath: string, projectId: string) {
       if (SKIP_EXT.has(path.extname(input.path))) return "(binary file)";
       const content = fs.readFileSync(resolved, "utf-8");
       return content.length > 10000 ? content.slice(0, 10000) + "\n...(truncated)" : content;
+    }],
+    ["write_file", async (input: { path: string; content: string }) => {
+      const resolved = path.resolve(sourcePath, input.path);
+      if (!resolved.startsWith(path.resolve(sourcePath))) return "Error: path traversal not allowed";
+      fs.mkdirSync(path.dirname(resolved), { recursive: true });
+      fs.writeFileSync(resolved, input.content);
+      changedFiles.push(input.path);
+      return `OK: wrote ${input.path} (${input.content.length} bytes)`;
+    }],
+    ["delete_file", async (input: { path: string }) => {
+      const resolved = path.resolve(sourcePath, input.path);
+      if (!resolved.startsWith(path.resolve(sourcePath))) return "Error: path traversal not allowed";
+      if (!fs.existsSync(resolved)) return `File not found: ${input.path}`;
+      fs.rmSync(resolved);
+      changedFiles.push(input.path);
+      return `Deleted: ${input.path}`;
     }],
     ["list_files", async () => {
       const files = listFiles(sourcePath);
@@ -134,6 +174,8 @@ function createChatToolHandlers(sourcePath: string, projectId: string) {
       }
     }],
   ]);
+
+  return { handlers, changedFiles };
 }
 
 // Chat with Claude about a project (SSE streaming with tools)
@@ -166,7 +208,7 @@ router.post("/projects/:projectId/chat", async (req: Request, res: Response) => 
   }).join("\n");
 
   const domain = process.env.DOMAIN || "vibestack.build";
-  const systemPrompt = `You are a senior full-stack developer integrated into VibeStack, a cloud deployment platform. You have tools to explore the project — USE THEM.
+  const systemPrompt = `You are a senior full-stack developer integrated into VibeStack, a cloud deployment platform. You have tools to explore AND modify the project — USE THEM.
 
 Project: ${project.name} (${project.slug})
 URL: https://${project.slug}.${domain}
@@ -176,31 +218,36 @@ Status: ${latestDeployment?.status || "no deployments"}${latestDeployment?.error
 Environment Variables:
 ${envContext}
 
-YOU HAVE TOOLS — use them:
+YOUR TOOLS:
 - read_file: Read any project file to see the code
+- write_file: Create or overwrite a file in the project
+- delete_file: Delete a file from the project
 - list_files: See the full project structure
 - search_files: Find where something is used across the codebase
 - get_logs: See the latest container stdout/stderr logs
 - query_database: See database tables, schema, and row counts
 
-CRITICAL — YOUR ROLE:
-You are a READ-ONLY advisor. You can read files and logs but CANNOT write or modify code. A separate deploy agent writes code — not you.
+YOUR ROLE:
+You are a hands-on coding agent. You can read files, understand the codebase, and directly edit files to make changes. When the user asks for a change, DO IT — read the relevant files, then write the updated versions.
 
-WHAT TO DO when the user wants changes:
-1. Use your tools to understand the current state
-2. Describe the changes in 1-3 short sentences (e.g., "I'd replace the placeholder icons in index.html with the product images you uploaded, and add a gallery grid section.")
-3. Tell the user to click "Apply & Deploy" to make it happen
+WORKFLOW for changes:
+1. Read the file(s) you need to understand
+2. Write the updated file(s) using write_file
+3. Tell the user what you changed in 1-3 short sentences
 
-ABSOLUTE RULES:
-- NEVER output code blocks, HTML, CSS, or file contents. You are not writing code. The deploy agent does that.
-- NEVER say "I've updated" or "I've changed" or "Now the website..." — you cannot change files.
-- Use phrasing like "I'd update...", "The fix would be...", "Click Apply & Deploy to..."
-- No emoji. No bullet-point marketing lists. Keep responses under 4 sentences.
-- When the user asks about code, READ THE FILE first — don't guess.
+IMPORTANT — uploaded files:
+- Users upload images and assets into the project. These are real files on disk (e.g., in public/).
+- Image files (.png, .jpg, .svg, etc.) cannot be read as text, but you can see them in list_files and reference them by path in code.
+- When the user mentions uploaded images, list_files to find them, then wire them into the code.
+
+RULES:
+- When the user asks for changes, make them directly — don't just describe what you would do.
+- Read files BEFORE editing them — don't guess at current contents.
+- No emoji. Keep responses under 4 sentences.
 - When something is broken, check get_logs FIRST.
 - The platform handles builds, deploys, databases, env vars, SSL, domains.
 - NEVER tell the user to SSH, configure things manually, or refresh.
-- NEVER ask the user to refresh or check things — you have the tools to check yourself.`;
+- For static sites, changes are live immediately after write_file. For container apps, the user may need to redeploy.`;
 
   // Limit history to last 20 messages to prevent old verbose patterns from dominating
   const history = db.prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at DESC LIMIT 20").all(project.id) as ChatMessage[];
@@ -211,7 +258,7 @@ ABSOLUTE RULES:
     content: m.role === "assistant" && m.content.length > 2000 ? m.content.slice(0, 2000) + "\n...(truncated)" : m.content,
   }));
 
-  const handlers = createChatToolHandlers(project.source_path, project.id);
+  const { handlers, changedFiles } = createChatToolHandlers(project.source_path, project.id);
 
   // Stream response via SSE with tool support
   res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
@@ -226,8 +273,8 @@ ABSOLUTE RULES:
       for (let retry = 0; retry < 3; retry++) {
         try {
           const stream = client.messages.stream({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 4096,
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 16384,
             system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
             messages,
             tools: CHAT_TOOLS,
@@ -242,7 +289,7 @@ ABSOLUTE RULES:
           throw err;
         }
       }
-      trackUsage(null, response!, "claude-haiku-4-5-20251001");
+      trackUsage(null, response!, "claude-sonnet-4-20250514");
 
       // Process response blocks
       const toolUses: Array<{ id: string; name: string; input: any }> = [];
@@ -256,6 +303,8 @@ ABSOLUTE RULES:
           // Show the user what we're doing
           const inp = block.input as Record<string, any>;
           const action = block.name === "read_file" ? `Reading ${inp.path}...`
+            : block.name === "write_file" ? `Writing ${inp.path}...`
+            : block.name === "delete_file" ? `Deleting ${inp.path}...`
             : block.name === "list_files" ? "Listing files..."
             : block.name === "search_files" ? `Searching for "${inp.query}"...`
             : block.name === "get_logs" ? "Checking logs..."
@@ -302,6 +351,11 @@ ABSOLUTE RULES:
     // Save only the final response text
     if (lastTurnText) {
       db.prepare("INSERT INTO chat_messages (project_id, role, content) VALUES (?, 'assistant', ?)").run(project.id, lastTurnText);
+    }
+
+    // Notify client about changed files so it can refresh the preview
+    if (changedFiles.length > 0) {
+      res.write(`data: ${JSON.stringify({ type: "files_changed", files: changedFiles })}\n\n`);
     }
 
     res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
