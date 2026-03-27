@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "../db/client.js";
-import { getClient } from "../services/claude.js";
+import { getClient, trackUsage } from "../services/claude.js";
 import { readProjectFiles } from "../services/generator.js";
 import { getRecentLogs } from "../services/logger.js";
 import { queryProjectDatabase } from "../services/database.js";
@@ -223,14 +223,15 @@ ABSOLUTE RULES:
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const stream = client.messages.stream({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 8192,
-        system: systemPrompt,
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 4096,
+        system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
         messages,
         tools: CHAT_TOOLS,
       });
 
       const response = await stream.finalMessage();
+      trackUsage(null, response, "claude-haiku-4-5-20251001");
 
       // Process response blocks
       const toolUses: Array<{ id: string; name: string; input: any }> = [];

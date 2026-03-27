@@ -411,10 +411,15 @@ export default function ProjectDetail() {
       {/* Main area — Preview or File Editor */}
       <div style={styles.main} className="vs-project-main">
         {sideTab === "files" ? (
-          <FileViewer projectId={project.id} onFilesUploaded={(filenames) => {
+          <FileViewer projectId={project.id} onFilesUploaded={async (filenames) => {
+            if (!id) return;
             const names = filenames.map(f => `public/${f}`).join(", ");
-            setPendingChatMessage(`I just uploaded these files: ${names}. Update the app to use them.`);
             setSideTab("chat");
+            try {
+              const dep = await api.deploy(id, `I just uploaded these files: ${names}. Update the app to use them appropriately (e.g. as images, backgrounds, gallery items). Keep existing functionality intact.`);
+              setSelectedDeployment(dep.id);
+              refresh();
+            } catch {}
           }} />
         ) : (
         <>

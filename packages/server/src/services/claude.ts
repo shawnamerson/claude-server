@@ -12,12 +12,15 @@ export function getClient(): Anthropic {
 }
 
 const FAST_MODEL = "claude-sonnet-4-20250514";
-const CHAT_MODEL = "claude-sonnet-4-20250514";
+const CHAT_MODEL = "claude-haiku-4-5-20251001";
 
-// Sonnet pricing per million tokens
+// Sonnet pricing per million tokens (used for deploys)
 const INPUT_COST_PER_M = 3.0;      // $3 per 1M input tokens
 const CACHE_READ_COST_PER_M = 0.3; // $0.30 per 1M cached input tokens
 const OUTPUT_COST_PER_M = 15.0;    // $15 per 1M output tokens
+// Haiku pricing (used for chat) — $0.80/$4 input/output per 1M
+const HAIKU_INPUT_COST_PER_M = 0.8;
+const HAIKU_OUTPUT_COST_PER_M = 4.0;
 
 export interface TokenUsage {
   inputTokens: number;
@@ -28,13 +31,17 @@ export interface TokenUsage {
 // Track cumulative usage per deploy
 const deployUsage = new Map<string, TokenUsage>();
 
-function trackUsage(deploymentId: string | null, message: Anthropic.Message) {
+export function trackUsage(deploymentId: string | null, message: Anthropic.Message, model?: string) {
   const input = message.usage?.input_tokens || 0;
   const output = message.usage?.output_tokens || 0;
   const cacheRead = (message.usage as unknown as Record<string, number>)?.cache_read_input_tokens || 0;
   const uncachedInput = input - cacheRead;
+  const isHaiku = model?.includes("haiku");
+  const inputRate = isHaiku ? HAIKU_INPUT_COST_PER_M : INPUT_COST_PER_M;
+  const outputRate = isHaiku ? HAIKU_OUTPUT_COST_PER_M : OUTPUT_COST_PER_M;
+  const cacheRate = isHaiku ? 0.08 : CACHE_READ_COST_PER_M; // Haiku cache read: $0.08/M
   const costCents = Math.round(
-    (uncachedInput / 1_000_000 * INPUT_COST_PER_M + cacheRead / 1_000_000 * CACHE_READ_COST_PER_M + output / 1_000_000 * OUTPUT_COST_PER_M) * 100
+    (uncachedInput / 1_000_000 * inputRate + cacheRead / 1_000_000 * cacheRate + output / 1_000_000 * outputRate) * 100
   );
 
   const cacheInfo = cacheRead > 0 ? ` (${cacheRead.toLocaleString()} cached)` : "";
