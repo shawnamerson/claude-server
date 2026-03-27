@@ -229,8 +229,46 @@ export async function runPipeline(project: Project, deploymentId: string, prompt
       console.warn("Auto-fix scan failed:", err instanceof Error ? err.message : String(err));
     }
 
-    // Skip npm install / syntax check for speed — auto-fix handles failures
-    // The code pattern scanner above catches the most common issues
+    // Quick syntax check on entry point — catches obvious errors before Docker build
+    try {
+      const fs = await import("fs");
+      const { execSync } = await import("child_process");
+      const serverPath = `${project.source_path}/server.js`;
+      const appPyPath = `${project.source_path}/app.py`;
+      const mainPyPath = `${project.source_path}/main.py`;
+
+      if (fs.existsSync(serverPath)) {
+        try {
+          execSync(`node -c "${serverPath}"`, { timeout: 5000, stdio: "pipe" });
+        } catch (err: any) {
+          const errMsg = err.stderr?.toString() || err.message;
+          addLog(deploymentId, "system", `Syntax error in server.js — asking Claude to fix...`);
+          // Quick fix: re-run modifyProject to fix the syntax error
+          const fixResult = await modifyProject(
+            project.source_path, [],
+            `Fix this syntax error in server.js:\n${errMsg.slice(0, 500)}`,
+            log
+          );
+          addLog(deploymentId, "system", `Fixed syntax error (${fixResult.files.length} files updated)`);
+        }
+      } else if (fs.existsSync(appPyPath) || fs.existsSync(mainPyPath)) {
+        const pyFile = fs.existsSync(appPyPath) ? appPyPath : mainPyPath;
+        try {
+          execSync(`python3 -c "import ast; ast.parse(open('${pyFile}').read())"`, { timeout: 5000, stdio: "pipe" });
+        } catch (err: any) {
+          const errMsg = err.stderr?.toString() || err.message;
+          addLog(deploymentId, "system", `Syntax error in ${pyFile.split("/").pop()} — asking Claude to fix...`);
+          const fixResult = await modifyProject(
+            project.source_path, [],
+            `Fix this syntax error in ${pyFile.split("/").pop()}:\n${errMsg.slice(0, 500)}`,
+            log
+          );
+          addLog(deploymentId, "system", `Fixed syntax error (${fixResult.files.length} files updated)`);
+        }
+      }
+    } catch (err) {
+      // Don't block deploy if syntax check itself fails
+    }
 
     // Save chat messages
     if (prompt) {

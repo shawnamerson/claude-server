@@ -532,14 +532,37 @@ export async function modifyProject(
   const devContainer = new DevContainer(sourcePath);
   const handlers = createToolHandlers(sourcePath, onLog, devContainer);
 
-  // Build context about existing files
+  // Build context about existing files — include contents for small projects
   const existingFiles = listFiles(sourcePath);
-  const fileList = existingFiles.length > 0
-    ? `\n\nExisting project files:\n${existingFiles.join("\n")}`
-    : "\n\n(Empty project)";
+  let fileContext = "\n\n(Empty project)";
+  if (existingFiles.length > 0) {
+    const KEY_FILES = ["index.html", "style.css", "app.js", "server.js", "package.json",
+      "src/App.jsx", "src/App.tsx", "src/main.jsx", "src/main.tsx", "src/index.css",
+      "vite.config.js", "app.py", "main.py", "requirements.txt"];
+    const included: string[] = [];
+    let totalChars = 0;
+    const MAX_CONTEXT_CHARS = 30000;
+    for (const f of existingFiles) {
+      const basename = f.split("/").slice(-2).join("/"); // e.g. "src/App.jsx"
+      if (KEY_FILES.some(k => f === k || f.endsWith("/" + k) || basename === k)) {
+        try {
+          const content = fs.readFileSync(path.join(sourcePath, f), "utf-8");
+          if (totalChars + content.length < MAX_CONTEXT_CHARS) {
+            included.push(`--- ${f} ---\n${content}`);
+            totalChars += content.length;
+          }
+        } catch {}
+      }
+    }
+    fileContext = included.length > 0
+      ? `\n\nExisting project files:\n${existingFiles.join("\n")}\n\nKey file contents (read these — don't re-read with tools unless you need other files):\n${included.join("\n\n")}`
+      : `\n\nExisting project files:\n${existingFiles.join("\n")}`;
+  }
 
-  const historyContext = chatHistory.length > 0
-    ? `\n\nPrevious conversation:\n${chatHistory.map(m => `${m.role}: ${m.content}`).join("\n")}`
+  // Limit chat history to avoid bloating context with old verbose messages
+  const recentHistory = chatHistory.slice(-6);
+  const historyContext = recentHistory.length > 0
+    ? `\n\nRecent conversation:\n${recentHistory.map(m => `${m.role}: ${m.content.slice(0, 500)}`).join("\n")}`
     : "";
 
   onLog("Claude is modifying your app...");
@@ -547,7 +570,7 @@ export async function modifyProject(
   try {
     const notes = await claudeAgentLoop(
       MODIFY_SYSTEM_PROMPT,
-      `${modification}${fileList}${historyContext}`,
+      `${modification}${fileContext}${historyContext}`,
       FULL_TOOLS,
       handlers,
       {
