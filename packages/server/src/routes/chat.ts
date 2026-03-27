@@ -251,13 +251,15 @@ RULES:
 - NEVER say "Let me copy" or "I'll modify" — just do it with the tools.
 - For static sites, changes are live immediately after write_file. For container apps, the user may need to redeploy.`;
 
-  // Limit history to last 20 messages to prevent old verbose patterns from dominating
-  const history = db.prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at DESC LIMIT 20").all(project.id) as ChatMessage[];
+  // Limit history to last 10 messages — fewer to avoid old read-only patterns polluting context
+  const history = db.prepare("SELECT role, content FROM chat_messages WHERE project_id = ? ORDER BY created_at DESC LIMIT 10").all(project.id) as ChatMessage[];
   history.reverse();
-  // Truncate old assistant messages that are too long (likely pre-fix verbose responses)
+  // Strip old advisory patterns from history so they don't influence behavior
   const messages: Anthropic.MessageParam[] = history.map(m => ({
     role: m.role as "user" | "assistant",
-    content: m.role === "assistant" && m.content.length > 2000 ? m.content.slice(0, 2000) + "\n...(truncated)" : m.content,
+    content: m.role === "assistant"
+      ? m.content.replace(/Click .?Apply .?& .?Deploy.?[^.]*\./gi, "").replace(/I'?d (update|replace|change|fix|add|remove|modify)/gi, "I $1d").slice(0, 1500)
+      : m.content,
   }));
 
   const { handlers, changedFiles } = createChatToolHandlers(project.source_path, project.id);
@@ -318,6 +320,14 @@ RULES:
 
       // Only stream text from the final turn (no intermediate thinking)
       if (toolUses.length === 0) {
+        // Check if model narrated instead of using tools — nudge it to act
+        const narrating = /let me|I'll |I would |I'?d (update|replace|change|fix|add|modify)|```/i.test(turnText);
+        if (narrating && turn === 0) {
+          // Push it to actually use tools instead of narrating
+          messages.push({ role: "assistant", content: response!.content });
+          messages.push({ role: "user", content: "Don't describe the changes — use write_file to make them now." });
+          continue;
+        }
         // Final turn — stream this text to user
         if (turnText) {
           res.write(`data: ${JSON.stringify({ type: "text", content: turnText })}\n\n`);
