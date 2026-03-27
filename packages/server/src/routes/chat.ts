@@ -222,22 +222,33 @@ ABSOLUTE RULES:
     const MAX_TURNS = 10;
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const stream = client.messages.stream({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
-        system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
-        messages,
-        tools: CHAT_TOOLS,
-      });
-
-      const response = await stream.finalMessage();
-      trackUsage(null, response, "claude-haiku-4-5-20251001");
+      let response: Anthropic.Message;
+      for (let retry = 0; retry < 3; retry++) {
+        try {
+          const stream = client.messages.stream({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 4096,
+            system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
+            messages,
+            tools: CHAT_TOOLS,
+          });
+          response = await stream.finalMessage();
+          break;
+        } catch (err: any) {
+          if (err?.status === 429 && retry < 2) {
+            await new Promise(r => setTimeout(r, (retry + 1) * 2000));
+            continue;
+          }
+          throw err;
+        }
+      }
+      trackUsage(null, response!, "claude-haiku-4-5-20251001");
 
       // Process response blocks
       const toolUses: Array<{ id: string; name: string; input: any }> = [];
       let turnText = "";
 
-      for (const block of response.content) {
+      for (const block of response!.content) {
         if (block.type === "text") {
           turnText += block.text;
         } else if (block.type === "tool_use") {
@@ -268,7 +279,7 @@ ABSOLUTE RULES:
       lastTurnText = turnText;
 
       // Execute tools and continue
-      messages.push({ role: "assistant", content: response.content });
+      messages.push({ role: "assistant", content: response!.content });
       const results: Anthropic.ToolResultBlockParam[] = [];
 
       for (const tu of toolUses) {
