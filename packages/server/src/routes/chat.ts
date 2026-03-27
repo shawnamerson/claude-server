@@ -273,8 +273,8 @@ RULES:
       for (let retry = 0; retry < 3; retry++) {
         try {
           const stream = client.messages.stream({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 16384,
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 4096,
             system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
             messages,
             tools: CHAT_TOOLS,
@@ -289,7 +289,7 @@ RULES:
           throw err;
         }
       }
-      trackUsage(null, response!, "claude-sonnet-4-20250514");
+      trackUsage(null, response!, "claude-haiku-4-5-20251001");
 
       // Process response blocks
       const toolUses: Array<{ id: string; name: string; input: any }> = [];
